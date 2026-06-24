@@ -56,7 +56,7 @@ export function CatalogList({ families }: { families: FamilySummary[] }) {
         kicker="Catalog"
         title="Products"
         sub="Every product family you buy and sell. Open one to see variants, costs, Amazon identity, and order history."
-        actions={<NewProductButton />}
+        actions={<NewProductButton categories={categories} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
