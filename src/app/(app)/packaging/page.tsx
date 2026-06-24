@@ -3,6 +3,7 @@ import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
 import { packagingOnHand, money, num, type PackagingItem, type PackagingMove, type Product } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { Boxes } from "lucide-react";
+import { AddPackagingButton, ReceiveButton } from "./packaging-actions";
 
 export default async function PackagingPage() {
   const supabase = await createClient();
@@ -31,6 +32,7 @@ export default async function PackagingPage() {
         kicker="Catalog"
         title="Packaging inventory"
         sub="Mailers, cartons, inserts and labels — tracked on their own, assignable to a product family."
+        actions={<AddPackagingButton families={(products ?? []) as { id: string; parent: string }[]} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -50,6 +52,7 @@ export default async function PackagingPage() {
                 <th className="px-4 py-2 text-right font-medium">Unit cost</th>
                 <th className="px-4 py-2 text-right font-medium">Value</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -74,6 +77,9 @@ export default async function PackagingPage() {
                   <td className="tabular px-4 py-2.5 text-right font-mono">{money(r.value)}</td>
                   <td className="px-4 py-2.5">
                     {r.low ? <Badge tone="warning">Reorder</Badge> : <Badge tone="success">In stock</Badge>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <ReceiveButton itemId={r.item.id} name={r.item.name} onHand={r.onHand} />
                   </td>
                 </tr>
               ))}

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Kpi, PageHead, SourceTag } from "@/components/ui/primitives";
 import { catFamilyStats, FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, money, num, type Variant } from "@/lib/derive";
 import { cn } from "@/lib/utils";
+import { AddVariantButton, EditVariantButton } from "./variant-actions";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,6 +31,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <Badge tone={linked === variants.length && variants.length > 0 ? "success" : "warning"}>
               {linked === variants.length ? "Linked to Amazon" : `${linked}/${variants.length} linked`}
             </Badge>
+            <AddVariantButton familyId={id} />
           </>
         }
       />
@@ -61,6 +63,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 <th className="px-4 py-2 text-right font-medium">FBA</th>
                 <th className="px-4 py-2 text-right font-medium">Cost</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -75,6 +78,16 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <td className={cn("tabular px-4 py-2.5 text-right font-mono", (v.fba_stock ?? 0) <= 40 && "text-warning")}>{num(v.fba_stock)}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{money(v.last_cost_usd)}</td>
                   <td className="px-4 py-2.5"><Badge tone={VARIANT_STATUS_TONE[v.status] ?? "muted"}>{v.status}</Badge></td>
+                  <td className="px-4 py-2.5 text-right">
+                    <EditVariantButton
+                      variantId={v.id}
+                      familyId={id}
+                      sku={v.sku}
+                      cost={v.last_cost_usd}
+                      status={v.status}
+                      reorderPoint={v.reorder_point}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

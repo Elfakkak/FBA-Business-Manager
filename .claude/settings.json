@@ -39,7 +39,8 @@
       "Bash(/usr/bin/curl -s --max-time 15 https://fba-business-manager-simos-projects-381039e7.vercel.app/login)",
       "Bash(/usr/bin/grep -o -i -m2 -E \"vyonix|business manager|NOT_FOUND\")",
       "Bash(node scripts/seed-catalog.mjs)",
-      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Phase 1: Catalog + Inventory + Packaging with real seeded data *)"
+      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Phase 1: Catalog + Inventory + Packaging with real seeded data *)",
+      "mcp__claude_ai_Supabase__get_project"
     ]
   }
 }

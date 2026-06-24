@@ -6,6 +6,7 @@ import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
 import { FAMILY_HEALTH_TONE, num, type FamilyHealth } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Package } from "lucide-react";
+import { NewProductButton } from "./new-product-button";
 
 export type FamilySummary = {
   id: string;
@@ -55,6 +56,7 @@ export function CatalogList({ families }: { families: FamilySummary[] }) {
         kicker="Catalog"
         title="Products"
         sub="Every product family you buy and sell. Open one to see variants, costs, Amazon identity, and order history."
+        actions={<NewProductButton />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
