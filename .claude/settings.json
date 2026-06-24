@@ -23,7 +23,23 @@
       "Bash(git add *)",
       "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Rebrand to Vyonix Business Manager *)",
       "Bash(sh -c 'mv .env.local .env.local.bak; env NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= SUPABASE_SERVICE_ROLE_KEY= npm run build 2>&1 | tail -20; mv .env.local.bak .env.local')",
-      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Make /login dynamic so build never depends on build-time env vars *)"
+      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Make /login dynamic so build never depends on build-time env vars *)",
+      "Bash(curl -s -I --max-time 10 \"https://fba-business-manager-simos-projects-381039e7.vercel.app/login\")",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\nredirect=%{redirect_url}\\\\n\" --max-time 10 \"https://fba-business-manager-felh8ehhv-simos-projects-381039e7.vercel.app/login\")",
+      "Bash(/usr/bin/curl -s -o /dev/null -w 'HTTP %{http_code} redirect=%{redirect_url}\\\\n' --max-time 15 https://fba-business-manager-simos-projects-381039e7.vercel.app/)",
+      "Bash(/usr/bin/curl -s -o /dev/null -w 'HTTP %{http_code} redirect=%{redirect_url}\\\\n' --max-time 15 https://fba-business-manager-simos-projects-381039e7.vercel.app/login)",
+      "Bash(/usr/bin/curl -s --max-time 15 -L https://fba-business-manager-simos-projects-381039e7.vercel.app/login)",
+      "Bash(/usr/bin/grep -o -i -m3 -E \"vyonix|sign in|sso-api|NOT_FOUND\")",
+      "Bash(/usr/bin/curl -s -o /dev/null -w \"HTTP %{http_code} redirect=%{redirect_url}\\\\n\" --max-time 15 \"https://fba-business-manager-felh8ehhv-simos-projects-381039e7.vercel.app/login\")",
+      "Bash(/usr/bin/curl -s -o /dev/null -w \"HTTP %{http_code} redirect=%{redirect_url}\\\\n\" --max-time 15 \"https://fba-business-manager-git-main-simos-projects-381039e7.vercel.app/login\")",
+      "Bash(/usr/bin/curl -s --max-time 15 -L \"https://fba-business-manager-felh8ehhv-simos-projects-381039e7.vercel.app/login\")",
+      "Bash(/usr/bin/grep -o -i -m3 -E \"vyonix|sign in|NOT_FOUND|DEPLOYMENT\")",
+      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit --allow-empty -q -m 'Trigger redeploy with Next.js framework preset *)",
+      "Bash(/usr/bin/curl -s -o /dev/null -w 'HTTP %{http_code}\\\\n' --max-time 15 https://fba-business-manager-simos-projects-381039e7.vercel.app/login)",
+      "Bash(/usr/bin/curl -s --max-time 15 https://fba-business-manager-simos-projects-381039e7.vercel.app/login)",
+      "Bash(/usr/bin/grep -o -i -m2 -E \"vyonix|business manager|NOT_FOUND\")",
+      "Bash(node scripts/seed-catalog.mjs)",
+      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Phase 1: Catalog + Inventory + Packaging with real seeded data *)"
     ]
   }
 }
