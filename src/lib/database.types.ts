@@ -279,6 +279,30 @@ export type Database = {
         }
         Relationships: []
       }
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          sort?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categorization_rules: {
         Row: {
           created_at: string

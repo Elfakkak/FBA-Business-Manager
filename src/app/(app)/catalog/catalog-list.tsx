@@ -7,6 +7,7 @@ import { FAMILY_HEALTH_TONE, num, type FamilyHealth } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Package } from "lucide-react";
 import { NewProductButton } from "./new-product-button";
+import { CategoryManagerButton, type CategoryRow } from "./category-manager";
 
 export type FamilySummary = {
   id: string;
@@ -29,12 +30,12 @@ const CHIPS: { key: "all" | FamilyHealth; label: string }[] = [
   { key: "Data gap", label: "Data gap" },
 ];
 
-export function CatalogList({ families }: { families: FamilySummary[] }) {
+export function CatalogList({ families, categories }: { families: FamilySummary[]; categories: CategoryRow[] }) {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
   const [chip, setChip] = useState<"all" | FamilyHealth>("all");
 
-  const categories = useMemo(() => [...new Set(families.map((f) => f.category))].sort(), [families]);
+  const categoryNames = categories.map((c) => c.name);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -56,7 +57,7 @@ export function CatalogList({ families }: { families: FamilySummary[] }) {
         kicker="Catalog"
         title="Products"
         sub="Every product family you buy and sell. Open one to see variants, costs, Amazon identity, and order history."
-        actions={<NewProductButton categories={categories} />}
+        actions={<><CategoryManagerButton categories={categories} /><NewProductButton categories={categoryNames} /></>}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -76,7 +77,7 @@ export function CatalogList({ families }: { families: FamilySummary[] }) {
           />
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
             <option value="all">All categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categoryNames.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <div className="flex gap-1">
             {CHIPS.map((c) => (

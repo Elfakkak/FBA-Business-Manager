@@ -35,6 +35,15 @@ export async function createProduct(form: FormData): Promise<Result> {
     order_history: [],
   });
   if (error) return { ok: false, error: error.message };
+
+  // keep the managed category list in sync if a new one was typed
+  if (category && category !== "Other") {
+    const { data: cats } = await supabase.from("categories").select("name");
+    const exists = (cats ?? []).some((c) => c.name.toLowerCase() === category.toLowerCase());
+    if (!exists) {
+      await supabase.from("categories").insert({ id: slug(category) || `cat-${Date.now().toString(36)}`, name: category });
+    }
+  }
   revalidatePath("/catalog");
   return { ok: true };
 }
