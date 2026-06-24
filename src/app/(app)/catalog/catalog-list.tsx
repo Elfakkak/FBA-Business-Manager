@@ -80,14 +80,7 @@ export function CatalogList({ families }: { families: FamilySummary[] }) {
           </select>
           <div className="flex gap-1">
             {CHIPS.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setChip(c.key)}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                  chip === c.key ? "border-primary/30 bg-primary/12 text-primary" : "hover:bg-accent"
-                )}
-              >
+              <button key={c.key} onClick={() => setChip(c.key)} className={cn("vy-chip", chip === c.key && "is-active")}>
                 {c.label}
               </button>
             ))}

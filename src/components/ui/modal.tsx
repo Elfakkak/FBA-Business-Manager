@@ -26,7 +26,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-xl border bg-card shadow-lg">
+      <div className="vy-card relative w-full max-w-lg" style={{ boxShadow: "var(--shadow-lg)" }}>
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="font-medium">{title}</h2>
           <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
@@ -51,13 +51,7 @@ export const inputCls =
 
 export function PrimaryButton({ children, className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
-      {...rest}
-      className={cn(
-        "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60",
-        className
-      )}
-    >
+    <button {...rest} className={cn("vy-btn vy-btn--primary", className)}>
       {children}
     </button>
   );
@@ -65,7 +59,7 @@ export function PrimaryButton({ children, className, ...rest }: React.ButtonHTML
 
 export function GhostButton({ children, className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button {...rest} className={cn("rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent", className)}>
+    <button {...rest} className={cn("vy-btn vy-btn--outline", className)}>
       {children}
     </button>
   );

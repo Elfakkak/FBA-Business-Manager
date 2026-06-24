@@ -1,32 +1,28 @@
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/derive";
 
-const TONE_CLASS: Record<Tone, string> = {
-  success: "text-success bg-success/10",
-  warning: "text-warning bg-warning/10",
-  danger: "text-danger bg-danger/10",
-  info: "text-info bg-info/10",
-  brand: "text-primary bg-primary/12",
-  muted: "text-muted-foreground bg-muted",
+const BADGE_CLASS: Record<Tone, string> = {
+  success: "vy-badge--success",
+  warning: "vy-badge--warning",
+  danger: "vy-badge--danger",
+  info: "vy-badge--info",
+  brand: "vy-badge--brand",
+  muted: "vy-badge--muted",
 };
 
 export function Badge({ tone = "muted", children, className }: { tone?: Tone; children: React.ReactNode; className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold", TONE_CLASS[tone], className)}>
-      {children}
-    </span>
-  );
+  return <span className={cn("vy-badge", BADGE_CLASS[tone], className)}>{children}</span>;
 }
 
 export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("rounded-xl border bg-card shadow-sm", className)}>{children}</div>;
+  return <div className={cn("vy-card", className)}>{children}</div>;
 }
 
-const KPI_VALUE_TONE: Partial<Record<Tone, string>> = {
-  success: "text-net",
-  warning: "text-warning",
-  danger: "text-danger",
-  info: "text-revenue",
+const KPI_TONE_CLASS: Partial<Record<Tone, string>> = {
+  success: "vy-kpi--success",
+  warning: "vy-kpi--warning",
+  danger: "vy-kpi--danger",
+  info: "vy-kpi--info",
 };
 
 export function Kpi({
@@ -43,14 +39,14 @@ export function Kpi({
   source?: "amazon" | "manual";
 }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
+    <div className={cn("vy-card vy-kpi", tone && KPI_TONE_CLASS[tone])}>
+      <div className="flex items-center gap-1.5">
+        <span className="vy-kicker">{label}</span>
         {source && <SourceTag source={source} />}
       </div>
-      <div className={cn("tabular mt-1.5 font-mono text-xl font-semibold", tone && KPI_VALUE_TONE[tone])}>{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-muted-foreground">{sub}</div>}
-    </Card>
+      <div className="vy-kpi-value">{value}</div>
+      {sub && <div className="vy-kpi-sub">{sub}</div>}
+    </div>
   );
 }
 
@@ -76,9 +72,9 @@ export function PageHead({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        {kicker && <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{kicker}</div>}
+    <div className="vy-card vy-page-head-card">
+      <div className="min-w-0">
+        {kicker && <div className="vy-kicker mb-1">{kicker}</div>}
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {sub && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{sub}</p>}
       </div>
