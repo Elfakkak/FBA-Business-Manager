@@ -30,8 +30,8 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-xl border bg-card p-8 shadow-lg">
         <div className="mb-6">
-          <div className="text-xl font-semibold tracking-tight">Manifest</div>
-          <p className="text-sm text-muted-foreground">FBA Business Manager</p>
+          <div className="text-xl font-semibold tracking-tight">Vyonix</div>
+          <p className="text-sm text-muted-foreground">Business Manager</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">

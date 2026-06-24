@@ -2,7 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(git mv *)",
-      "Bash(mv src/middleware.ts src/proxy.ts)"
+      "Bash(mv src/middleware.ts src/proxy.ts)",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_deployment",
+      "Bash(echo \"files on remote: $\\(gh api repos/Elfakkak/FBA-Business-Manager/git/trees/main?recursive=1 --jq '[.tree[]|select\\(.type==\"blob\"\\)]|length' \\)\")",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(node -e ' *)",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "Bash(rm -rf .next)",
+      "Bash(env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= SUPABASE_SERVICE_ROLE_KEY= sh -c 'mv .env.local .env.local.bak; npm run build 2>&1 | tail -30; mv .env.local.bak .env.local')",
+      "Bash(grep -qiE \"ready|local:|started|http://localhost\" /private/tmp/claude-501/-Users-simoelfkkak-Documents-Antigravity-FBA-Business-Manager/64d10618-3161-4a54-8ea5-b07f6b998016/tasks/b033j4efc.output)",
+      "Bash(break)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} redirects to %{redirect_url}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/login)",
+      "Bash(git add *)",
+      "Bash(git -c user.name=Elfakkak -c user.email=mr.elfakkak@gmail.com commit -q -m 'Rebrand to Vyonix Business Manager *)"
     ]
   }
 }

@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Manifest — FBA Business Manager",
+  title: "Vyonix — Business Manager",
   description:
     "Operations platform for the Amazon FBA / import business: orders, catalog, inventory, finance and integrations.",
 };

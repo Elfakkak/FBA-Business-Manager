@@ -49,8 +49,8 @@ export default async function Home() {
       {/* sidebar */}
       <aside className="hidden w-64 shrink-0 border-r bg-surface-raised/60 p-4 md:block">
         <div className="mb-6 px-2">
-          <div className="text-lg font-semibold tracking-tight">Manifest</div>
-          <p className="text-xs text-muted-foreground">FBA Business Manager</p>
+          <div className="text-lg font-semibold tracking-tight">Vyonix</div>
+          <p className="text-xs text-muted-foreground">Business Manager</p>
         </div>
         <nav className="space-y-0.5">
           {SECTIONS.map((s, i) => {
