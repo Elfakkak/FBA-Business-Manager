@@ -24,14 +24,19 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="vy-card relative w-full max-w-lg" style={{ boxShadow: "var(--shadow-lg)" }}>
-        <div className="flex items-center justify-between border-b px-5 py-3">
+    <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      {/* Solid (non-translucent) panel, capped height with internal scroll so
+          the header + footer buttons never clip off-screen. */}
+      <div
+        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-xl border"
+        style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)", maxHeight: "90vh" }}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
           <h2 className="font-medium">{title}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent" aria-label="Close"><X className="h-4 w-4" /></button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );
