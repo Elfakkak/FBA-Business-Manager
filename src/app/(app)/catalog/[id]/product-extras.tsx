@@ -4,10 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { createClient } from "@/lib/supabase/client";
 import { logNewSize, addTechPack } from "../actions";
 import { sizeCompliance, storagePerUnit, inFromCm, lbFromKg, money, num, type Dim } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Ruler, FileText, Boxes, Package, Check, X, Plus, History } from "lucide-react";
+import { Ruler, FileText, Boxes, Package, Check, X, Plus, History, Upload, Loader2, ExternalLink } from "lucide-react";
 
 const dimStr = (d: Dim, unit: "cm" | "in") => {
   if (!d || !(d.l || d.w || d.h)) return "—";
@@ -177,7 +178,7 @@ function LogSizeModal({ id, onClose }: { id: string; onClose: () => void }) {
 }
 
 // ---------- Tech pack ----------
-type Pack = { id: string; version: number; file_name: string; note: string | null; doc_date: string | null };
+type Pack = { id: string; version: number; file_name: string; note: string | null; doc_date: string | null; asset_ref?: string | null };
 export function TechPackCard({ familyId, packs }: { familyId: string; packs: Pack[] }) {
   const [open, setOpen] = useState(false);
   const sorted = [...packs].sort((a, b) => b.version - a.version);
@@ -194,7 +195,9 @@ export function TechPackCard({ familyId, packs }: { familyId: string; packs: Pac
       ) : (
         <div className="space-y-2">
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <div className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4 text-primary" /><span className="font-medium">v{latest.version}</span><Badge tone="brand">Latest</Badge></div>
+            <div className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4 text-primary" /><span className="font-medium">v{latest.version}</span><Badge tone="brand">Latest</Badge>
+              {latest.asset_ref && <a href={latest.asset_ref} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">View PDF <ExternalLink className="h-3.5 w-3.5" /></a>}
+            </div>
             <div className="mt-1 text-[12px] text-muted-foreground">{latest.file_name} · {latest.doc_date}</div>
             {latest.note && <div className="text-[12px] text-muted-foreground">{latest.note}</div>}
           </div>
@@ -216,27 +219,45 @@ export function TechPackCard({ familyId, packs }: { familyId: string; packs: Pac
 function TechPackModal({ familyId, nextVersion, onClose }: { familyId: string; nextVersion: number; onClose: () => void }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  const [file, setFile] = useState<File | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const supabase = createClient();
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await addTechPack(familyId, form);
-      if (!res.ok) { setError(res.error); return; }
-      onClose(); router.refresh();
-    });
+    if (!file) { setError("Choose a PDF first."); return; }
+    setError(null); setBusy(true);
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `${familyId}/techpacks/v${nextVersion}-${safe}`;
+    const { error: upErr } = await supabase.storage.from("product-media").upload(path, file, { upsert: true });
+    if (upErr) { setError(upErr.message); setBusy(false); return; }
+    const url = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
+    const form = new FormData();
+    form.set("file_name", file.name);
+    form.set("asset_ref", url);
+    form.set("file_size", String(file.size));
+    form.set("note", note);
+    const res = await addTechPack(familyId, form);
+    setBusy(false);
+    if (!res.ok) { setError(res.error); return; }
+    onClose(); router.refresh();
   }
+
   return (
     <Modal open onClose={onClose} title={`Tech pack · v${nextVersion}`}>
-      <p className="-mt-2 mb-4 text-sm text-muted-foreground">Record this version. File upload (PDF) wires with Supabase Storage next.</p>
+      <p className="-mt-2 mb-4 text-sm text-muted-foreground">Upload the product spec PDF. It&apos;s saved as version {nextVersion}; older versions stay in history.</p>
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="File name"><input name="file_name" required autoFocus className={inputCls} placeholder="e.g. SWC-18-techpack-v2.pdf" /></Field>
-        <Field label="What changed (optional)"><input name="note" className={inputCls} placeholder="e.g. Updated stitching spec + new colorway" /></Field>
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-8 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary">
+          <Upload className="h-5 w-5" />
+          <span>{file ? file.name : "Choose a PDF — click to browse"}</span>
+          <input type="file" accept="application/pdf" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <Field label="What changed (optional)"><input value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} placeholder="e.g. Updated stitching spec + new colorway" /></Field>
         {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : `Save v${nextVersion}`}</PrimaryButton>
+          <PrimaryButton type="submit" disabled={busy || !file} className="inline-flex items-center gap-1.5">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</> : `Save v${nextVersion}`}</PrimaryButton>
         </div>
       </form>
     </Modal>

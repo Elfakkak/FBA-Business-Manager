@@ -109,15 +109,39 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+export async function addProductImage(id: string, url: string): Promise<Result> {
+  if (!url) return { ok: false, error: "No image." };
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from("products").select("images").eq("id", id).maybeSingle();
+  const images = Array.isArray(cur?.images) ? [...(cur!.images as string[])] : [];
+  images.push(url);
+  const { error } = await supabase.from("products").update({ images }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${id}`);
+  return { ok: true };
+}
+
+export async function removeProductImage(id: string, url: string): Promise<Result> {
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from("products").select("images").eq("id", id).maybeSingle();
+  const images = (Array.isArray(cur?.images) ? (cur!.images as string[]) : []).filter((u) => u !== url);
+  const { error } = await supabase.from("products").update({ images }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${id}`);
+  return { ok: true };
+}
+
 export async function addTechPack(familyId: string, form: FormData): Promise<Result> {
   const fileName = String(form.get("file_name") ?? "").trim();
   const note = String(form.get("note") ?? "").trim() || null;
+  const assetRef = String(form.get("asset_ref") ?? "").trim() || null;
+  const fileSize = parseInt(String(form.get("file_size") ?? "")) || null;
   if (!fileName) return { ok: false, error: "File name is required." };
   const supabase = await createClient();
   const { data: latest } = await supabase.from("product_tech_packs").select("version").eq("family_id", familyId).order("version", { ascending: false }).limit(1).maybeSingle();
   const version = (latest?.version ?? 0) + 1;
   const { error } = await supabase.from("product_tech_packs").insert({
-    family_id: familyId, version, file_name: fileName, note, doc_date: new Date().toISOString().slice(0, 10),
+    family_id: familyId, version, file_name: fileName, note, asset_ref: assetRef, file_size: fileSize, doc_date: new Date().toISOString().slice(0, 10),
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/catalog/${familyId}`);

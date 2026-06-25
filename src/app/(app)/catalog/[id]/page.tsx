@@ -10,6 +10,7 @@ import {
 import { VariantsTable } from "./variants-table";
 import { EditProductButton } from "./edit-product-button";
 import { StorageBar, DimensionsCard, TechPackCard } from "./product-extras";
+import { ProductImages } from "./product-images";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp, Wallet, Warehouse, Boxes, FileText, History,
@@ -52,7 +53,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
-  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date").eq("family_id", id);
+  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref").eq("family_id", id);
   const dimHistory = Array.isArray(p.dim_history) ? (p.dim_history as never[]) : [];
 
   return (
@@ -99,10 +100,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
       <StorageBar dimCm={dim} />
 
-      {/* facts */}
+      {/* images + facts */}
       <Card className="p-5">
-        <SectionTitle icon={ImageIcon} tone="muted" title="Snapshot" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <SectionTitle icon={ImageIcon} tone="muted" title="Images" />
+        <ProductImages id={id} images={Array.isArray(p.images) ? (p.images as string[]) : []} />
+        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Fact label="FBA stock" value={num(s.stock)} sub="units" source="amazon" />
           <Fact label="Inbound" value={num(s.inbound)} sub="to FBA" source="amazon" />
           <Fact label="Variants" value={num(s.skuCount)} sub="SKUs" />
