@@ -9,6 +9,14 @@ export type PackagingMove = Database["public"]["Tables"]["packaging_moves"]["Row
 
 export const CAT_LOW_STOCK = 40;
 export const INV_SAFETY_DAYS = 14;
+export const INV_FCS = ["ONT8", "LGB8", "MDW2", "ATL6"];
+
+// Reorder suggestion: cover lead time + ~45 days, round to 25, floor 50.
+export function reorderQty(velocity: number, leadTimeDays: number, available: number, inbound: number) {
+  const target = Math.ceil(velocity * (leadTimeDays + 45));
+  const have = available + inbound;
+  return Math.max(50, Math.ceil(Math.max(0, target - have) / 25) * 25);
+}
 
 export type Tone = "success" | "warning" | "danger" | "info" | "brand" | "muted";
 
