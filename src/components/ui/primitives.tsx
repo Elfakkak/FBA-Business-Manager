@@ -63,20 +63,30 @@ export function Kpi({
   sub,
   tone,
   source,
+  icon: Icon,
+  progress,
 }: {
   label: string;
   value: React.ReactNode;
   sub?: string;
   tone?: Tone;
   source?: "amazon" | "manual";
+  icon?: React.ElementType;
+  progress?: number; // 0-100, renders a thin bar under the value
 }) {
   return (
     <div className={cn("vy-card vy-kpi", tone && KPI_TONE_CLASS[tone])}>
       <div className="flex items-center gap-1.5">
+        {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
         <span className="vy-kicker">{label}</span>
         {source && <SourceTag source={source} />}
       </div>
       <div className="vy-kpi-value">{value}</div>
+      {progress != null && (
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-success" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+        </div>
+      )}
       {sub && <div className="vy-kpi-sub">{sub}</div>}
     </div>
   );

@@ -7,19 +7,30 @@ import { Card, Badge, Kpi, PageHead, Chip, SectionTitle } from "@/components/ui/
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { updateOrder, setOrderStatus } from "../actions";
 import {
-  money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE,
+  money, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE,
   type OrderRow, type InvoiceRow,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Factory, Route, Pencil, Check, Hammer, ClipboardCheck, Truck, Receipt, PackageCheck } from "lucide-react";
+import {
+  Factory, Route, Pencil, Check, Hammer, ClipboardCheck, Truck, Receipt,
+  PackageCheck, LayoutDashboard, ChevronRight, AlertCircle,
+} from "lucide-react";
 
-const SECTIONS = [
-  { key: "production", label: "Production", icon: Hammer },
-  { key: "inspection", label: "Inspection", icon: ClipboardCheck },
-  { key: "shipping", label: "Shipping", icon: Truck },
-  { key: "invoices", label: "Invoices", icon: Receipt },
-  { key: "closeout", label: "Closeout", icon: PackageCheck },
-] as const;
+type Tone = "brand" | "success" | "info" | "warning" | "muted";
+const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Tone }[] = [
+  { key: "overview", label: "Home", icon: LayoutDashboard, tone: "muted" },
+  { key: "production", label: "Production", icon: Hammer, tone: "brand" },
+  { key: "inspection", label: "Inspection", icon: ClipboardCheck, tone: "success" },
+  { key: "shipping", label: "Shipping", icon: Truck, tone: "info" },
+  { key: "invoices", label: "Invoices", icon: Receipt, tone: "warning" },
+  { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
+];
+
+function addDays(iso: string, n: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 export function OrderShell({ order, invoices, rollup }: {
   order: OrderRow;
@@ -27,12 +38,20 @@ export function OrderShell({ order, invoices, rollup }: {
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<string>("invoices");
+  const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
-
   const advance = (key: string) => start(async () => { await setOrderStatus(order.id, key); router.refresh(); });
+
+  // D1/D14/D25/D30 milestones derived from placed_on; tone from pipeline position.
+  const placed = order.placed_on;
+  const milestones = placed ? [
+    { label: "D1 · Materials", date: placed, doneAt: 1, flightAt: 1 },
+    { label: "D14 · Production", date: addDays(placed, 13), doneAt: 2, flightAt: 1 },
+    { label: "D25 · Inspection", date: addDays(placed, 24), doneAt: 3, flightAt: 2 },
+    { label: "D30 · Ready to ship", date: addDays(placed, 29), doneAt: 3, flightAt: 2 },
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -56,24 +75,34 @@ export function OrderShell({ order, invoices, rollup }: {
         {order.placed_on && <Chip>Placed {order.placed_on}</Chip>}
       </div>
 
+      {/* milestone strip */}
+      {milestones.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {milestones.map((m) => {
+            const done = curIdx >= m.doneAt, flight = !done && curIdx >= m.flightAt;
+            return (
+              <div key={m.label} className={cn("rounded-lg border px-3 py-2.5",
+                done ? "border-success/30 bg-success/10" : flight ? "border-warning/40 bg-warning/10" : "bg-card")}>
+                <div className={cn("text-[10px] font-bold uppercase tracking-wide", done ? "text-success" : flight ? "text-warning" : "text-muted-foreground")}>{m.label}</div>
+                <div className="mt-0.5 text-[11px]">{done ? `✓ ${m.date}` : flight ? `In flight · ${m.date}` : `est ${m.date}`}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* status pipeline stepper */}
       <Card className="p-4">
-        <div className="mb-3 vy-kicker">Lifecycle</div>
+        <div className="vy-kicker mb-3">Lifecycle</div>
         <div className="flex flex-wrap gap-2">
           {ORDER_PIPELINE.map((p, i) => {
             const done = i < curIdx, current = i === curIdx;
             return (
-              <button
-                key={p.key}
-                onClick={() => advance(p.key)}
-                disabled={pending}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                  current ? "border-primary/30 bg-primary/12 text-primary"
+              <button key={p.key} onClick={() => advance(p.key)} disabled={pending || current}
+                className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  current ? "border-primary bg-primary text-primary-foreground"
                     : done ? "border-success/30 bg-success/10 text-success"
-                    : "text-muted-foreground hover:bg-accent"
-                )}
-              >
+                    : "text-muted-foreground hover:bg-accent")}>
                 {done && <Check className="h-3 w-3" />}{p.label}
               </button>
             );
@@ -83,7 +112,7 @@ export function OrderShell({ order, invoices, rollup }: {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Order total" value={rollup.total > 0 ? money(rollup.total) : "—"} sub="from invoices" />
-        <Kpi label="Paid" value={money(rollup.paid)} sub={`${rollup.paidPct}%`} tone="success" />
+        <Kpi label="Paid" value={money(rollup.paid)} sub={`${rollup.paidPct}% paid`} tone="success" progress={rollup.paidPct} />
         <Kpi label="Balance" value={money(rollup.balance)} sub="outstanding" tone={rollup.balance > 0 ? "warning" : "success"} />
         <Kpi label="FBA arrival" value={order.fba_eta ?? "—"} sub="ETA" source="amazon" />
       </div>
@@ -95,35 +124,17 @@ export function OrderShell({ order, invoices, rollup }: {
           return (
             <button key={s.key} onClick={() => setTab(s.key)}
               className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition",
-                tab === s.key ? "bg-primary/12 font-medium text-primary" : "text-muted-foreground hover:bg-accent")}>
+                tab === s.key ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
               <Icon className="h-3.5 w-3.5" /> {s.label}
             </button>
           );
         })}
       </div>
 
-      {tab === "invoices" ? (
-        <Card className="p-5">
-          <SectionTitle icon={Receipt} tone="warning" title="Invoices & payables" count={invoices.length} />
-          {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No invoices on this order yet.</p>
-          ) : (
-            <ul className="divide-y">
-              {invoices.map((inv) => {
-                const bal = Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
-                return (
-                  <li key={inv.id} className="flex items-center gap-3 py-2.5">
-                    <span className="font-mono text-[12px] font-semibold">{inv.id}</span>
-                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{inv.vendor_type}</span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{inv.vendor} · due {inv.due ?? "—"}</span>
-                    <span className="tabular font-mono text-sm">{money(inv.total)}</span>
-                    {bal > 0 ? <Badge tone="warning">{money(bal)} due</Badge> : <Badge tone="success">Paid</Badge>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+      {tab === "overview" ? (
+        <Overview order={order} rollup={rollup} curIdx={curIdx} onJump={setTab} />
+      ) : tab === "invoices" ? (
+        <InvoicesPanel invoices={invoices} />
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}
@@ -133,20 +144,104 @@ export function OrderShell({ order, invoices, rollup }: {
   );
 }
 
-function StagePanel({ tab, status }: { tab: string; status: string }) {
-  const meta: Record<string, { icon: React.ElementType; tone: "brand" | "success" | "info"; title: string; body: string }> = {
-    production: { icon: Hammer, tone: "brand", title: "Production", body: "Units, SKU breakdown and WIP milestones for this order. Production tracking lands with the catalog→order line items." },
-    inspection: { icon: ClipboardCheck, tone: "success", title: "Inspection", body: "AQL inspection booking, report and pass/fail. Wires up when the inspection partner flow is connected." },
-    shipping: { icon: Truck, tone: "info", title: "Shipping", body: "Freight legs, forwarder, incoterm, ETD/ETA and FBA inbounds. Builds with the Logistics phase." },
-    closeout: { icon: PackageCheck, tone: "success", title: "Closeout", body: "Reconcile receiving, compute landed cost per unit and close the order. Lights up once shipping + invoices are complete." },
-  };
-  const m = meta[tab] ?? meta.production;
-  const Icon = m.icon;
+function Overview({ order, rollup, curIdx, onJump }: {
+  order: OrderRow; rollup: { balance: number; invoiceCount: number }; curIdx: number; onJump: (k: string) => void;
+}) {
+  // needs-attention derived from status + balance
+  const needs: { tone: Tone; text: string }[] = [];
+  if (rollup.balance > 0) needs.push({ tone: "warning", text: `${money(rollup.balance)} unpaid across ${rollup.invoiceCount} invoice(s)` });
+  if (order.status === "draft") needs.push({ tone: "muted", text: "Draft — send deposit to start production" });
+  if (order.status === "inspection") needs.push({ tone: "warning", text: "Inspection pending — book QC / review report" });
+  if (order.status === "transit") needs.push({ tone: "info", text: "In transit — track shipment to FBA" });
+  if (order.status === "fba") needs.push({ tone: "success", text: "At FBA — reconcile receiving & compute landed cost" });
+
+  const cards = SECTIONS.filter((s) => s.key !== "overview").map((s) => {
+    const idx = { production: 1, inspection: 2, shipping: 3, invoices: -1, landed: 4 }[s.key] ?? -1;
+    const state = s.key === "invoices" ? (rollup.balance > 0 ? "Open" : "Settled")
+      : idx < 0 ? "—" : curIdx > idx ? "Done" : curIdx === idx ? "Current" : "Upcoming";
+    const tone: Tone = state === "Done" || state === "Settled" ? "success" : state === "Current" || state === "Open" ? "warning" : "muted";
+    return { ...s, state, tone };
+  });
+
+  return (
+    <div className="space-y-4">
+      {needs.length > 0 && (
+        <Card className="p-5">
+          <SectionTitle icon={AlertCircle} tone="warning" title="Needs attention" count={needs.length} />
+          <ul className="space-y-2">
+            {needs.map((n, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                <span className={cn("h-2 w-2 rounded-full",
+                  n.tone === "warning" ? "bg-warning" : n.tone === "info" ? "bg-info" : n.tone === "success" ? "bg-success" : "bg-muted-foreground")} />
+                {n.text}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <button key={c.key} onClick={() => onJump(c.key)} className="vy-card vy-card-hover flex items-center gap-3 p-4 text-left">
+              <span className={cn("inline-grid h-10 w-10 place-items-center rounded-lg",
+                c.tone === "success" ? "bg-success/12 text-success" : c.tone === "warning" ? "bg-warning/12 text-warning" : "bg-muted text-muted-foreground")}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{c.label}</div>
+                <div className="text-[12px] text-muted-foreground">{c.state}</div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InvoicesPanel({ invoices }: { invoices: InvoiceRow[] }) {
   return (
     <Card className="p-5">
-      <SectionTitle icon={Icon} tone={m.tone} title={m.title} />
+      <SectionTitle icon={Receipt} tone="warning" title="Invoices & payables" count={invoices.length} />
+      {invoices.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No invoices on this order yet.</p>
+      ) : (
+        <ul className="divide-y">
+          {invoices.map((inv) => {
+            const bal = Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
+            return (
+              <li key={inv.id} className="flex items-center gap-3 py-2.5">
+                <span className="font-mono text-[12px] font-semibold">{inv.id}</span>
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{inv.vendor_type}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{inv.vendor} · due {inv.due ?? "—"}</span>
+                <span className="tabular font-mono text-sm">{money(inv.total)}</span>
+                {bal > 0 ? <Badge tone="warning">{money(bal)} due</Badge> : <Badge tone="success">Paid</Badge>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function StagePanel({ tab, status }: { tab: string; status: string }) {
+  const meta: Record<string, { body: string }> = {
+    production: { body: "Units, SKU breakdown and WIP milestones for this order. Production tracking lands with the catalog→order line items." },
+    inspection: { body: "AQL inspection booking, report and pass/fail. Wires up when the inspection partner flow is connected." },
+    shipping: { body: "Freight legs, forwarder, incoterm, ETD/ETA and FBA inbounds. Builds with the Logistics phase." },
+    landed: { body: "Reconcile receiving and compute landed cost per unit, then close the order. Lights up once shipping + invoices are complete." },
+  };
+  const sec = SECTIONS.find((s) => s.key === tab)!;
+  const Icon = sec.icon;
+  return (
+    <Card className="p-5">
+      <SectionTitle icon={Icon} tone={sec.tone} title={sec.label} />
       <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center">
-        <p className="mx-auto max-w-md text-sm text-muted-foreground">{m.body}</p>
+        <p className="mx-auto max-w-md text-sm text-muted-foreground">{meta[tab]?.body}</p>
         <p className="mt-2 text-[11px] text-muted-foreground">Current order status: <span className="font-medium text-foreground">{ORDER_STATUS_LABEL[status] ?? status}</span></p>
       </div>
     </Card>

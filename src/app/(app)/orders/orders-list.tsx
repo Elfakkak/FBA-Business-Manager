@@ -8,7 +8,7 @@ import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components
 import { createOrder } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Boxes, Wallet, Hammer, ClipboardCheck, Truck, PackageCheck } from "lucide-react";
 
 export type OrderSummary = {
   id: string; title: string; supplier: string | null; agent: string | null;
@@ -32,23 +32,25 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
   }, [orders, q, stage]);
 
   const openOrders = orders.filter((o) => o.status !== "closed" && o.status !== "fba").length;
-  const totalValue = orders.reduce((s, o) => s + o.total, 0);
   const outstanding = orders.reduce((s, o) => s + o.balance, 0);
+  const byStatus = (k: string) => orders.filter((o) => o.status === k).length;
 
   return (
     <div className="space-y-6">
       <PageHead
-        kicker="Operations"
+        kicker="Operations command center"
         title="Orders"
         sub="Every purchase order across its lifecycle — production, inspection, shipping, invoices and landed cost."
         actions={<NewOrderButton suppliers={suppliers} agents={agents} />}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Orders" value={num(orders.length)} sub={`${openOrders} in flight`} />
-        <Kpi label="Open orders" value={num(openOrders)} sub="not yet at FBA" tone="info" />
-        <Kpi label="Order value" value={money(totalValue)} sub="invoiced total" />
-        <Kpi label="Outstanding" value={money(outstanding)} sub="unpaid balance" tone={outstanding > 0 ? "warning" : "success"} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <Kpi label="Open orders" value={num(openOrders)} sub="in flight" icon={Boxes} tone="info" />
+        <Kpi label="Outstanding" value={money(outstanding)} sub="unpaid exposure" icon={Wallet} tone={outstanding > 0 ? "warning" : "success"} />
+        <Kpi label="In production" value={num(byStatus("production"))} sub="being made" icon={Hammer} />
+        <Kpi label="Inspection" value={num(byStatus("inspection"))} sub="QC needed" icon={ClipboardCheck} tone={byStatus("inspection") ? "warning" : undefined} />
+        <Kpi label="In transit" value={num(byStatus("transit"))} sub="shipping" icon={Truck} />
+        <Kpi label="At FBA" value={num(byStatus("fba"))} sub="ready to close" icon={PackageCheck} tone="success" />
       </div>
 
       <Card className="p-3">
@@ -74,10 +76,10 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Order</th>
                 <th className="px-4 py-2 font-medium">Supplier</th>
+                <th className="px-4 py-2 font-medium">Dates</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 text-right font-medium">Total</th>
                 <th className="px-4 py-2 text-right font-medium">Paid</th>
-                <th className="px-4 py-2 text-right font-medium">FBA ETA</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
@@ -94,12 +96,15 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
                     <div>{o.supplier ?? "—"}</div>
                     {o.agent && <div className="text-[11px] text-muted-foreground">via {o.agent}</div>}
                   </td>
+                  <td className="px-4 py-2.5 text-[12px]">
+                    <div className="text-muted-foreground">Placed <span className="text-foreground">{o.placedOn ?? "—"}</span></div>
+                    <div className="text-muted-foreground">FBA ETA <span className="text-foreground">{o.fbaEta ?? "—"}</span></div>
+                  </td>
                   <td className="px-4 py-2.5"><Badge tone={ORDER_STATUS_TONE[o.status] ?? "muted"}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Badge></td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{o.total > 0 ? money(o.total) : "—"}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">
                     {o.total > 0 ? <>{money(o.paid)}<span className="text-[11px] text-muted-foreground"> · {o.paidPct}%</span></> : "—"}
                   </td>
-                  <td className="tabular px-4 py-2.5 text-right font-mono text-muted-foreground">{o.fbaEta ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right"><Link href={`/orders/${o.id}`}><ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" /></Link></td>
                 </tr>
               ))}
