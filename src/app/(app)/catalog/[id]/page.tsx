@@ -9,9 +9,10 @@ import {
 } from "@/lib/derive";
 import { VariantsTable } from "./variants-table";
 import { EditProductButton } from "./edit-product-button";
+import { StorageBar, DimensionsCard, TechPackCard } from "./product-extras";
 import { cn } from "@/lib/utils";
 import {
-  TrendingUp, Wallet, Warehouse, Boxes, Ruler, FileText, History,
+  TrendingUp, Wallet, Warehouse, Boxes, FileText, History,
   ShoppingCart, ImageIcon,
 } from "lucide-react";
 
@@ -51,6 +52,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
+  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date").eq("family_id", id);
+  const dimHistory = Array.isArray(p.dim_history) ? (p.dim_history as never[]) : [];
 
   return (
     <div className="space-y-6">
@@ -93,6 +96,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <Kpi label="Avg COGS" value={eco.avgCogs != null ? money(eco.avgCogs) : "—"} sub="from last orders" icon={Boxes} source="manual" />
         <Kpi label="FBA stock" value={num(s.stock)} sub={`${s.skuCount} SKUs`} icon={Warehouse} source="amazon" tone="success" />
       </div>
+
+      <StorageBar dimCm={dim} />
 
       {/* facts */}
       <Card className="p-5">
@@ -144,32 +149,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       </Card>
 
       {/* dimensions & weight */}
-      <Card className="p-5">
-        <SectionTitle icon={Ruler} tone="brand" title="Dimensions & weight" />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="vy-kicker mb-2">Product — each unit</div>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <DField label="Size" value={dim?.l ? `${dim.l}×${dim.w}×${dim.h} cm` : p.dims ?? "—"} />
-              <DField label="Weight" value={p.weight_kg ? `${p.weight_kg} kg` : p.weight_lbs ? `${p.weight_lbs} lb` : "—"} />
-            </dl>
-          </div>
-          <div>
-            <div className="vy-kicker mb-2">Master carton</div>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <DField label="Size" value={carton?.l ? `${carton.l}×${carton.w}×${carton.h} cm` : "—"} />
-              <DField label="Pieces / box" value={p.units_per_carton ? num(p.units_per_carton) : "—"} />
-            </dl>
-          </div>
-        </div>
-        <p className="mt-4 text-[11px] text-muted-foreground">No changes logged yet — dimensions and size/weight history fill in as you log new sizes.</p>
-      </Card>
+      <DimensionsCard
+        id={id}
+        dimCm={dim}
+        weightKg={p.weight_kg}
+        cartonCm={carton}
+        unitsPerCarton={p.units_per_carton}
+        history={dimHistory}
+      />
 
       {/* tech pack */}
-      <Card className="p-5">
-        <SectionTitle icon={FileText} tone="warning" title="Tech pack" />
-        <EmptyBlock>No tech pack uploaded yet. Upload the product spec PDF; re-upload anytime to add a new version.</EmptyBlock>
-      </Card>
+      <TechPackCard familyId={id} packs={techPacks ?? []} />
 
       {/* cost + order history */}
       <div className="grid gap-4 lg:grid-cols-2">

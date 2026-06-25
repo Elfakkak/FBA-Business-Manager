@@ -215,6 +215,48 @@ export function familyEco(variants: Variant[], weightLb: number) {
   return { avgMargin, avgCogs, avgFba, pricedCount: priced.length, total: variants.length };
 }
 
+// ---------- dual-unit conversions + Amazon size compliance + storage ----------
+const CM_PER_IN = 2.54, LB_PER_KG = 2.20462;
+export const inFromCm = (cm: number) => Math.round((cm / CM_PER_IN) * 10) / 10;
+export const cmFromIn = (i: number) => Math.round(i * CM_PER_IN * 10) / 10;
+export const lbFromKg = (kg: number) => Math.round(kg * LB_PER_KG * 100) / 100;
+export const kgFromLb = (lb: number) => Math.round((lb / LB_PER_KG) * 100) / 100;
+
+export type Dim = { l?: number | null; w?: number | null; h?: number | null } | null;
+
+export function sizeCompliance(dimCm: Dim, weightKg: number | null) {
+  const lb = weightKg ? lbFromKg(weightKg) : 0;
+  const hasDims = !!(dimCm && (dimCm.l || dimCm.w || dimCm.h));
+  let level: "standard" | "oversize" | "over-max" = "standard";
+  if (hasDims) {
+    const ins = [dimCm!.l ?? 0, dimCm!.w ?? 0, dimCm!.h ?? 0].map(inFromCm).sort((a, b) => b - a);
+    const [a, b, c] = ins;
+    const girth = a + 2 * (b + c);
+    if (a > 108 || girth > 165 || lb > 150) level = "over-max";
+    else if (a > 18 || b > 14 || c > 8 || lb > 20) level = "oversize";
+    const stdOk = a <= 18 && b <= 14 && c <= 8 && lb <= 20;
+    const awdOk = a <= 25 && lb <= 50;
+    return compliance(level, stdOk, awdOk);
+  }
+  if (lb > 150) level = "over-max"; else if (lb > 20) level = "oversize";
+  return compliance(level, lb <= 20, lb <= 50);
+}
+function compliance(level: "standard" | "oversize" | "over-max", stdOk: boolean, awdOk: boolean) {
+  const map = {
+    standard: { tone: "success" as Tone, label: "Within Amazon standard size", detail: "Inside the standard-size limit — lowest FBA fees." },
+    oversize: { tone: "danger" as Tone, label: "Over standard — oversize", detail: "Past the standard-size limit, so it ships at higher oversize fees." },
+    "over-max": { tone: "danger" as Tone, label: "Exceeds Amazon maximum", detail: "Over Amazon's absolute limit (108in longest · 165in length+girth · 150lb)." },
+  };
+  return { level, stdOk, awdOk, ...map[level] };
+}
+
+export function storagePerUnit(dimCm: Dim, months: number, peak: boolean) {
+  if (!dimCm || !(dimCm.l && dimCm.w && dimCm.h)) return 0;
+  const cuFt = (inFromCm(dimCm.l) * inFromCm(dimCm.w) * inFromCm(dimCm.h)) / 1728;
+  const rate = peak ? 2.4 : 0.78;
+  return Math.round(cuFt * rate * months * 100) / 100;
+}
+
 export function marginTone(marginPct: number | null): Tone {
   if (marginPct == null) return "muted";
   if (marginPct <= 0) return "danger";

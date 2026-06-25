@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { Dim } from "@/lib/derive";
 import type { Database } from "@/lib/database.types";
 
 type VariantUpdate = Database["public"]["Tables"]["product_variants"]["Update"];
@@ -76,6 +77,50 @@ export async function updateProduct(id: string, form: FormData): Promise<Result>
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/catalog/${id}`);
   revalidatePath("/catalog");
+  return { ok: true };
+}
+
+export async function logNewSize(id: string, form: FormData): Promise<Result> {
+  const supabase = await createClient();
+  const flt = (k: string) => { const v = String(form.get(k) ?? "").trim(); return v === "" ? null : (parseFloat(v) || null); };
+  const intv = (k: string) => { const v = String(form.get(k) ?? "").trim(); return v === "" ? null : (parseInt(v) || null); };
+  const dim = { l: flt("dim_l"), w: flt("dim_w"), h: flt("dim_h") };
+  const carton = { l: flt("carton_l"), w: flt("carton_w"), h: flt("carton_h") };
+  const weight = flt("weight_kg");
+  const units = intv("units_per_carton");
+  const note = String(form.get("note") ?? "").trim() || null;
+
+  const { data: cur } = await supabase.from("products").select("dim_history, dim_cm, weight_kg, carton_cm, units_per_carton").eq("id", id).maybeSingle();
+  const history = Array.isArray(cur?.dim_history) ? [...(cur!.dim_history as unknown[])] : [];
+  const today = new Date().toISOString().slice(0, 10);
+  // seed an "Earlier" entry from current values if history is empty
+  const curDim = cur?.dim_cm as Dim;
+  if (history.length === 0 && curDim && (curDim.l || curDim.w || curDim.h)) {
+    history.push({ date: "Earlier", dimCm: cur!.dim_cm, weightKg: cur!.weight_kg, cartonCm: cur!.carton_cm, unitsPerCarton: cur!.units_per_carton });
+  }
+  history.push({ date: today, dimCm: dim, weightKg: weight, cartonCm: carton, unitsPerCarton: units, note });
+
+  const { error } = await supabase.from("products").update({
+    dim_cm: dim, weight_kg: weight, carton_cm: carton, units_per_carton: units,
+    dim_history: history as never,
+  }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${id}`);
+  return { ok: true };
+}
+
+export async function addTechPack(familyId: string, form: FormData): Promise<Result> {
+  const fileName = String(form.get("file_name") ?? "").trim();
+  const note = String(form.get("note") ?? "").trim() || null;
+  if (!fileName) return { ok: false, error: "File name is required." };
+  const supabase = await createClient();
+  const { data: latest } = await supabase.from("product_tech_packs").select("version").eq("family_id", familyId).order("version", { ascending: false }).limit(1).maybeSingle();
+  const version = (latest?.version ?? 0) + 1;
+  const { error } = await supabase.from("product_tech_packs").insert({
+    family_id: familyId, version, file_name: fileName, note, doc_date: new Date().toISOString().slice(0, 10),
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${familyId}`);
   return { ok: true };
 }
 
