@@ -165,6 +165,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           status: v.status, prep: v.prep, reorder_point: v.reorder_point,
           // same invStats the Inventory page uses → product & inventory always agree
           invHealth: invStats(v, p.lead_time_days ?? 0).health,
+          fbaFee: ((v as Variant & { amazon_meta?: AmazonMeta | null }).amazon_meta)?.fbaFee ?? null,
+          inbound: v.inbound ?? 0,
         }))}
       />
 

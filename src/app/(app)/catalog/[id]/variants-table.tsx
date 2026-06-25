@@ -12,7 +12,7 @@ import { AddVariantButton, EditVariantButton } from "./variant-actions";
 export type VRow = {
   id: string; sku: string; name: string; pack: string; fnsku: string | null; asin: string | null;
   fba_stock: number; last_cost_usd: number | null; sale_price: number | null; status: string; prep: string; reorder_point: number | null;
-  invHealth: InvHealth;
+  invHealth: InvHealth; fbaFee: number | null; inbound: number;
 };
 
 export function VariantsTable({ familyId, weightLb, variants }: { familyId: string; weightLb: number; variants: VRow[] }) {
@@ -22,14 +22,16 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
   return (
     <>
       <TableCard icon={Package} tone="brand" title="Variants" count={variants.length} action={<AddVariantButton familyId={familyId} />}>
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[960px] text-sm">
           <thead>
             <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-2 font-medium">SKU</th>
               <th className="px-4 py-2 font-medium">Variant</th>
               <th className="px-4 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU <SourceTag source="amazon" /></span></th>
               <th className="px-4 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">FBA <SourceTag source="amazon" /></span></th>
+              <th className="px-4 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">Inbound <SourceTag source="amazon" /></span></th>
               <th className="px-4 py-2 font-medium">Stock</th>
+              <th className="px-4 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">FBA fee <SourceTag source="amazon" /></span></th>
               <th className="px-4 py-2 text-right font-medium">Cost</th>
               <th className="px-4 py-2 text-right font-medium">Price</th>
               <th className="px-4 py-2 font-medium">Status</th>
@@ -51,7 +53,9 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
                       {num(v.fba_stock)} <ArrowUpRight className="h-3 w-3 opacity-60" />
                     </Link>
                   </td>
+                  <td className={cn("tabular px-4 py-2.5 text-right font-mono", v.inbound > 0 ? "text-info" : "text-muted-foreground")}>{v.inbound > 0 ? num(v.inbound) : "—"}</td>
                   <td className="px-4 py-2.5"><Badge tone={INV_HEALTH_TONE[v.invHealth]}>{v.invHealth}</Badge></td>
+                  <td className="tabular px-4 py-2.5 text-right font-mono">{v.fbaFee != null ? money(v.fbaFee) : "—"}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{money(v.last_cost_usd)}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{e.price > 0 ? money(e.price) : "—"}</td>
                   <td className="px-4 py-2.5"><Badge tone={VARIANT_STATUS_TONE[v.status] ?? "muted"}>{v.status}</Badge></td>
