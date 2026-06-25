@@ -21,7 +21,7 @@ const NAV: Group[] = [
       { label: "Orders", href: "/orders", section: "orders", icon: Package, ready: true },
       { label: "Invoices", href: "/invoices", section: "finance", icon: Receipt },
       { label: "Shipments", href: "/shipments", section: "shipments", icon: Ship },
-      { label: "FBA Shipments", href: "/fba-shipments", section: "shipments", icon: Truck },
+      { label: "FBA Shipments", href: "/fba-shipments", section: "shipments", icon: Truck, ready: true },
     ],
   },
   {

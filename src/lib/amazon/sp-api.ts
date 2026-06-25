@@ -33,11 +33,11 @@ export function spCredsFromEnv(): AmazonCreds {
 
 export class SpApiError extends Error {}
 
-function hostFor(region?: string) {
+export function hostFor(region?: string) {
   return REGION_HOST[(region ?? "na").toLowerCase()] ?? REGION_HOST.na;
 }
 
-async function getAccessToken(creds: AmazonCreds): Promise<string> {
+export async function getAccessToken(creds: AmazonCreds): Promise<string> {
   if (!creds.client_id || !creds.client_secret || !creds.refresh_token) {
     throw new SpApiError("Missing LWA credentials (Client ID, Client Secret, Refresh token).");
   }
