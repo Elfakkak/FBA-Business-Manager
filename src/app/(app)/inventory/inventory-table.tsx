@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, SourceTag } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
 import { INV_HEALTH_TONE, INV_FCS, INV_SAFETY_DAYS, num, type InvHealth } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
 import { setReorderPoint } from "./actions";
@@ -137,10 +137,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync }: { rows: InvR
 
       {/* table */}
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
-          <span className="font-medium">{filtered.length} SKUs</span>
-          <span className="text-muted-foreground">Available = on-hand − reserved − unfulfillable</span>
-        </div>
+        <CardHeader title={`${filtered.length} SKUs`} caption="Available = on-hand − reserved − unfulfillable" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead>

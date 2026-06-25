@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, Avatar } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createSupplier } from "./actions";
@@ -56,11 +56,8 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
           className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
-          <span className="font-medium">{filtered.length} suppliers</span>
-          <span className="text-muted-foreground">Open AP = unpaid goods + agent bills on their orders</span>
-        </div>
+      <Card className="overflow-hidden">
+        <CardHeader title={`${filtered.length} suppliers`} caption="Open AP = unpaid goods + agent bills on their orders" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>

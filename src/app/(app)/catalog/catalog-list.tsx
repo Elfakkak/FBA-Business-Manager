@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, num, type FamilyHealth } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -106,11 +106,8 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
-          <span className="font-medium">{filtered.length} products</span>
-          <span className="text-muted-foreground">Sorted by family</span>
-        </div>
+      <Card className="overflow-hidden">
+        <CardHeader title={`${filtered.length} products`} caption="Sorted by family" />
         {filtered.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">No products match your filters.</div>
         ) : (

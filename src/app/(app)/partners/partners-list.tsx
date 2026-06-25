@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, Avatar } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createPartner } from "./actions";
@@ -74,11 +74,8 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
-          <span className="font-medium">{filtered.length} partners</span>
-          <span className="text-muted-foreground">Open AP = unpaid service bills (not goods)</span>
-        </div>
+      <Card className="overflow-hidden">
+        <CardHeader title={`${filtered.length} partners`} caption="Open AP = unpaid service bills (not goods)" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>

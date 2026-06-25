@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { createOrder } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE } from "@/lib/derive";
@@ -66,11 +66,8 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
-          <span className="font-medium">{filtered.length} orders</span>
-          <span className="text-muted-foreground">Total / paid derived from invoices</span>
-        </div>
+      <Card className="overflow-hidden">
+        <CardHeader title={`${filtered.length} orders`} caption="Total / paid derived from invoices" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead>
