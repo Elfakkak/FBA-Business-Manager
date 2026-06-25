@@ -21,13 +21,15 @@ const dimsLabel = (d?: { l: number | null; w: number | null; h: number | null } 
 export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId: string; primarySku: string | null; variants: AmazonVariant[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const primary = variants.find((v) => v.sku === primarySku) ?? variants[0];
+  // default to the highest-stock SKU when none is pinned
+  const primary = variants.find((v) => v.sku === primarySku) ?? [...variants].sort((a, b) => b.fbaStock - a.fbaStock)[0];
   const setPrimary = (sku: string) => start(async () => { await setPrimarySku(familyId, sku); router.refresh(); });
 
   const m = primary?.meta ?? null;
   const dims = m?.dims_in ?? null;
   const tier = amazonSizeTier(dims?.l, dims?.w, dims?.h, m?.weight_lb);
   const referral = primary?.salePrice != null ? primary.salePrice * 0.15 : null;
+  const netAfterAmazon = primary?.salePrice != null && m?.fbaFee != null && referral != null ? primary.salePrice - m.fbaFee - referral : null;
 
   if (!variants.length) return null;
 
@@ -53,7 +55,7 @@ export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId
       {primary && (
         <>
           <div className="mb-3 text-[12px] text-muted-foreground">Showing Amazon data for <span className="font-mono font-semibold text-foreground">{primary.sku}</span>{primary.asin ? <> · ASIN <span className="font-mono">{primary.asin}</span></> : ""}</div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <Detail icon={Package} label="Size tier"><Badge tone={tier.tone}>{tier.tier}</Badge></Detail>
             <Detail icon={Ruler} label="Dimensions">
               <div className="font-mono text-sm font-bold">{dimsLabel(dims, cmFromIn, "cm")}</div>
@@ -70,6 +72,10 @@ export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId
             <Detail icon={Wallet} label="Referral (15%)">
               <div className="font-mono text-sm font-bold">{referral != null ? money(referral) : "—"}</div>
               <div className="text-[10px] text-muted-foreground">{primary.salePrice != null ? `on ${money(primary.salePrice)}` : "set price"}</div>
+            </Detail>
+            <Detail icon={Wallet} label="Net after Amazon">
+              <div className={cn("font-mono text-sm font-bold", netAfterAmazon != null && netAfterAmazon < 0 && "text-danger")}>{netAfterAmazon != null ? money(netAfterAmazon) : "—"}</div>
+              <div className="text-[10px] text-muted-foreground">price − FBA − referral</div>
             </Detail>
           </div>
           {(!m || (!dims && m?.weight_lb == null && m?.fbaFee == null)) && (
