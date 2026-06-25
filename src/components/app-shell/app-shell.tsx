@@ -17,8 +17,8 @@ type Group = { title: string; icon: React.ElementType; href?: string; section?: 
 const NAV: Group[] = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/", section: "dashboard" },
   {
-    title: "Operations", icon: Boxes, items: [
-      { label: "Orders", href: "/orders", section: "orders", icon: Package },
+    title: "Operations", icon: Boxes, defaultOpen: true, items: [
+      { label: "Orders", href: "/orders", section: "orders", icon: Package, ready: true },
       { label: "Invoices", href: "/invoices", section: "finance", icon: Receipt },
       { label: "Shipments", href: "/shipments", section: "shipments", icon: Ship },
       { label: "FBA Shipments", href: "/fba-shipments", section: "shipments", icon: Truck },

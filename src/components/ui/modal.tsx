@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
@@ -22,8 +23,10 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // Portal to <body> so a `backdrop-filter` ancestor (e.g. .vy-card) can't
+  // become the containing block for our position:fixed overlay.
+  return createPortal(
     <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="dialog" aria-modal>
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       {/* Solid (non-translucent) panel, capped height with internal scroll so
@@ -38,7 +41,8 @@ export function Modal({
         </div>
         <div className="overflow-y-auto p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

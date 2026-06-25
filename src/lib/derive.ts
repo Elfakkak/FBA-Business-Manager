@@ -127,6 +127,26 @@ export function partnerRollup(name: string, type: string, orders: OrderRow[], in
   };
 }
 
+// Order money rollup — total/paid/balance derived from its invoices.
+export function orderRollup(orderId: string, invoices: InvoiceRow[]) {
+  const mine = invoices.filter((i) => i.order_id === orderId);
+  const total = mine.reduce((s, i) => s + (i.total ?? 0), 0);
+  const paid = mine.reduce((s, i) => s + (i.paid ?? 0), 0);
+  const balance = Math.max(0, total - paid);
+  const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+  return { total, paid, balance, paidPct, invoiceCount: mine.length };
+}
+
+// Pipeline order for the status stepper.
+export const ORDER_PIPELINE: { key: string; label: string }[] = [
+  { key: "draft", label: "Draft" },
+  { key: "production", label: "Production" },
+  { key: "inspection", label: "Inspection" },
+  { key: "transit", label: "Shipping" },
+  { key: "fba", label: "At FBA" },
+  { key: "closed", label: "Closed" },
+];
+
 export const PARTNER_TYPE_TONE: Record<string, Tone> = {
   Agent: "info",
   Forwarder: "brand",
