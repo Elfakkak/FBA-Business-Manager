@@ -1075,6 +1075,9 @@ export type Database = {
       }
       product_variants: {
         Row: {
+          ad_sales_30d: number | null
+          ad_spend_30d: number | null
+          ad_units_30d: number | null
           amazon_meta: Json | null
           asin: string | null
           created_at: string
@@ -1100,6 +1103,9 @@ export type Database = {
           velocity: number | null
         }
         Insert: {
+          ad_sales_30d?: number | null
+          ad_spend_30d?: number | null
+          ad_units_30d?: number | null
           amazon_meta?: Json | null
           asin?: string | null
           created_at?: string
@@ -1125,6 +1131,9 @@ export type Database = {
           velocity?: number | null
         }
         Update: {
+          ad_sales_30d?: number | null
+          ad_spend_30d?: number | null
+          ad_units_30d?: number | null
           amazon_meta?: Json | null
           asin?: string | null
           created_at?: string

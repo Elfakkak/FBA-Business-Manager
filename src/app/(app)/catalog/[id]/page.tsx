@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/components/ui/primitives";
 import {
-  catFamilyStats, familyEco, familyWeightLb, marginTone, invStats,
+  catFamilyStats, familyEco, familyWeightLb, marginTone, invStats, skuProfit,
   FAMILY_HEALTH_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
   money, num, type Variant, type Product, type AmazonMeta,
 } from "@/lib/derive";
@@ -177,6 +177,48 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           meta: (v.amazon_meta as AmazonMeta | null) ?? null,
         }))}
       />
+
+      {/* Profitability — true net per unit incl. ads + ACoS/TACoS (live Amazon Ads) */}
+      <Card className="p-5">
+        <SectionTitle icon={TrendingUp} tone="brand" title="Profitability"
+          sub="True net per unit (price − COGS − referral − FBA − ad) with ACoS / TACoS from your live Amazon Ads spend (last 30d)." />
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead><tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2 font-medium">SKU</th>
+              <th className="px-3 py-2 text-right font-medium">Price</th>
+              <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">Ad spend 30d <SourceTag source="amazon" /></span></th>
+              <th className="px-3 py-2 text-right font-medium">ACoS</th><th className="px-3 py-2 text-right font-medium">TACoS</th>
+              <th className="px-3 py-2 text-right font-medium">Ad / unit</th><th className="px-3 py-2 text-right font-medium">True net / unit</th>
+              <th className="px-3 py-2 text-right font-medium">Margin</th><th className="px-3 py-2 font-medium">Call</th>
+            </tr></thead>
+            <tbody className="divide-y">
+              {variants.map((v) => {
+                const meta = v.amazon_meta as AmazonMeta | null;
+                const pr = skuProfit(v, meta?.fbaFee ?? null);
+                const call = pr.net == null ? { t: "Set price", tone: "muted" as const }
+                  : pr.net <= 0 ? { t: "Fix / kill", tone: "danger" as const }
+                  : pr.marginPct != null && pr.marginPct >= 25 && (pr.tacos == null || pr.tacos < 0.15) ? { t: "Push", tone: "success" as const }
+                  : { t: "Hold", tone: "warning" as const };
+                return (
+                  <tr key={v.id} className="hover:bg-accent/40">
+                    <td className="px-3 py-2 font-mono text-[12px] font-semibold">{v.sku}</td>
+                    <td className="tabular px-3 py-2 text-right font-mono">{pr.price > 0 ? money(pr.price) : "—"}</td>
+                    <td className="tabular px-3 py-2 text-right font-mono">{pr.adSpend > 0 ? money(pr.adSpend) : "—"}</td>
+                    <td className={cn("tabular px-3 py-2 text-right font-mono", pr.acos != null && pr.acos > 0.3 && "text-warning")}>{pr.acos != null ? `${Math.round(pr.acos * 100)}%` : "—"}</td>
+                    <td className={cn("tabular px-3 py-2 text-right font-mono", pr.tacos != null && pr.tacos > 0.15 && "text-warning")}>{pr.tacos != null ? `${Math.round(pr.tacos * 100)}%` : "—"}</td>
+                    <td className="tabular px-3 py-2 text-right font-mono text-muted-foreground">{pr.adPerUnit > 0 ? money(pr.adPerUnit) : "—"}</td>
+                    <td className={cn("tabular px-3 py-2 text-right font-mono font-semibold", pr.net != null && pr.net <= 0 && "text-danger")}>{pr.net != null ? money(pr.net) : "—"}</td>
+                    <td className="px-3 py-2 text-right">{pr.marginPct != null ? <Badge tone={marginTone(pr.marginPct)}>{pr.marginPct}%</Badge> : "—"}</td>
+                    <td className="px-3 py-2"><Badge tone={call.tone}>{call.t}</Badge></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Live Sponsored Products spend from your Amazon Ads (Vegalux US). TACoS = ad spend ÷ total sales · ACoS = ad spend ÷ ad-attributed sales · ad/unit spreads spend across units sold.</p>
+      </Card>
 
       {/* Inbound to FBA — what's coming for this product & when */}
       <Card className="p-5">

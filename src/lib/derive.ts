@@ -118,6 +118,26 @@ export function amazonSizeTier(l?: number | null, w?: number | null, h?: number 
   return { tier: "Extra-large", tone: "danger" };
 }
 
+// ---------- true profitability per SKU (price − COGS − referral − FBA − ad) ----------
+// Uses the real FBA fee from amazon_meta when present, real ad spend (30d) for ACoS/TACoS,
+// and velocity to spread ad cost per unit. All derived at read time.
+export function skuProfit(v: Variant, amazonFee: number | null) {
+  const price = v.sale_price ?? 0;
+  const cogs = v.last_cost_usd ?? 0;
+  const referral = price * FBA_REFERRAL_DEFAULT;
+  const fba = amazonFee ?? 0;
+  const adSpend = v.ad_spend_30d ?? 0;
+  const adSales = v.ad_sales_30d ?? 0;
+  const units30 = (v.velocity ?? 0) * 30;
+  const sales30 = price * units30;
+  const adPerUnit = units30 > 0 ? adSpend / units30 : 0;
+  const net = price > 0 ? price - cogs - referral - fba - adPerUnit : null;
+  const marginPct = price > 0 && net != null ? Math.round((net / price) * 100) : null;
+  const acos = adSales > 0 ? adSpend / adSales : null;       // ad cost / ad-attributed sales
+  const tacos = sales30 > 0 ? adSpend / sales30 : null;      // ad cost / total sales
+  return { price, cogs, referral, fba, adSpend, adSales, units30, sales30, adPerUnit, net, marginPct, acos, tacos };
+}
+
 // ---------- supplier / partner rollups (derived, not stored) ----------
 export type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 export type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
