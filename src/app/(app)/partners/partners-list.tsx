@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createPartner } from "./actions";
 import { money, num, PARTNER_TYPE_TONE } from "@/lib/derive";
@@ -140,22 +141,10 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
 
 function NewPartnerButton() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await createPartner(form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.push(`/partners/${encodeURIComponent(String(form.get("name")))}`);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal(
+    (form) => createPartner(form),
+    { onSuccess: (form) => router.push(`/partners/${encodeURIComponent(String(form.get("name")))}`) },
+  );
 
   return (
     <>

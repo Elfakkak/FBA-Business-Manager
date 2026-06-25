@@ -1,30 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { addPackagingItem, receivePackaging } from "./actions";
 import { Plus } from "lucide-react";
 
 const KINDS = ["Mailer", "Master carton", "Insert", "Polybag", "Label", "Box", "Other"];
 
 export function AddPackagingButton({ families }: { families: { id: string; parent: string }[] }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await addPackagingItem(form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => addPackagingItem(form));
 
   return (
     <>
@@ -65,22 +49,7 @@ export function AddPackagingButton({ families }: { families: { id: string; paren
 }
 
 export function ReceiveButton({ itemId, name, onHand }: { itemId: string; name: string; onHand: number }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await receivePackaging(itemId, form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => receivePackaging(itemId, form));
 
   return (
     <>

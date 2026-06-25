@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createSupplier } from "./actions";
 import { money, num } from "@/lib/derive";
@@ -124,22 +125,10 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
 
 function NewSupplierButton() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await createSupplier(form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.push(`/suppliers/${encodeURIComponent(String(form.get("name")))}`);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal(
+    (form) => createSupplier(form),
+    { onSuccess: (form) => router.push(`/suppliers/${encodeURIComponent(String(form.get("name")))}`) },
+  );
 
   return (
     <>

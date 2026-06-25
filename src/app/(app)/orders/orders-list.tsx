@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { createOrder } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -119,22 +119,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
 }
 
 function NewOrderButton({ suppliers, agents }: { suppliers: string[]; agents: string[] }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await createOrder(form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => createOrder(form));
 
   return (
     <>

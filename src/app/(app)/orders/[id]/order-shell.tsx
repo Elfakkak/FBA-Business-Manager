@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Chip, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine } from "../actions";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE,
@@ -355,21 +356,7 @@ function StagePanel({ tab, status }: { tab: string; status: string }) {
 }
 
 function EditOrderModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await updateOrder(order.id, form);
-      if (!res.ok) { setError(res.error); return; }
-      onClose();
-      router.refresh();
-    });
-  }
+  const { error, pending, onSubmit } = useFormModal((form) => updateOrder(order.id, form), { onSuccess: onClose });
 
   return (
     <Modal open onClose={onClose} title={`Edit ${order.id}`}>

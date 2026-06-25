@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
+import { useFormModal } from "@/lib/use-form-modal";
 import { logNewSize, addTechPack } from "../actions";
 import { sizeCompliance, storagePerUnit, inFromCm, lbFromKg, money, num, type Dim } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,7 @@ export function DimensionsCard({ id, dimCm, weightKg, cartonCm, unitsPerCarton, 
 
   return (
     <Card className="p-5">
-      <SectionTitle icon={Ruler} tone="brand" title="Dimensions & weight"
+      <SectionTitle icon={Ruler} tone="brand" title="Dimensions & weight" sub="Log a new size to update the current values — each change is kept in history (it affects your FBA fees)."
         action={<GhostButton onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Log new size</GhostButton>} />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -131,19 +132,7 @@ function LimitChip({ ok, label, value }: { ok: boolean; label: string; value: st
 }
 
 function LogSizeModal({ id, onClose }: { id: string; onClose: () => void }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await logNewSize(id, form);
-      if (!res.ok) { setError(res.error); return; }
-      onClose(); router.refresh();
-    });
-  }
+  const { error, pending, onSubmit } = useFormModal((form) => logNewSize(id, form), { onSuccess: onClose });
   return (
     <Modal open onClose={onClose} title="Log new size">
       <p className="-mt-2 mb-4 text-sm text-muted-foreground">Centimeters &amp; kilograms. Current values move into history.</p>

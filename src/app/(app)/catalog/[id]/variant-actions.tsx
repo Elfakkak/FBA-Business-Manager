@@ -1,30 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { addVariant, updateVariant } from "../actions";
 import { Plus, Pencil } from "lucide-react";
 
 const STATUSES = ["Ready", "Reorder", "SKU mislabeled", "Not linked"];
 
 export function AddVariantButton({ familyId }: { familyId: string }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await addVariant(familyId, form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => addVariant(familyId, form));
 
   return (
     <>
@@ -71,22 +55,7 @@ export function EditVariantButton({
   status: string;
   reorderPoint: number | null;
 }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await updateVariant(variantId, familyId, form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateVariant(variantId, familyId, form));
 
   return (
     <>
