@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { INTG_DEFS } from "@/lib/integrations";
-import { fetchFbaInventory, type AmazonCreds } from "@/lib/amazon/sp-api";
+import { fetchFbaInventory, spCredsFromEnv, type AmazonCreds } from "@/lib/amazon/sp-api";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -78,7 +78,16 @@ export async function syncIntegration(id: string): Promise<Result> {
 export async function syncAmazonInventory(): Promise<Result> {
   const supabase = await createClient();
   const { data: row } = await supabase.from("integrations").select("oauth_token").eq("id", "amazon").maybeSingle();
-  const creds = (row?.oauth_token ?? {}) as AmazonCreds;
+  // env credentials are a fallback; anything stored on the integration row wins
+  const stored = (row?.oauth_token ?? {}) as AmazonCreds;
+  const env = spCredsFromEnv();
+  const creds: AmazonCreds = {
+    client_id: stored.client_id || env.client_id,
+    client_secret: stored.client_secret || env.client_secret,
+    refresh_token: stored.refresh_token || env.refresh_token,
+    marketplace_id: stored.marketplace_id || env.marketplace_id,
+    region: stored.region || env.region,
+  };
 
   try {
     const inventory = await fetchFbaInventory(creds);

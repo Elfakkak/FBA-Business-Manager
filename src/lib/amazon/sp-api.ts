@@ -20,6 +20,17 @@ const REGION_HOST: Record<string, string> = {
 // US is the default marketplace if none is configured.
 export const DEFAULT_MARKETPLACE = "ATVPDKIKX0DER";
 
+// Credentials from environment (fallback when none are stored on the integration row).
+export function spCredsFromEnv(): AmazonCreds {
+  return {
+    client_id: process.env.AMAZON_SP_CLIENT_ID,
+    client_secret: process.env.AMAZON_SP_CLIENT_SECRET,
+    refresh_token: process.env.AMAZON_SP_REFRESH_TOKEN,
+    marketplace_id: process.env.AMAZON_SP_MARKETPLACE_ID,
+    region: process.env.AMAZON_SP_REGION,
+  };
+}
+
 export class SpApiError extends Error {}
 
 function hostFor(region?: string) {
