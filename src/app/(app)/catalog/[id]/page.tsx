@@ -5,16 +5,17 @@ import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/component
 import {
   catFamilyStats, familyEco, familyWeightLb, marginTone, invStats,
   FAMILY_HEALTH_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
-  money, num, type Variant, type Product,
+  money, num, type Variant, type Product, type AmazonMeta,
 } from "@/lib/derive";
 import { VariantsTable } from "./variants-table";
 import { EditProductButton } from "./edit-product-button";
 import { StorageBar, DimensionsCard, TechPackCard } from "./product-extras";
 import { ProductImages } from "./product-images";
+import { AmazonDetailsCard } from "./amazon-details";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp, Wallet, Warehouse, Boxes, FileText, History,
-  ShoppingCart, ImageIcon,
+  ShoppingCart, ImageIcon, Truck,
 } from "lucide-react";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,20 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const { data: variantsData } = await supabase.from("product_variants").select("*").eq("family_id", id).order("sku");
   const variants = (variantsData ?? []) as Variant[];
   const p = product as Product;
+
+  // inbound shipments touching this family's SKUs → "what's coming to FBA & when"
+  const skus = variants.map((v) => v.sku);
+  type InbItem = { sku: string; expected: number; received: number; fba_inbounds: { id: string; fc: string; amazon_status: string; eta: string | null } | null };
+  // fba_inbound_items isn't in the generated types yet — loose handle for this read
+  const sb = supabase as unknown as { from: (t: string) => { select: (s: string) => { in: (c: string, v: string[]) => Promise<{ data: unknown[] | null }> } } };
+  const { data: inbItemRows } = skus.length
+    ? await sb.from("fba_inbound_items").select("sku, expected, received, fba_inbounds(id, fc, amazon_status, eta)").in("sku", skus)
+    : { data: [] };
+  const inbItems = ((inbItemRows ?? []) as unknown as InbItem[])
+    .filter((i) => i.fba_inbounds && i.fba_inbounds.amazon_status !== "Closed" && i.expected > i.received)
+    .map((i) => ({ sku: i.sku, remaining: i.expected - i.received, expected: i.expected, received: i.received, shipmentId: i.fba_inbounds!.id, fc: i.fba_inbounds!.fc, status: i.fba_inbounds!.amazon_status, eta: i.fba_inbounds!.eta }))
+    .sort((a, b) => (a.eta ?? "~").localeCompare(b.eta ?? "~"));
+  const inboundUnits = inbItems.reduce((s, i) => s + i.remaining, 0);
 
   // order-line history for this family → cost history + order history
   const { data: lineRows } = await supabase
@@ -139,6 +154,51 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           invHealth: invStats(v, p.lead_time_days ?? 0).health,
         }))}
       />
+
+      {/* Amazon details (size/weight/tier/fee) — per SKU, choose the source SKU */}
+      <AmazonDetailsCard
+        familyId={id}
+        primarySku={(p as Product & { primary_sku?: string | null }).primary_sku ?? null}
+        variants={variants.map((v) => ({
+          sku: v.sku, asin: v.asin, fnsku: v.fnsku, status: v.status, fbaStock: v.fba_stock ?? 0, salePrice: v.sale_price,
+          meta: ((v as Variant & { amazon_meta?: AmazonMeta | null }).amazon_meta) ?? null,
+        }))}
+      />
+
+      {/* Inbound to FBA — what's coming for this product & when */}
+      <Card className="p-5">
+        <SectionTitle icon={Truck} tone="info" title="Inbound to FBA"
+          sub="Units on the way to Amazon for this product's SKUs — from your FBA shipments." />
+        {inbItems.length === 0 ? (
+          <div className="rounded-lg border border-dashed bg-background/40 px-4 py-6 text-center text-sm text-muted-foreground">
+            No active inbound shipments for this product. New shipments appear here once synced on <Link href="/fba-shipments" className="font-medium text-primary hover:underline">FBA Shipments</Link>.
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 text-sm"><span className="font-mono text-lg font-bold text-info">{num(inboundUnits)}</span> <span className="text-muted-foreground">units inbound across {new Set(inbItems.map((i) => i.shipmentId)).size} shipment(s)</span></div>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead><tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Shipment</th><th className="px-3 py-2 font-medium">SKU</th><th className="px-3 py-2 font-medium">FC</th>
+                  <th className="px-3 py-2 text-right font-medium">Coming</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">ETA</th>
+                </tr></thead>
+                <tbody className="divide-y">
+                  {inbItems.map((i, n) => (
+                    <tr key={`${i.shipmentId}-${i.sku}-${n}`} className="hover:bg-accent/40">
+                      <td className="px-3 py-2"><Link href="/fba-shipments" className="font-mono text-[12px] hover:text-primary">{i.shipmentId}</Link></td>
+                      <td className="px-3 py-2 font-mono text-[12px]">{i.sku}</td>
+                      <td className="px-3 py-2"><Badge tone="muted">{i.fc}</Badge></td>
+                      <td className="tabular px-3 py-2 text-right font-mono font-semibold text-info">{num(i.remaining)}</td>
+                      <td className="px-3 py-2"><Badge tone={i.status === "Receiving" ? "warning" : "info"}>{i.status}</Badge></td>
+                      <td className="px-3 py-2 text-[12px] text-muted-foreground">{i.eta ?? "set on shipment"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Card>
 
       {/* details */}
       <Card className="p-5">

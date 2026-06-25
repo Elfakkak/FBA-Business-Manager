@@ -109,6 +109,15 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+// Choose which SKU's Amazon details (size/weight/fee) represent this product family.
+export async function setPrimarySku(familyId: string, sku: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").update({ primary_sku: sku } as never).eq("id", familyId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${familyId}`);
+  return { ok: true };
+}
+
 export async function addProductImage(id: string, url: string): Promise<Result> {
   if (!url) return { ok: false, error: "No image." };
   const supabase = await createClient();

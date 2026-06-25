@@ -97,6 +97,28 @@ export function packagingOnHand(item: PackagingItem, moves: PackagingMove[]) {
   return { onHand, unit, value, low };
 }
 
+// ---------- Amazon details (pulled per SKU; stored in product_variants.amazon_meta) ----------
+export type AmazonMeta = {
+  dims_in?: { l: number | null; w: number | null; h: number | null } | null;
+  weight_lb?: number | null;
+  fbaFee?: number | null;
+  referralFee?: number | null;
+  currency?: string | null;
+};
+
+// Amazon US FBA size tiers, classified from package dimensions (inches) + weight (lb).
+export function amazonSizeTier(l?: number | null, w?: number | null, h?: number | null, weightLb?: number | null): { tier: string; tone: Tone } {
+  const dims = [l, w, h].filter((x): x is number => typeof x === "number" && x > 0).sort((a, b) => b - a);
+  if (dims.length < 3) return { tier: "Unknown", tone: "muted" };
+  const wt = weightLb ?? 0;
+  const [longest, median, shortest] = dims;
+  if (longest <= 15 && median <= 12 && shortest <= 0.75 && wt <= 1) return { tier: "Small standard", tone: "success" };
+  if (longest <= 18 && median <= 14 && shortest <= 8 && wt <= 20) return { tier: "Large standard", tone: "info" };
+  const girth = 2 * (median + shortest);
+  if (longest <= 59 && median <= 33 && longest + girth <= 130 && wt <= 50) return { tier: "Large bulky", tone: "warning" };
+  return { tier: "Extra-large", tone: "danger" };
+}
+
 // ---------- supplier / partner rollups (derived, not stored) ----------
 export type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 export type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];

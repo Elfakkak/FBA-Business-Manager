@@ -49,10 +49,12 @@ async function fetchInventory(token) {
 const famId = (r) => "amz-" + String(r.asin || r.sku).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Catalog Items API — real title, brand, image, and the VARIATION parent ASIN
-// (so we can group SKUs into the same family Amazon uses).
+const toIn = (m) => { if (!m?.value) return null; const u = (m.unit || "").toLowerCase(); if (u.includes("centimet")) return +(m.value / 2.54).toFixed(2); if (u.includes("millimet")) return +(m.value / 25.4).toFixed(2); return +(+m.value).toFixed(2); };
+const toLb = (m) => { if (!m?.value) return null; const u = (m.unit || "").toLowerCase(); if (u.includes("kilogram")) return +(m.value * 2.20462).toFixed(2); if (u.includes("gram")) return +(m.value / 453.592).toFixed(2); if (u.includes("ounce")) return +(m.value / 16).toFixed(2); return +(+m.value).toFixed(2); };
+
+// Catalog Items API — title, brand, image, VARIATION parent ASIN, and package dims/weight.
 async function fetchCatalogItem(token, asin) {
-  const qs = new URLSearchParams({ marketplaceIds: marketplace, includedData: "summaries,images,relationships" });
+  const qs = new URLSearchParams({ marketplaceIds: marketplace, includedData: "summaries,images,relationships,dimensions" });
   const res = await fetch(`${SP_HOST[region] || SP_HOST.na}/catalog/2022-04-01/items/${asin}?${qs}`, { headers: { "x-amz-access-token": token } });
   if (!res.ok) return null;
   const j = await res.json();
@@ -60,8 +62,25 @@ async function fetchCatalogItem(token, asin) {
   const imgGroup = (j.images ?? []).find((i) => i.marketplaceId === marketplace) ?? j.images?.[0];
   const relGroup = (j.relationships ?? []).find((r) => r.marketplaceId === marketplace) ?? j.relationships?.[0];
   const variation = (relGroup?.relationships ?? []).find((r) => r.type === "VARIATION");
-  const parentAsin = variation?.parentAsins?.[0] ?? null; // present only on child items
-  return { title: sum?.itemName ?? null, brand: sum?.brand ?? null, image: imgGroup?.images?.[0]?.link ?? null, parentAsin };
+  const parentAsin = variation?.parentAsins?.[0] ?? null;
+  const dimGroup = (j.dimensions ?? []).find((d) => d.marketplaceId === marketplace) ?? j.dimensions?.[0];
+  const pkg = dimGroup?.package ?? dimGroup?.item;
+  const dims_in = pkg ? { l: toIn(pkg.length), w: toIn(pkg.width), h: toIn(pkg.height) } : null;
+  const weight_lb = pkg ? toLb(pkg.weight) : null;
+  return { title: sum?.itemName ?? null, brand: sum?.brand ?? null, image: imgGroup?.images?.[0]?.link ?? null, parentAsin, dims_in, weight_lb };
+}
+
+// Product Fees API — the FBA fulfillment fee (size/weight-based, price-independent).
+async function fetchFbaFee(token, asin) {
+  try {
+    const res = await fetch(`${SP_HOST[region] || SP_HOST.na}/products/fees/v0/items/${asin}/feesEstimate`, {
+      method: "POST", headers: { "x-amz-access-token": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ FeesEstimateRequest: { MarketplaceId: marketplace, IsAmazonFulfilled: true, Identifier: asin, PriceToEstimateFees: { ListingPrice: { CurrencyCode: "USD", Amount: 19.99 } } } }),
+    });
+    const j = await res.json();
+    const details = j.payload?.FeesEstimateResult?.FeesEstimate?.FeeDetailList ?? [];
+    return details.find((d) => d.FeeType === "FBAFees")?.FeeAmount?.Amount ?? null;
+  } catch { return null; }
 }
 
 // ── Phase 1: fetch inventory + catalog details from Amazon, cache to disk ──
@@ -72,8 +91,11 @@ if (MODE === "fetch" || MODE === "all") {
   const catalog = {};
   let i = 0;
   for (const asin of asins) {
-    try { catalog[asin] = await fetchCatalogItem(token, asin); } catch { catalog[asin] = null; }
-    if (++i % 10 === 0) console.log(`  …catalog ${i}/${asins.length}`);
+    try {
+      catalog[asin] = await fetchCatalogItem(token, asin);
+      if (catalog[asin]) { catalog[asin].fbaFee = await fetchFbaFee(token, asin); await sleep(550); }
+    } catch { catalog[asin] = catalog[asin] ?? null; }
+    if (++i % 10 === 0) console.log(`  …catalog+fees ${i}/${asins.length}`);
     await sleep(600); // respect getCatalogItem rate limit (~2/s)
   }
   // also fetch the parent ASINs (family heads) we discovered, for their title/image
@@ -116,7 +138,9 @@ const { data: existing } = await db.from("product_variants").select("sku, family
 const bySku = new Map((existing ?? []).map((v) => [v.sku, v]));
 let created = 0, updated = 0;
 for (const r of inv) {
-  const patch = { fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved ?? 0, fnsku: r.fnsku, asin: r.asin, status: r.fnsku ? "Ready" : "Not linked" };
+  const c = catalog[r.asin] ?? {};
+  const amazon_meta = { dims_in: c.dims_in ?? null, weight_lb: c.weight_lb ?? null, fbaFee: c.fbaFee ?? null, currency: "USD" };
+  const patch = { fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved ?? 0, fnsku: r.fnsku, asin: r.asin, amazon_meta, status: r.fnsku ? "Ready" : "Not linked" };
   const cur = bySku.get(r.sku);
   if (cur) {
     // re-parent + rename ONLY imported families' variants — never touch a seeded product
