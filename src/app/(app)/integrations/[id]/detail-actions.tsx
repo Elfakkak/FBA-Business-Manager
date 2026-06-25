@@ -43,6 +43,13 @@ export function IntegrationDetailActions({ def, connected }: { def: IntegrationD
       <button onClick={() => setOpen(true)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Plug className="h-4 w-4" /> Connect</button>
       <Modal open={open} onClose={() => setOpen(false)} title={`Connect ${def.name}`}>
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">Credentials are stored server-side (owner-only). Live sync activates once the {def.name} fetch is wired.</p>
+        <div className="mb-4 rounded-lg border bg-accent/40 p-3">
+          <div className="vy-kicker mb-1.5">How to get these</div>
+          <ol className="list-decimal space-y-1 pl-4 text-[12px] text-muted-foreground">
+            {def.howto.map((step, i) => <li key={i}>{step}</li>)}
+          </ol>
+          {def.docsUrl && <a href={def.docsUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[12px] font-medium text-primary hover:underline">Open {def.name} docs →</a>}
+        </div>
         <form onSubmit={onConnect} className="space-y-4">
           {def.creds.map((f) => (
             <Field key={f.name} label={f.label}>

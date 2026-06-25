@@ -14,6 +14,7 @@ export type IntegrationDef = {
   creds: CredField[];
   streams: Stream[];
   docsUrl?: string;
+  howto: string[];          // step-by-step to obtain the credentials
 };
 
 const OAUTH: CredField[] = [
@@ -36,6 +37,13 @@ export const INTG_DEFS: IntegrationDef[] = [
       { name: "FBA inventory", api: "FBA Inventory API", feeds: "Inventory · Reorder", detail: "On-hand, reserved, inbound, velocity" },
       { name: "Orders", api: "Orders API", feeds: "Orders", detail: "Customer orders + fulfillment status" },
     ],
+    howto: [
+      "Go to Amazon Developer Central and register an SP-API application.",
+      "Create a Login with Amazon (LWA) security profile — copy its Client ID & Client Secret.",
+      "In Seller Central → Apps & Services → Develop Apps, authorize the app on your seller account.",
+      "Complete the OAuth consent to generate a Refresh token.",
+      "Paste the three values below — they're encrypted server-side.",
+    ],
   },
   {
     id: "amazonads", name: "Amazon Ads", tone: "warning",
@@ -46,6 +54,12 @@ export const INTG_DEFS: IntegrationDef[] = [
       { name: "Ad spend", api: "Amazon Ads API · reports", feeds: "P&L · Performance", detail: "Sponsored Products/Brands daily spend per campaign/SKU" },
       { name: "ACoS / TACoS", api: "Amazon Ads API · reports", feeds: "P&L · Performance", detail: "Ad cost of sales — total & per product" },
       { name: "Campaign performance", api: "Amazon Ads API · campaigns", feeds: "Performance", detail: "Impressions, clicks, conversions, spend" },
+    ],
+    howto: [
+      "In the Amazon Ads console, register an Amazon Ads API application.",
+      "Generate the LWA Client ID & Secret for the Ads API.",
+      "Authorize the app on your Ads account to obtain a Refresh token.",
+      "Paste the three values below.",
     ],
   },
   {
@@ -58,6 +72,7 @@ export const INTG_DEFS: IntegrationDef[] = [
       { name: "Transactions", api: "Mercury API · transactions", feeds: "Finance · Review", detail: "Money in/out for categorization" },
       { name: "FX rates", api: "Mercury API · rates", feeds: "Finance", detail: "USD↔RMB reference rate" },
     ],
+    howto: ["Open Mercury → Settings → API tokens.", "Create a read-only API token.", "Paste it below."],
   },
   {
     id: "track17", name: "17TRACK", tone: "info",
@@ -65,6 +80,7 @@ export const INTG_DEFS: IntegrationDef[] = [
     syncs: "Live container & parcel tracking",
     creds: [{ name: "api_key", label: "API key", type: "password" }],
     streams: [{ name: "Tracking events", api: "17TRACK API · register/track", feeds: "Shipments", detail: "Container/parcel milestones + status" }],
+    howto: ["Sign in to the 17TRACK dashboard → API.", "Copy your API key.", "Paste it below."],
   },
   {
     id: "quickbooks", name: "QuickBooks Online", tone: "success",
@@ -75,6 +91,7 @@ export const INTG_DEFS: IntegrationDef[] = [
       { name: "Bills & COGS", api: "QBO API · bills", feeds: "Finance", detail: "Supplier bills + landed cost" },
       { name: "Partner draws", api: "QBO API · journal", feeds: "Finance · Partnership", detail: "Owner distributions" },
     ],
+    howto: ["Create an app at Intuit Developer.", "Copy the OAuth Client ID & Secret.", "Authorize on your QuickBooks company to get a Refresh token.", "Paste the values below."],
   },
   {
     id: "wise", name: "FX rates (Wise)", tone: "info",
@@ -82,6 +99,7 @@ export const INTG_DEFS: IntegrationDef[] = [
     syncs: "Live USD ↔ RMB rate · payment FX",
     creds: [{ name: "api_token", label: "API token", type: "password" }],
     streams: [{ name: "USD↔RMB rate", api: "Wise API · rates", feeds: "Finance · P&L", detail: "Live rate for supplier costs" }],
+    howto: ["Open Wise → Settings → API tokens.", "Create a token with read access.", "Paste it below."],
   },
 ];
 

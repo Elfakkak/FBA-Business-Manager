@@ -113,6 +113,10 @@ function IntgRow({ state }: { state: IntgState }) {
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title={`Connect ${def.name}`}>
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">Credentials stored server-side (owner-only). Live sync activates once the {def.name} fetch is wired.</p>
+        <div className="mb-4 rounded-lg border bg-accent/40 p-3">
+          <div className="vy-kicker mb-1.5">How to get these</div>
+          <ol className="list-decimal space-y-1 pl-4 text-[12px] text-muted-foreground">{def.howto.map((step, i) => <li key={i}>{step}</li>)}</ol>
+        </div>
         <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); setError(null); start(async () => { const r = await connectIntegration(def.id, f); if (!r.ok) { setError(r.error); return; } setOpen(false); router.refresh(); }); }} className="space-y-4">
           {def.creds.map((c) => <Field key={c.name} label={c.label}><input name={c.name} type={c.type === "password" ? "password" : "text"} required autoComplete="off" className={inputCls} /></Field>)}
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
