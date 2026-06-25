@@ -21,7 +21,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       sku: v.sku,
       fnsku: v.fnsku,
       asin: v.asin,
-      favorite: (v as typeof v & { favorite?: boolean }).favorite ?? false,
+      favorite: v.favorite ?? false,
       familyId: v.family_id,
       family: p?.parent ?? v.family_id,
       color: p?.color ?? null,

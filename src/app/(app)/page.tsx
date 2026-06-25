@@ -24,7 +24,7 @@ export default async function Dashboard() {
   const radar = vars
     .map((v) => {
       const st = invStats(v, leadOf.get(v.family_id) ?? 0);
-      const fav = (v as Variant & { favorite?: boolean }).favorite ?? false;
+      const fav = v.favorite ?? false;
       return { v, st, fav, product: nameOf.get(v.family_id) ?? v.family_id };
     })
     .filter((r) => r.st.health === "Reorder" || r.st.health === "Low")

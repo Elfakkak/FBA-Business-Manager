@@ -30,10 +30,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // inbound shipments touching this family's SKUs → "what's coming to FBA & when"
   const skus = variants.map((v) => v.sku);
   type InbItem = { sku: string; expected: number; received: number; fba_inbounds: { id: string; fc: string; amazon_status: string; eta: string | null } | null };
-  // fba_inbound_items isn't in the generated types yet — loose handle for this read
-  const sb = supabase as unknown as { from: (t: string) => { select: (s: string) => { in: (c: string, v: string[]) => Promise<{ data: unknown[] | null }> } } };
   const { data: inbItemRows } = skus.length
-    ? await sb.from("fba_inbound_items").select("sku, expected, received, fba_inbounds(id, fc, amazon_status, eta)").in("sku", skus)
+    ? await supabase.from("fba_inbound_items").select("sku, expected, received, fba_inbounds(id, fc, amazon_status, eta)").in("sku", skus)
     : { data: [] };
   const inbItems = ((inbItemRows ?? []) as unknown as InbItem[])
     .filter((i) => i.fba_inbounds && i.fba_inbounds.amazon_status !== "Closed" && i.expected > i.received)
@@ -165,7 +163,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           status: v.status, prep: v.prep, reorder_point: v.reorder_point,
           // same invStats the Inventory page uses → product & inventory always agree
           invHealth: invStats(v, p.lead_time_days ?? 0).health,
-          fbaFee: ((v as Variant & { amazon_meta?: AmazonMeta | null }).amazon_meta)?.fbaFee ?? null,
+          fbaFee: (v.amazon_meta as AmazonMeta | null)?.fbaFee ?? null,
           inbound: v.inbound ?? 0,
         }))}
       />
@@ -173,10 +171,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {/* Amazon details (size/weight/tier/fee) — per SKU, choose the source SKU */}
       <AmazonDetailsCard
         familyId={id}
-        primarySku={(p as Product & { primary_sku?: string | null }).primary_sku ?? null}
+        primarySku={p.primary_sku ?? null}
         variants={variants.map((v) => ({
           sku: v.sku, asin: v.asin, fnsku: v.fnsku, status: v.status, fbaStock: v.fba_stock ?? 0, salePrice: v.sale_price,
-          meta: ((v as Variant & { amazon_meta?: AmazonMeta | null }).amazon_meta) ?? null,
+          meta: (v.amazon_meta as AmazonMeta | null) ?? null,
         }))}
       />
 

@@ -168,6 +168,7 @@ export type Database = {
           established: string | null
           gtin_exempt: boolean | null
           id: number
+          logo_url: string | null
           name: string | null
           registry_enrolled: boolean | null
           registry_id: string | null
@@ -186,6 +187,7 @@ export type Database = {
           established?: string | null
           gtin_exempt?: boolean | null
           id?: number
+          logo_url?: string | null
           name?: string | null
           registry_enrolled?: boolean | null
           registry_id?: string | null
@@ -204,6 +206,7 @@ export type Database = {
           established?: string | null
           gtin_exempt?: boolean | null
           id?: number
+          logo_url?: string | null
           name?: string | null
           registry_enrolled?: boolean | null
           registry_id?: string | null
@@ -374,6 +377,38 @@ export type Database = {
           wechat?: string | null
         }
         Relationships: []
+      }
+      fba_inbound_items: {
+        Row: {
+          expected: number
+          fnsku: string | null
+          inbound_id: string
+          received: number
+          sku: string
+        }
+        Insert: {
+          expected?: number
+          fnsku?: string | null
+          inbound_id: string
+          received?: number
+          sku: string
+        }
+        Update: {
+          expected?: number
+          fnsku?: string | null
+          inbound_id?: string
+          received?: number
+          sku?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fba_inbound_items_inbound_id_fkey"
+            columns: ["inbound_id"]
+            isOneToOne: false
+            referencedRelation: "fba_inbounds"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fba_inbounds: {
         Row: {
@@ -1040,9 +1075,11 @@ export type Database = {
       }
       product_variants: {
         Row: {
+          amazon_meta: Json | null
           asin: string | null
           created_at: string
           family_id: string
+          favorite: boolean
           fba_stock: number
           fnsku: string | null
           has_image: boolean
@@ -1054,6 +1091,7 @@ export type Database = {
           pack: string
           prep: Database["public"]["Enums"]["variant_prep"]
           reorder_point: number | null
+          reserved: number
           sale_price: number | null
           sku: string
           status: Database["public"]["Enums"]["variant_status"]
@@ -1062,9 +1100,11 @@ export type Database = {
           velocity: number | null
         }
         Insert: {
+          amazon_meta?: Json | null
           asin?: string | null
           created_at?: string
           family_id: string
+          favorite?: boolean
           fba_stock?: number
           fnsku?: string | null
           has_image?: boolean
@@ -1076,6 +1116,7 @@ export type Database = {
           pack?: string
           prep?: Database["public"]["Enums"]["variant_prep"]
           reorder_point?: number | null
+          reserved?: number
           sale_price?: number | null
           sku: string
           status?: Database["public"]["Enums"]["variant_status"]
@@ -1084,9 +1125,11 @@ export type Database = {
           velocity?: number | null
         }
         Update: {
+          amazon_meta?: Json | null
           asin?: string | null
           created_at?: string
           family_id?: string
+          favorite?: boolean
           fba_stock?: number
           fnsku?: string | null
           has_image?: boolean
@@ -1098,6 +1141,7 @@ export type Database = {
           pack?: string
           prep?: Database["public"]["Enums"]["variant_prep"]
           reorder_point?: number | null
+          reserved?: number
           sale_price?: number | null
           sku?: string
           status?: Database["public"]["Enums"]["variant_status"]
@@ -1128,6 +1172,7 @@ export type Database = {
           dim_cm: Json | null
           dim_history: Json | null
           dims: string | null
+          favorite: boolean
           id: string
           images: Json
           last_ordered: string | null
@@ -1136,6 +1181,7 @@ export type Database = {
           moq: number
           order_history: Json
           parent: string
+          primary_sku: string | null
           supplier: string | null
           supplier_route: string | null
           units_per_carton: number | null
@@ -1155,6 +1201,7 @@ export type Database = {
           dim_cm?: Json | null
           dim_history?: Json | null
           dims?: string | null
+          favorite?: boolean
           id: string
           images?: Json
           last_ordered?: string | null
@@ -1163,6 +1210,7 @@ export type Database = {
           moq?: number
           order_history?: Json
           parent: string
+          primary_sku?: string | null
           supplier?: string | null
           supplier_route?: string | null
           units_per_carton?: number | null
@@ -1182,6 +1230,7 @@ export type Database = {
           dim_cm?: Json | null
           dim_history?: Json | null
           dims?: string | null
+          favorite?: boolean
           id?: string
           images?: Json
           last_ordered?: string | null
@@ -1190,6 +1239,7 @@ export type Database = {
           moq?: number
           order_history?: Json
           parent?: string
+          primary_sku?: string | null
           supplier?: string | null
           supplier_route?: string | null
           units_per_carton?: number | null

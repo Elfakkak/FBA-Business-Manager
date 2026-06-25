@@ -112,7 +112,7 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
 // Choose which SKU's Amazon details (size/weight/fee) represent this product family.
 export async function setPrimarySku(familyId: string, sku: string): Promise<Result> {
   const supabase = await createClient();
-  const { error } = await supabase.from("products").update({ primary_sku: sku } as never).eq("id", familyId);
+  const { error } = await supabase.from("products").update({ primary_sku: sku }).eq("id", familyId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/catalog/${familyId}`);
   return { ok: true };

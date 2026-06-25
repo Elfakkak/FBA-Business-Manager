@@ -101,7 +101,7 @@ export async function syncAmazonInventory(): Promise<Result> {
       if (!r.sellerSku) continue;
       const { data: upd } = await supabase
         .from("product_variants")
-        .update({ fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved } as never)
+        .update({ fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved })
         .eq("sku", r.sellerSku)
         .select("id");
       if (upd?.length) matched += upd.length;
@@ -124,19 +124,17 @@ export async function syncAmazonInventory(): Promise<Result> {
 export async function syncFbaInbounds(): Promise<Result> {
   const supabase = await createClient();
   const creds = await resolveAmazonCreds(supabase);
-  // fba_inbound_items isn't in the generated types yet — use a loose handle for it
-  const sb = supabase as unknown as { from: (t: string) => { delete: () => { eq: (c: string, v: string) => Promise<unknown> }; insert: (v: unknown) => Promise<unknown> } };
   try {
     const shipments = await fetchFbaInbounds(creds);
     for (const s of shipments) {
       await supabase.from("fba_inbounds").upsert({
         id: s.shipmentId, fc: s.fc, sku_count: s.skuCount, expected: s.expected,
         received: s.received, amazon_status: s.amazonStatus, synced: new Date().toISOString(),
-      } as never, { onConflict: "id" });
+      }, { onConflict: "id" });
       // replace this shipment's item rows
-      await sb.from("fba_inbound_items").delete().eq("inbound_id", s.shipmentId);
+      await supabase.from("fba_inbound_items").delete().eq("inbound_id", s.shipmentId);
       if (s.items.length) {
-        await sb.from("fba_inbound_items").insert(
+        await supabase.from("fba_inbound_items").insert(
           s.items.map((i) => ({ inbound_id: s.shipmentId, sku: i.sellerSku, fnsku: i.fnSku, expected: i.quantityShipped, received: i.quantityReceived })),
         );
       }

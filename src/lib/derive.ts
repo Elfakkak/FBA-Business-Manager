@@ -67,8 +67,7 @@ export function invStats(v: Variant, leadTimeDays: number) {
   const inbound = v.inbound ?? 0;
   const unfulfillable = v.unfulfillable ?? 0;
   // real reserved from Amazon when present; fall back to a velocity estimate
-  const realReserved = (v as Variant & { reserved?: number | null }).reserved;
-  const reserved = realReserved != null ? realReserved : Math.min(onHand, Math.round(velocity * 2));
+  const reserved = v.reserved != null ? v.reserved : Math.min(onHand, Math.round(velocity * 2));
   const available = Math.max(0, onHand - reserved - unfulfillable);
   const projected = available + inbound;
   const daysCover = velocity > 0 ? available / velocity : Infinity;
