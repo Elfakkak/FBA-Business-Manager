@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,8 @@ export type InvRow = {
 // (no FNSKU label applied). Otherwise the unit is FNSKU-labeled.
 const isStickerless = (r: InvRow) => !!r.fnsku && !!r.asin && r.fnsku === r.asin;
 
+type SortKey = "family" | "sku" | "onHand" | "reserved" | "available" | "inbound" | "daysCover" | "reorderPoint";
+
 const CHIPS: { key: "all" | InvHealth; label: string }[] = [
   { key: "all", label: "All" }, { key: "Reorder", label: "Reorder" }, { key: "Low", label: "Low" }, { key: "Healthy", label: "Healthy" },
 ];
@@ -39,8 +41,21 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [editing, setEditing] = useState(false);
   const [favOnly, setFavOnly] = useState(false);
   const [dupOnly, setDupOnly] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [, start] = useTransition();
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "family" || key === "sku" ? "asc" : "desc" }));
+  const sortRows = (arr: InvRow[]) => {
+    if (!sort) return arr;
+    const { key, dir } = sort; const f = dir === "asc" ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      const av = a[key], bv = b[key];
+      if (typeof av === "string" || typeof bv === "string") return String(av ?? "").localeCompare(String(bv ?? "")) * f;
+      return (((av as number) ?? Infinity) - ((bv as number) ?? Infinity)) * f; // nulls (∞ cover) sort last on asc
+    });
+  };
 
   // duplicate listings: the same ASIN sold under more than one SKU (splits your stock)
   const dupAsins = useMemo(() => {
@@ -170,16 +185,16 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
           <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Product</th>
-                <th className="px-3 py-2 font-medium">SKU</th>
-                <th className="px-3 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU / Prep <SourceTag source="amazon" /></span></th>
-                <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">On hand <SourceTag source="amazon" /></span></th>
-                <th className="px-3 py-2 text-right font-medium">Reserved</th>
-                <th className="px-3 py-2 text-right font-medium">Avail</th>
-                <th className="px-3 py-2 text-right font-medium">Inbound</th>
-                <th className="px-3 py-2 text-right font-medium">Days cover</th>
-                <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">Reorder pt <SourceTag source="manual" /></span></th>
-                <th className="px-3 py-2 font-medium">Status</th>
+                <SortTh label="Product" k="family" sort={sort} onSort={toggleSort} />
+                <SortTh label="SKU" k="sku" sort={sort} onSort={toggleSort} />
+                <th className="whitespace-nowrap px-3 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU / Prep <SourceTag source="amazon" /></span></th>
+                <SortTh label="On hand" k="onHand" right sort={sort} onSort={toggleSort} extra={<SourceTag source="amazon" />} />
+                <SortTh label="Reserved" k="reserved" right sort={sort} onSort={toggleSort} />
+                <SortTh label="Avail" k="available" right sort={sort} onSort={toggleSort} />
+                <SortTh label="Inbound" k="inbound" right sort={sort} onSort={toggleSort} />
+                <SortTh label="Days cover" k="daysCover" right sort={sort} onSort={toggleSort} />
+                <SortTh label="Reorder pt" k="reorderPoint" right sort={sort} onSort={toggleSort} extra={<SourceTag source="manual" />} />
+                <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -187,7 +202,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               {filtered.length === 0 ? (
                 <tr><td colSpan={COLS} className="px-4 py-9 text-center text-muted-foreground">No SKUs match your filters.</td></tr>
               ) : view === "sku" ? (
-                filtered.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
+                sortRows(filtered).map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
               ) : (
                 groups.map(([fid, members]) => {
                   const open = collapsed[fid] !== true;
@@ -224,7 +239,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                         <td className="px-3 py-2">{needs > 0 ? <Badge tone="danger">{needs} reorder</Badge> : <Badge tone="success">Healthy</Badge>}</td>
                         <td className="px-3 py-2" />
                       </tr>
-                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} indent router={router} />)}
+                      {open && sortRows(members).map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} indent router={router} />)}
                     </FragmentGroup>
                   );
                 })
@@ -259,8 +274,19 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   );
 }
 
-function FragmentGroup({ children }: { children: React.ReactNode }) {
+function FragmentGroup({ children }: { children: ReactNode }) {
   return <>{children}</>;
+}
+
+function SortTh({ label, k, right, sort, onSort, extra }: {
+  label: string; k: SortKey; right?: boolean; sort: { key: SortKey; dir: "asc" | "desc" } | null; onSort: (k: SortKey) => void; extra?: ReactNode;
+}) {
+  const active = sort?.key === k;
+  return (
+    <th className={cn("cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:text-foreground", right && "text-right")} onClick={() => onSort(k)}>
+      <span className="inline-flex items-center gap-1">{label}{extra}{active && <span className="text-[8px]">{sort!.dir === "asc" ? "▲" : "▼"}</span>}</span>
+    </th>
+  );
 }
 
 function Row({ r, editing, onSave, onFav, dup, indent, router }: {
@@ -290,7 +316,6 @@ function Row({ r, editing, onSave, onFav, dup, indent, router }: {
           <Link href={`/inventory?q=${encodeURIComponent(r.sku)}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
           {dup && <span title={`ASIN ${r.asin} is sold under more than one SKU — stock is split across duplicate listings`}><Badge tone="danger">Dup</Badge></span>}
         </div>
-        <div className="text-[10px] text-muted-foreground">{r.fc}</div>
       </td>
       <td className="px-3 py-2.5">
         {sticker
