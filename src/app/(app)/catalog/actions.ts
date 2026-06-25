@@ -127,6 +127,10 @@ export async function removeProductImage(id: string, url: string): Promise<Resul
   const images = (Array.isArray(cur?.images) ? (cur!.images as string[]) : []).filter((u) => u !== url);
   const { error } = await supabase.from("products").update({ images }).eq("id", id);
   if (error) return { ok: false, error: error.message };
+  // also delete the underlying storage object so the bucket doesn't accumulate orphans
+  const marker = "/product-media/";
+  const i = url.indexOf(marker);
+  if (i !== -1) await supabase.storage.from("product-media").remove([url.slice(i + marker.length)]);
   revalidatePath(`/catalog/${id}`);
   return { ok: true };
 }

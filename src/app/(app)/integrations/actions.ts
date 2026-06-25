@@ -6,6 +6,15 @@ import { INTG_DEFS } from "@/lib/integrations";
 
 type Result = { ok: true } | { ok: false; error: string };
 
+// Every surface that reflects integration state: the Settings hub, the standalone
+// hub, the detail page, and Inventory (its sync strip reads Amazon's status).
+function revalidateIntegration(id: string) {
+  revalidatePath("/settings");
+  revalidatePath("/integrations");
+  revalidatePath(`/integrations/${id}`);
+  revalidatePath("/inventory");
+}
+
 // Saves credentials (owner-only via RLS) and marks the integration connected.
 // NOTE: this stores the seam; live data sync is wired per-provider afterwards.
 export async function connectIntegration(id: string, form: FormData): Promise<Result> {
@@ -27,7 +36,7 @@ export async function connectIntegration(id: string, form: FormData): Promise<Re
     last_sync: new Date().toISOString(),
   }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/integrations");
+  revalidateIntegration(id);
   return { ok: true };
 }
 
@@ -35,8 +44,7 @@ export async function syncIntegration(id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("integrations").update({ last_sync: new Date().toISOString() }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/integrations");
-  revalidatePath(`/integrations/${id}`);
+  revalidateIntegration(id);
   return { ok: true };
 }
 
@@ -46,6 +54,6 @@ export async function disconnectIntegration(id: string): Promise<Result> {
     status: "disconnected", oauth_token: null, note: null,
   }).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/integrations");
+  revalidateIntegration(id);
   return { ok: true };
 }

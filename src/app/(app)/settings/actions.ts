@@ -46,14 +46,20 @@ export async function saveNotifications(form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+const ROLES = ["Owner", "Partner", "Operations", "Viewer"] as const;
+type Role = (typeof ROLES)[number];
+const normalizeRole = (r: string): Role => (ROLES.includes(r as Role) ? (r as Role) : "Viewer");
+
 export async function inviteMember(form: FormData): Promise<Result> {
   const email = String(form.get("email") ?? "").trim();
-  const role = String(form.get("role") ?? "Viewer").trim();
+  let role = normalizeRole(String(form.get("role") ?? "Viewer").trim());
   if (!/\S+@\S+\.\S+/.test(email)) return { ok: false, error: "Enter a valid email." };
+  // never escalate an invitee straight to Owner — they'd inherit owner RLS on signup
+  if (role === "Owner") role = "Partner";
   const supabase = await createClient();
   const id = `m${Date.now().toString(36)}`;
   const { error } = await supabase.from("users").insert({
-    id, name: email.split("@")[0], email, role: role as never, status: "active", fin_id: id,
+    id, name: email.split("@")[0], email, role, status: "invited", fin_id: id,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/settings");
@@ -65,9 +71,17 @@ export async function updateMember(id: string, form: FormData): Promise<Result> 
   const patch: Record<string, unknown> = {};
   const name = s(form, "name"); if (name) patch.name = name;
   const email = s(form, "email"); if (email) patch.email = email;
-  const role = s(form, "role"); if (role) patch.role = role;
-  if (form.get("is_owner") !== null) patch.is_owner = form.get("is_owner") === "on";
-  const share = form.get("share"); if (share !== null && String(share) !== "") patch.share = (parseFloat(String(share)) || 0) / 100;
+  const role = s(form, "role"); if (role) patch.role = normalizeRole(role);
+  if (form.get("is_owner") !== null) {
+    const isOwner = form.get("is_owner") === "on";
+    patch.is_owner = isOwner;
+    if (!isOwner) patch.share = null; // clear stale ownership when demoted
+  }
+  const share = form.get("share");
+  if (patch.share !== null && share !== null && String(share) !== "") {
+    const pct = parseFloat(String(share)) || 0;
+    patch.share = Math.min(1, Math.max(0, pct / 100)); // clamp 0–100%
+  }
   const { error } = await supabase.from("users").update(patch as never).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/settings");

@@ -102,15 +102,28 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
       {/* images + facts */}
       <Card className="p-5">
-        <SectionTitle icon={ImageIcon} tone="muted" title="Images" />
-        <ProductImages id={id} images={Array.isArray(p.images) ? (p.images as string[]) : []} />
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          <Fact label="FBA stock" value={num(s.stock)} sub="units" source="amazon" />
-          <Fact label="Inbound" value={num(s.inbound)} sub="to FBA" source="amazon" />
-          <Fact label="Variants" value={num(s.skuCount)} sub="SKUs" />
-          <Fact label="Last cost" value={s.costLabel} sub="per unit" source="manual" />
-          <Fact label="Lead time" value={p.lead_time_days ? `${p.lead_time_days}d` : "—"} sub="production" source="manual" />
-          <Fact label="MOQ" value={p.moq ? `${num(p.moq)}` : "—"} sub="min order" source="manual" />
+        <SectionTitle icon={ImageIcon} tone="muted" title="Images" sub="Drag your own product shots onto a slot — they persist." />
+        <div className="flex flex-wrap gap-[18px]">
+          <ProductImages id={id} images={Array.isArray(p.images) ? (p.images as string[]) : []} />
+          <div className="grid min-w-[240px] flex-[1_1_280px] grid-cols-2 content-start overflow-hidden rounded-[10px] border bg-background/40">
+            {[
+              { label: "FBA stock", value: num(s.stock), sub: "units", source: "amazon" as const },
+              { label: "Inbound", value: num(s.inbound), sub: "to FBA", source: "amazon" as const },
+              { label: "Variants", value: num(s.skuCount), sub: "SKUs", source: undefined },
+              { label: "Last cost", value: s.costLabel, sub: "per unit", source: "manual" as const },
+              { label: "Lead time", value: p.lead_time_days ? `${p.lead_time_days}d` : "—", sub: "production", source: "manual" as const },
+              { label: "MOQ", value: p.moq ? `${num(p.moq)}` : "—", sub: "min order", source: "manual" as const },
+            ].map((f, i) => (
+              <div key={f.label} className={cn("px-3.5 py-3", i % 2 === 1 && "border-l", i >= 2 && "border-t")}>
+                <div className="mb-0.5 flex items-center gap-1.5">
+                  <span className="vy-kicker">{f.label}</span>
+                  {f.source && <SourceTag source={f.source} />}
+                </div>
+                <div className="tabular font-mono text-base font-bold">{f.value}</div>
+                <div className="text-[10.5px] text-muted-foreground">{f.sub}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </Card>
 
@@ -199,18 +212,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
         </Card>
       </div>
-    </div>
-  );
-}
-
-function Fact({ label, value, sub, source }: { label: string; value: React.ReactNode; sub?: string; source?: "amazon" | "manual" }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}{source && <SourceTag source={source} />}
-      </div>
-      <div className="tabular mt-1 font-mono text-sm font-semibold">{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }

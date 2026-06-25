@@ -21,12 +21,15 @@ export function Avatar({ name, tone = "brand", size = 32 }: { name: string; tone
   );
 }
 
-export function SectionTitle({ icon: Icon, tone = "muted", title, count, action }: { icon: React.ElementType; tone?: Tone; title: string; count?: number; action?: React.ReactNode }) {
+export function SectionTitle({ icon: Icon, tone = "muted", title, count, sub, action }: { icon: React.ElementType; tone?: Tone; title: string; count?: number; sub?: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-2">
+    <div className="mb-3 flex items-start justify-between gap-2">
       <div className="flex items-center gap-2.5">
-        <span className={cn("inline-grid h-7 w-7 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>
-        <span className="font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</span>
+        <span className={cn("inline-grid h-7 w-7 shrink-0 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>
+        <div>
+          <div className="font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</div>
+          {sub && <div className="text-[12px] text-muted-foreground">{sub}</div>}
+        </div>
       </div>
       {action}
     </div>

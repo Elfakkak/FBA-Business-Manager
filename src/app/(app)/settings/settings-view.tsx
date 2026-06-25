@@ -269,7 +269,7 @@ function MemberModal({ member, onClose }: { member: Member | null; onClose: () =
         <Field label="Email"><input name="email" type="email" required defaultValue={member?.email ?? ""} autoFocus={!member} className={inputCls} /></Field>
         <Field label="Access role">
           <select name="role" defaultValue={member?.role ?? "Viewer"} className={inputCls}>
-            {["Owner", "Admin", "Editor", "Operations", "Viewer", "Partner"].map((r) => <option key={r}>{r}</option>)}
+            {["Owner", "Partner", "Operations", "Viewer"].map((r) => <option key={r}>{r}</option>)}
           </select>
         </Field>
         {member && (
