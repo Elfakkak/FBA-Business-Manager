@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Badge } from "@/components/ui/primitives";
+import { Card, Badge, Avatar } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { addContact, updateContact, deleteContact } from "./actions";
 import { User, Plus, Pencil } from "lucide-react";
@@ -25,9 +25,12 @@ export function ContactsSection({ company, contacts }: { company: string; contac
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 font-medium"><User className="h-4 w-4 text-info" /> Contacts ({contacts.length})</div>
-          <p className="text-sm text-muted-foreground">The people you deal with at {company}.</p>
+        <div className="flex items-center gap-2.5">
+          <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><User className="h-4 w-4" /></span>
+          <div>
+            <div className="font-medium">Contacts ({contacts.length})</div>
+            <p className="text-sm text-muted-foreground">The people you deal with at {company}.</p>
+          </div>
         </div>
         <GhostButton onClick={() => setEditing("new")} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add contact</GhostButton>
       </div>
@@ -40,9 +43,7 @@ export function ContactsSection({ company, contacts }: { company: string; contac
             <div key={c.id} className="rounded-lg border p-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/12 text-xs font-semibold text-primary">
-                    {c.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
-                  </span>
+                  <Avatar name={c.name} tone="brand" />
                   <div>
                     <div className="flex items-center gap-1.5 text-sm font-medium">{c.name}{c.is_primary && <Badge tone="success">Primary</Badge>}</div>
                     {c.role && <div className="text-[11px] text-muted-foreground">{c.role}</div>}

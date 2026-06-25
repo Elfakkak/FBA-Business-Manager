@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar, Chip, SectionTitle } from "@/components/ui/primitives";
 import {
   supplierRollup, money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
   type OrderRow, type InvoiceRow, type Product,
 } from "@/lib/derive";
 import { EditSupplierButton } from "../edit-supplier-button";
 import { ContactsSection, type Contact } from "@/components/contacts/contacts-section";
-import { Package } from "lucide-react";
+import { Package, Route, Factory, Ship, CreditCard, Receipt } from "lucide-react";
 
 export default async function SupplierDetail({ params }: { params: Promise<{ name: string }> }) {
   const { name: raw } = await params;
@@ -42,13 +42,14 @@ export default async function SupplierDetail({ params }: { params: Promise<{ nam
       <PageHead
         kicker="Supplier"
         title={name}
+        leading={<Avatar name={name} tone="brand" size={44} />}
         actions={<><EditSupplierButton supplier={supplier} />{supplier.is_new && <Badge tone="brand">New</Badge>}</>}
       />
-      <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
-        {supplier.route && <span className="rounded-md border bg-card px-2 py-1">{supplier.route}</span>}
-        {supplier.origin && <span className="rounded-md border bg-card px-2 py-1">{supplier.origin}</span>}
-        {supplier.incoterm && <span className="rounded-md border bg-card px-2 py-1">{supplier.incoterm}</span>}
-        {supplier.payment_terms && <span className="rounded-md border bg-card px-2 py-1">{supplier.payment_terms}</span>}
+      <div className="flex flex-wrap gap-2">
+        {supplier.route && <Chip icon={Route}>{supplier.route}</Chip>}
+        {supplier.origin && <Chip icon={Factory}>{supplier.origin}</Chip>}
+        {supplier.incoterm && <Chip icon={Ship}>{supplier.incoterm}</Chip>}
+        {supplier.payment_terms && <Chip icon={CreditCard}>{supplier.payment_terms}</Chip>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -61,7 +62,7 @@ export default async function SupplierDetail({ params }: { params: Promise<{ nam
       <ContactsSection company={name} contacts={(contacts ?? []) as Contact[]} />
 
       <Card className="p-5">
-        <div className="mb-3 font-medium">Products ({myProducts.length})</div>
+        <SectionTitle icon={Package} tone="brand" title="Products" count={myProducts.length} />
         {myProducts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No catalog products linked to this supplier yet.</p>
         ) : (
@@ -80,7 +81,7 @@ export default async function SupplierDetail({ params }: { params: Promise<{ nam
       </Card>
 
       <Card className="p-5">
-        <div className="mb-3 font-medium">Orders ({myOrders.length})</div>
+        <SectionTitle icon={Factory} tone="info" title="Orders" count={myOrders.length} />
         {myOrders.length === 0 ? (
           <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
@@ -98,7 +99,7 @@ export default async function SupplierDetail({ params }: { params: Promise<{ nam
 
       {myBills.length > 0 && (
         <Card className="p-5">
-          <div className="mb-3 font-medium">Bills on their orders ({myBills.length})</div>
+          <SectionTitle icon={Receipt} tone="warning" title="Bills on their orders" count={myBills.length} />
           <ul className="divide-y">
             {myBills.map((b) => {
               const bal = Math.max(0, (b.total ?? 0) - (b.paid ?? 0));

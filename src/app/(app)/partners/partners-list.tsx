@@ -3,12 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createPartner } from "./actions";
 import { money, num, PARTNER_TYPE_TONE } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { Plus, ArrowRight } from "lucide-react";
 
 export type PartnerSummary = {
   name: string;
@@ -26,11 +27,10 @@ const CHIPS = [
   { key: "all", label: "All" }, { key: "Agent", label: "Agents" },
   { key: "Forwarder", label: "Forwarders" }, { key: "Inspection", label: "Inspections" },
 ];
-const initials = (s: string) => s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-
 export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
+  const [peek, setPeek] = useState<PartnerSummary | null>(null);
 
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -94,12 +94,12 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
               {filtered.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">No partners match your filters.</td></tr>
               ) : filtered.map((p) => (
-                <tr key={p.name} className="hover:bg-accent/40">
+                <tr key={p.name} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(p)}>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">{initials(p.name)}</span>
+                      <Avatar name={p.name} tone={PARTNER_TYPE_TONE[p.type] ?? "muted"} />
                       <div>
-                        <Link href={`/partners/${encodeURIComponent(p.name)}`} className="font-medium hover:text-primary">{p.name}</Link>
+                        <Link href={`/partners/${encodeURIComponent(p.name)}`} onClick={(e) => e.stopPropagation()} className="font-medium hover:text-primary">{p.name}</Link>
                         {p.isNew && <Badge tone="brand" className="ml-1.5">New</Badge>}
                         <div className="text-[11px] text-muted-foreground">{p.specialty ?? SUBLABEL[p.type] ?? ""}</div>
                       </div>
@@ -115,6 +115,28 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
           </table>
         </div>
       </Card>
+
+      <Drawer open={!!peek} onClose={() => setPeek(null)} title="Partner">
+        {peek && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar name={peek.name} tone={PARTNER_TYPE_TONE[peek.type] ?? "muted"} size={44} />
+              <div>
+                <div className="flex items-center gap-1.5 font-medium">{peek.name}<Badge tone={PARTNER_TYPE_TONE[peek.type] ?? "muted"}>{peek.type}</Badge>{peek.isNew && <Badge tone="brand">New</Badge>}</div>
+                <div className="text-[12px] text-muted-foreground">{peek.specialty ?? SUBLABEL[peek.type] ?? ""}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <DrawerStat label="Orders" value={num(peek.orderCount)} />
+              <DrawerStat label="Bills" value={num(peek.invoiceCount)} />
+              <DrawerStat label="Open AP" value={peek.openBalance > 0 ? money(peek.openBalance) : "—"} />
+            </div>
+            <Link href={`/partners/${encodeURIComponent(peek.name)}`} className="vy-btn vy-btn--primary w-full justify-center">
+              Open full partner <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

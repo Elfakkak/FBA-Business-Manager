@@ -109,10 +109,16 @@ export function supplierRollup(name: string, orders: OrderRow[], invoices: Invoi
   };
 }
 
+// Exact "via {name}" or agent match — avoids substring false positives
+// (e.g. a partner "Air" matching route "Airfreight").
+export function partnerMatchesOrder(o: OrderRow, name: string) {
+  return o.agent === name || (o.route ?? "").toLowerCase() === `via ${name}`.toLowerCase();
+}
+
 export function partnerRollup(name: string, type: string, orders: OrderRow[], invoices: InvoiceRow[]) {
   const myBills = invoices.filter((i) => i.vendor === name && i.vendor_type === type);
   const billOrderIds = new Set(myBills.map((i) => i.order_id).filter(Boolean) as string[]);
-  const routeOrderIds = orders.filter((o) => (o.route ?? "").includes(name) || o.agent === name).map((o) => o.id);
+  const routeOrderIds = orders.filter((o) => partnerMatchesOrder(o, name)).map((o) => o.id);
   const orderIds = new Set([...billOrderIds, ...routeOrderIds]);
   return {
     orderCount: orderIds.size,

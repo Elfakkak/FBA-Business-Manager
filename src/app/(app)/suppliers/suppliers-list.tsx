@@ -3,12 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createSupplier } from "./actions";
 import { money, num } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import { Plus, ArrowRight } from "lucide-react";
 
 export type SupplierSummary = {
   name: string;
@@ -22,12 +23,9 @@ export type SupplierSummary = {
   openBalance: number;
 };
 
-function initials(s: string) {
-  return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
 export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
   const [q, setQ] = useState("");
+  const [peek, setPeek] = useState<SupplierSummary | null>(null);
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
     return suppliers.filter((s) => !n || `${s.name} ${s.origin ?? ""} ${s.route ?? ""}`.toLowerCase().includes(n));
@@ -79,12 +77,12 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
               {filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No suppliers match your search.</td></tr>
               ) : filtered.map((s) => (
-                <tr key={s.name} className="hover:bg-accent/40">
+                <tr key={s.name} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(s)}>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/12 text-[11px] font-semibold text-primary">{initials(s.name)}</span>
+                      <Avatar name={s.name} tone="brand" />
                       <div>
-                        <Link href={`/suppliers/${encodeURIComponent(s.name)}`} className="font-medium hover:text-primary">{s.name}</Link>
+                        <Link href={`/suppliers/${encodeURIComponent(s.name)}`} onClick={(e) => e.stopPropagation()} className="font-medium hover:text-primary">{s.name}</Link>
                         {s.isNew && <Badge tone="brand" className="ml-1.5">New</Badge>}
                         {s.route && <div className="text-[11px] text-muted-foreground">{s.route}</div>}
                       </div>
@@ -101,6 +99,28 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
           </table>
         </div>
       </Card>
+
+      <Drawer open={!!peek} onClose={() => setPeek(null)} title="Supplier">
+        {peek && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar name={peek.name} tone="brand" size={44} />
+              <div>
+                <div className="flex items-center gap-1.5 font-medium">{peek.name}{peek.isNew && <Badge tone="brand">New</Badge>}</div>
+                <div className="text-[12px] text-muted-foreground">{peek.route ?? "Direct"}{peek.origin ? ` · ${peek.origin}` : ""}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <DrawerStat label="Products" value={num(peek.productCount)} />
+              <DrawerStat label="Orders" value={num(peek.orderCount)} sub={`${peek.openOrders} open`} />
+              <DrawerStat label="Open AP" value={peek.openBalance > 0 ? money(peek.openBalance) : "—"} />
+            </div>
+            <Link href={`/suppliers/${encodeURIComponent(peek.name)}`} className="vy-btn vy-btn--primary w-full justify-center">
+              Open full supplier <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

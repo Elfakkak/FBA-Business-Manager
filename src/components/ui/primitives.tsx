@@ -1,5 +1,37 @@
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import type { Tone } from "@/lib/derive";
+
+const TONE_FG: Record<Tone, string> = {
+  success: "bg-success/12 text-success",
+  warning: "bg-warning/12 text-warning",
+  danger: "bg-danger/12 text-danger",
+  info: "bg-info/12 text-info",
+  brand: "bg-primary/12 text-primary",
+  muted: "bg-muted text-muted-foreground",
+};
+
+export function Avatar({ name, tone = "brand", size = 32 }: { name: string; tone?: Tone; size?: number }) {
+  return (
+    <span
+      className={cn("inline-grid shrink-0 place-items-center rounded-lg font-semibold", TONE_FG[tone])}
+      style={{ width: size, height: size, fontSize: size * 0.34 }}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+export function SectionTitle({ icon: Icon, tone = "muted", title, count, action }: { icon: React.ElementType; tone?: Tone; title: string; count?: number; action?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className={cn("inline-grid h-7 w-7 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>
+        <span className="font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</span>
+      </div>
+      {action}
+    </div>
+  );
+}
 
 const BADGE_CLASS: Record<Tone, string> = {
   success: "vy-badge--success",
@@ -65,20 +97,35 @@ export function PageHead({
   title,
   sub,
   actions,
+  leading,
 }: {
   kicker?: string;
   title: string;
   sub?: string;
   actions?: React.ReactNode;
+  leading?: React.ReactNode;
 }) {
   return (
     <div className="vy-card vy-page-head-card">
-      <div className="min-w-0">
-        {kicker && <div className="vy-kicker mb-1">{kicker}</div>}
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {sub && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{sub}</p>}
+      <div className="flex min-w-0 items-center gap-3">
+        {leading}
+        <div className="min-w-0">
+          {kicker && <div className="vy-kicker mb-1">{kicker}</div>}
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {sub && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{sub}</p>}
+        </div>
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  );
+}
+
+// chip pill with optional icon (matches prototype vy-chip)
+export function Chip({ icon: Icon, children }: { icon?: React.ElementType; children: React.ReactNode }) {
+  return (
+    <span className="vy-chip">
+      {Icon && <Icon className="h-3 w-3" />}
+      {children}
+    </span>
   );
 }

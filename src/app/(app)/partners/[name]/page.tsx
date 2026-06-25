@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, Avatar, Chip, SectionTitle } from "@/components/ui/primitives";
 import {
-  partnerRollup, money, num, PARTNER_TYPE_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
+  partnerRollup, partnerMatchesOrder, money, num, PARTNER_TYPE_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
   type OrderRow, type InvoiceRow,
 } from "@/lib/derive";
 import { EditPartnerButton } from "../edit-partner-button";
 import { ContactsSection, type Contact } from "@/components/contacts/contacts-section";
+import { Route, Factory, User, CreditCard, Receipt } from "lucide-react";
 
 export default async function PartnerDetail({ params }: { params: Promise<{ name: string }> }) {
   const { name: raw } = await params;
@@ -28,7 +29,7 @@ export default async function PartnerDetail({ params }: { params: Promise<{ name
   const r = partnerRollup(name, partner.type, allOrders, allInvoices);
   const myBills = allInvoices.filter((i) => i.vendor === name && i.vendor_type === partner.type);
   const billOrderIds = new Set(myBills.map((i) => i.order_id).filter(Boolean) as string[]);
-  const myOrders = allOrders.filter((o) => billOrderIds.has(o.id) || (o.route ?? "").includes(name) || o.agent === name);
+  const myOrders = allOrders.filter((o) => billOrderIds.has(o.id) || partnerMatchesOrder(o, name));
 
   return (
     <div className="space-y-6">
@@ -39,13 +40,14 @@ export default async function PartnerDetail({ params }: { params: Promise<{ name
       <PageHead
         kicker="Partner"
         title={name}
+        leading={<Avatar name={name} tone={PARTNER_TYPE_TONE[partner.type] ?? "muted"} size={44} />}
         actions={<><EditPartnerButton partner={partner} /><Badge tone={PARTNER_TYPE_TONE[partner.type] ?? "muted"}>{partner.type}</Badge>{partner.is_new && <Badge tone="brand">New</Badge>}</>}
       />
-      <div className="flex flex-wrap gap-2 text-[12px] text-muted-foreground">
-        {partner.specialty && <span className="rounded-md border bg-card px-2 py-1">{partner.specialty}</span>}
-        {partner.origin && <span className="rounded-md border bg-card px-2 py-1">{partner.origin}</span>}
-        {partner.contact && <span className="rounded-md border bg-card px-2 py-1">{partner.contact}</span>}
-        {partner.payment_terms && <span className="rounded-md border bg-card px-2 py-1">{partner.payment_terms}</span>}
+      <div className="flex flex-wrap gap-2">
+        {partner.specialty && <Chip icon={Route}>{partner.specialty}</Chip>}
+        {partner.origin && <Chip icon={Factory}>{partner.origin}</Chip>}
+        {partner.contact && <Chip icon={User}>{partner.contact}</Chip>}
+        {partner.payment_terms && <Chip icon={CreditCard}>{partner.payment_terms}</Chip>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -58,7 +60,7 @@ export default async function PartnerDetail({ params }: { params: Promise<{ name
       <ContactsSection company={name} contacts={(contacts ?? []) as Contact[]} />
 
       <Card className="p-5">
-        <div className="mb-3 font-medium">Orders ({myOrders.length})</div>
+        <SectionTitle icon={Factory} tone="info" title="Orders" count={myOrders.length} />
         {myOrders.length === 0 ? (
           <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
@@ -76,7 +78,7 @@ export default async function PartnerDetail({ params }: { params: Promise<{ name
 
       {myBills.length > 0 && (
         <Card className="p-5">
-          <div className="mb-3 font-medium">Bills ({myBills.length})</div>
+          <SectionTitle icon={Receipt} tone="warning" title="Bills" count={myBills.length} />
           <ul className="divide-y">
             {myBills.map((b) => {
               const bal = Math.max(0, (b.total ?? 0) - (b.paid ?? 0));
