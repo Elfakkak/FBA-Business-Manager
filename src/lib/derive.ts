@@ -87,6 +87,63 @@ export function packagingOnHand(item: PackagingItem, moves: PackagingMove[]) {
   return { onHand, unit, value, low };
 }
 
+// ---------- supplier / partner rollups (derived, not stored) ----------
+export type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
+export type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+
+const isClosed = (status: string) => /closed|fba/i.test(status);
+const unpaid = (inv: InvoiceRow) => Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
+
+export function supplierRollup(name: string, orders: OrderRow[], invoices: InvoiceRow[], products: Product[]) {
+  const myOrders = orders.filter((o) => o.supplier === name);
+  const myOrderIds = new Set(myOrders.map((o) => o.id));
+  const myProducts = products.filter((p) => p.supplier === name);
+  const openBalance = invoices
+    .filter((i) => i.order_id && myOrderIds.has(i.order_id) && (i.vendor_type === "Supplier" || i.vendor_type === "Agent"))
+    .reduce((s, i) => s + unpaid(i), 0);
+  return {
+    productCount: myProducts.length,
+    orderCount: myOrders.length,
+    openOrders: myOrders.filter((o) => !isClosed(o.status)).length,
+    openBalance,
+  };
+}
+
+export function partnerRollup(name: string, type: string, orders: OrderRow[], invoices: InvoiceRow[]) {
+  const myBills = invoices.filter((i) => i.vendor === name && i.vendor_type === type);
+  const billOrderIds = new Set(myBills.map((i) => i.order_id).filter(Boolean) as string[]);
+  const routeOrderIds = orders.filter((o) => (o.route ?? "").includes(name) || o.agent === name).map((o) => o.id);
+  const orderIds = new Set([...billOrderIds, ...routeOrderIds]);
+  return {
+    orderCount: orderIds.size,
+    invoiceCount: myBills.length,
+    openBalance: myBills.reduce((s, i) => s + unpaid(i), 0),
+  };
+}
+
+export const PARTNER_TYPE_TONE: Record<string, Tone> = {
+  Agent: "info",
+  Forwarder: "brand",
+  Inspection: "warning",
+};
+
+export const ORDER_STATUS_TONE: Record<string, Tone> = {
+  draft: "muted",
+  production: "info",
+  inspection: "warning",
+  transit: "info",
+  fba: "success",
+  closed: "muted",
+};
+export const ORDER_STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  production: "In production",
+  inspection: "Inspection",
+  transit: "In transit",
+  fba: "At FBA",
+  closed: "Closed",
+};
+
 // ---------- formatting ----------
 export function money(n: number | null | undefined) {
   if (n == null) return "—";

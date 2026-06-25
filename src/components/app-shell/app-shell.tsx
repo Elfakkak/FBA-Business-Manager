@@ -43,9 +43,9 @@ const NAV: Group[] = [
     ],
   },
   {
-    title: "Partners", icon: Factory, items: [
-      { label: "Suppliers", href: "/suppliers", section: "suppliers", icon: Factory },
-      { label: "Trading partners", href: "/partners", section: "partners", icon: Users },
+    title: "Partners", icon: Factory, defaultOpen: true, items: [
+      { label: "Suppliers", href: "/suppliers", section: "suppliers", icon: Factory, ready: true },
+      { label: "Trading partners", href: "/partners", section: "partners", icon: Users, ready: true },
     ],
   },
 ];
