@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { syncIntegration, disconnectIntegration } from "../actions";
 import { ConnectIntegrationModal } from "../connect-modal";
 import { AmazonConnect } from "../amazon-connect";
+import { SyncAllButton } from "../sync-all-button";
 import type { IntegrationDef } from "@/lib/integrations";
 import { RefreshCw, Plug } from "lucide-react";
 
@@ -19,12 +20,12 @@ export function IntegrationDetailActions({ def, connected }: { def: IntegrationD
 
   if (connected) {
     return (
-      <>
-        <button onClick={() => run(() => syncIntegration(def.id))} disabled={pending} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5">
-          <RefreshCw className="h-4 w-4" /> Sync now
-        </button>
+      <div className="flex items-start gap-2">
+        {def.id === "amazon"
+          ? <SyncAllButton />
+          : <button onClick={() => run(() => syncIntegration(def.id))} disabled={pending} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5"><RefreshCw className="h-4 w-4" /> Sync now</button>}
         <button onClick={() => run(() => disconnectIntegration(def.id))} disabled={pending} className="vy-btn vy-btn--ghost text-danger">Disconnect</button>
-      </>
+      </div>
     );
   }
 
