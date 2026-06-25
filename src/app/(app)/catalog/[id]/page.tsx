@@ -38,6 +38,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     .map((i) => ({ sku: i.sku, remaining: i.expected - i.received, expected: i.expected, received: i.received, shipmentId: i.fba_inbounds!.id, fc: i.fba_inbounds!.fc, status: i.fba_inbounds!.amazon_status, eta: i.fba_inbounds!.eta }))
     .sort((a, b) => (a.eta ?? "~").localeCompare(b.eta ?? "~"));
   const inboundUnits = inbItems.reduce((s, i) => s + i.remaining, 0);
+  // FBA Inventory reports inbound units even when the shipment feed only has closed
+  // shipments — surface that real per-SKU inbound as the fallback.
+  const variantInbound = variants.filter((v) => (v.inbound ?? 0) > 0).map((v) => ({ sku: v.sku, units: v.inbound ?? 0 })).sort((a, b) => b.units - a.units);
+  const totalVariantInbound = variantInbound.reduce((s, i) => s + i.units, 0);
   // restock signal: variants below their reorder point (same invStats the inventory uses)
   const restock = variants.filter((v) => { const h = invStats(v, p.lead_time_days ?? 0).health; return h === "Reorder" || h === "Low"; });
 
@@ -224,9 +228,25 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <Card className="p-5">
         <SectionTitle icon={Truck} tone="info" title="Inbound to FBA"
           sub="Units on the way to Amazon for this product's SKUs — from your FBA shipments." />
-        {inbItems.length === 0 ? (
+        {inbItems.length === 0 && totalVariantInbound > 0 ? (
+          // shipment feed has no active records, but FBA Inventory reports inbound units
+          <>
+            <div className="mb-3 text-sm"><span className="font-mono text-lg font-bold text-info">{num(totalVariantInbound)}</span> <span className="text-muted-foreground">units inbound to FBA (from FBA Inventory) across {variantInbound.length} SKU(s)</span></div>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[360px] text-sm">
+                <thead><tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground"><th className="px-3 py-2 font-medium">SKU</th><th className="px-3 py-2 text-right font-medium">Units inbound</th></tr></thead>
+                <tbody className="divide-y">
+                  {variantInbound.map((i) => (
+                    <tr key={i.sku} className="hover:bg-accent/40"><td className="px-3 py-2 font-mono text-[12px]">{i.sku}</td><td className="tabular px-3 py-2 text-right font-mono font-semibold text-info">{num(i.units)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">Per-shipment detail (FC, ETA, received) shows here when Amazon exposes an <em>active</em> inbound shipment — all current shipment records are closed. See all on <Link href="/fba-shipments" className="font-medium text-primary hover:underline">FBA Shipments</Link>.</p>
+          </>
+        ) : inbItems.length === 0 ? (
           <div className="rounded-lg border border-dashed bg-background/40 px-4 py-6 text-center text-sm text-muted-foreground">
-            No active inbound shipments for this product. New shipments appear here once synced on <Link href="/fba-shipments" className="font-medium text-primary hover:underline">FBA Shipments</Link>.
+            No units inbound for this product right now. Inbound appears here from your <Link href="/fba-shipments" className="font-medium text-primary hover:underline">FBA Shipments</Link> sync.
           </div>
         ) : (
           <>
