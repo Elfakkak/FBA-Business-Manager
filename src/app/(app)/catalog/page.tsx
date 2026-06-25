@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { catFamilyStats, type Variant } from "@/lib/derive";
+import { catFamilyStats, familyEco, familyWeightLb, type Variant, type Product } from "@/lib/derive";
 import { CatalogList, type FamilySummary } from "./catalog-list";
 import type { CategoryRow } from "./category-manager";
 
@@ -22,6 +22,7 @@ export default async function CatalogPage() {
   const families: FamilySummary[] = (products ?? []).map((p) => {
     const vs = byFamily.get(p.id) ?? [];
     const s = catFamilyStats(vs);
+    const eco = familyEco(vs, familyWeightLb(p as Product));
     return {
       id: p.id,
       parent: p.parent,
@@ -36,6 +37,7 @@ export default async function CatalogPage() {
       costLabel: s.costLabel,
       health: s.health,
       lowStock: s.lowStock,
+      avgMargin: eco.avgMargin,
       skus: vs.map((v) => ({ sku: v.sku, stock: v.fba_stock ?? 0, status: v.status })),
     };
   });
