@@ -48,6 +48,37 @@ export async function createProduct(form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
+
+export async function updateProduct(id: string, form: FormData): Promise<Result> {
+  const supabase = await createClient();
+  const txt = (k: string) => { const v = form.get(k); return v === null ? undefined : (String(v).trim() || null); };
+  const int = (k: string) => { const v = form.get(k); if (v === null || String(v).trim() === "") return undefined; const n = parseInt(String(v)); return Number.isFinite(n) ? n : null; };
+  const flt = (k: string) => { const v = form.get(k); if (v === null || String(v).trim() === "") return undefined; const n = parseFloat(String(v)); return Number.isFinite(n) ? n : null; };
+
+  const patch: ProductUpdate = {};
+  for (const k of ["material", "supplier", "supplier_route", "last_ordered"]) {
+    const v = txt(k); if (v !== undefined) (patch as Record<string, unknown>)[k] = v;
+  }
+  const lead = int("lead_time_days"); if (lead !== undefined) patch.lead_time_days = lead ?? 0;
+  const moq = int("moq"); if (moq !== undefined) patch.moq = moq ?? 0;
+  const wkg = flt("weight_kg"); if (wkg !== undefined) patch.weight_kg = wkg;
+  const upc = int("units_per_carton"); if (upc !== undefined) patch.units_per_carton = upc;
+
+  // dimensions {l,w,h} for unit + carton, only set when any provided
+  const dl = flt("dim_l"), dw = flt("dim_w"), dh = flt("dim_h");
+  if (dl !== undefined || dw !== undefined || dh !== undefined) patch.dim_cm = { l: dl ?? null, w: dw ?? null, h: dh ?? null };
+  const cl = flt("carton_l"), cw = flt("carton_w"), ch = flt("carton_h");
+  if (cl !== undefined || cw !== undefined || ch !== undefined) patch.carton_cm = { l: cl ?? null, w: cw ?? null, h: ch ?? null };
+
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to update." };
+  const { error } = await supabase.from("products").update(patch).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${id}`);
+  revalidatePath("/catalog");
+  return { ok: true };
+}
+
 export async function addVariant(familyId: string, form: FormData): Promise<Result> {
   const sku = String(form.get("sku") ?? "").trim();
   const name = String(form.get("name") ?? "").trim();

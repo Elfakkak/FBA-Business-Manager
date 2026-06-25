@@ -3,15 +3,16 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/components/ui/primitives";
 import {
-  catFamilyStats, familyEco, variantEco, familyWeightLb, marginTone,
-  FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
+  catFamilyStats, familyEco, familyWeightLb, marginTone,
+  FAMILY_HEALTH_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
   money, num, type Variant, type Product,
 } from "@/lib/derive";
-import { AddVariantButton, EditVariantButton } from "./variant-actions";
+import { VariantsTable } from "./variants-table";
+import { EditProductButton } from "./edit-product-button";
 import { cn } from "@/lib/utils";
 import {
-  Package, TrendingUp, Wallet, Warehouse, Boxes, Ruler, FileText, History,
-  ShoppingCart, ImageIcon, ArrowUpRight,
+  TrendingUp, Wallet, Warehouse, Boxes, Ruler, FileText, History,
+  ShoppingCart, ImageIcon,
 } from "lucide-react";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,6 +49,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const linked = variants.filter((v) => v.asin && v.asin !== "Pending sync").length;
   const dim = (p.dim_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
+  const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
+  const supplierNames = (supplierList ?? []).map((s) => s.name);
 
   return (
     <div className="space-y-6">
@@ -64,8 +67,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <Badge tone={linked === variants.length && variants.length > 0 ? "success" : "warning"}>
               {linked === variants.length ? "Linked to Amazon" : `${linked}/${variants.length} linked`}
             </Badge>
+            <EditProductButton
+              product={{
+                id: p.id, material: p.material, supplier: p.supplier, supplier_route: p.supplier_route,
+                lead_time_days: p.lead_time_days, moq: p.moq, last_ordered: p.last_ordered,
+                weight_kg: p.weight_kg, units_per_carton: p.units_per_carton, dim_cm: dim, carton_cm: carton,
+              }}
+              suppliers={supplierNames}
+            />
             <Link href="/orders" className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><ShoppingCart className="h-4 w-4" /> Reorder</Link>
-            <AddVariantButton familyId={id} />
           </>
         }
       />
@@ -97,50 +107,16 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </div>
       </Card>
 
-      {/* variants */}
-      <Card>
-        <SectionTitle icon={Package} tone="brand" title="Variants" count={variants.length}
-          action={<span className="text-[11px] text-muted-foreground">click Edit to set cost, price & status</span>} />
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2 font-medium">SKU</th>
-                <th className="px-4 py-2 font-medium">Variant</th>
-                <th className="px-4 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU <SourceTag source="amazon" /></span></th>
-                <th className="px-4 py-2 text-right font-medium">FBA</th>
-                <th className="px-4 py-2 text-right font-medium">Cost</th>
-                <th className="px-4 py-2 text-right font-medium">Price</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 text-right font-medium">Margin</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {variants.map((v) => {
-                const e = variantEco(v, weightLb);
-                return (
-                  <tr key={v.id} className="hover:bg-accent/40">
-                    <td className="px-4 py-2.5 font-mono text-[12px] font-semibold">{v.sku}</td>
-                    <td className="px-4 py-2.5">{v.name}<span className="text-muted-foreground"> · {v.pack}</span></td>
-                    <td className="px-4 py-2.5 font-mono text-[12px]">{v.fnsku ? v.fnsku : <Badge tone="warning">Not linked</Badge>}</td>
-                    <td className={cn("tabular px-4 py-2.5 text-right font-mono", (v.fba_stock ?? 0) <= 40 && "text-warning")}>{num(v.fba_stock)}</td>
-                    <td className="tabular px-4 py-2.5 text-right font-mono">{money(v.last_cost_usd)}</td>
-                    <td className="tabular px-4 py-2.5 text-right font-mono">{e.price > 0 ? money(e.price) : "—"}</td>
-                    <td className="px-4 py-2.5"><Badge tone={VARIANT_STATUS_TONE[v.status] ?? "muted"}>{v.status}</Badge></td>
-                    <td className="px-4 py-2.5 text-right">
-                      {e.marginPct != null ? <Badge tone={marginTone(e.marginPct)}>{e.marginPct}%</Badge> : <span className="text-[11px] text-muted-foreground">No price</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <EditVariantButton variantId={v.id} familyId={id} sku={v.sku} cost={v.last_cost_usd} salePrice={v.sale_price} status={v.status} reorderPoint={v.reorder_point} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* variants — click a row for the detail drawer */}
+      <VariantsTable
+        familyId={id}
+        weightLb={weightLb}
+        variants={variants.map((v) => ({
+          id: v.id, sku: v.sku, name: v.name, pack: v.pack, fnsku: v.fnsku, asin: v.asin,
+          fba_stock: v.fba_stock ?? 0, last_cost_usd: v.last_cost_usd, sale_price: v.sale_price,
+          status: v.status, prep: v.prep, reorder_point: v.reorder_point,
+        }))}
+      />
 
       {/* details */}
       <Card className="p-5">
