@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag } from "@/components/ui/primitives";
 import { INV_HEALTH_TONE, INV_FCS, INV_SAFETY_DAYS, num, type InvHealth } from "@/lib/derive";
+import { intgAgo } from "@/lib/integrations";
 import { setReorderPoint } from "./actions";
 import { cn } from "@/lib/utils";
 import {
@@ -22,7 +23,7 @@ const CHIPS: { key: "all" | InvHealth; label: string }[] = [
   { key: "all", label: "All" }, { key: "Reorder", label: "Reorder" }, { key: "Low", label: "Low" }, { key: "Healthy", label: "Healthy" },
 ];
 
-export function InventoryTable({ rows }: { rows: InvRow[] }) {
+export function InventoryTable({ rows, amazonConnected, lastSync }: { rows: InvRow[]; amazonConnected: boolean; lastSync: string | null }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
@@ -90,12 +91,20 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
         <Kpi label="Unfulfillable" value={num(unfulfillable)} sub="stranded units" icon={Info} source="amazon" tone={unfulfillable ? "warning" : undefined} />
       </div>
 
-      {/* sync status strip */}
-      <div className="flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "hsl(var(--info) / 0.06)", borderColor: "hsl(var(--info) / 0.22)" }}>
-        <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><RefreshCw className="h-4 w-4" /></span>
-        <span><span className="font-medium">Synced from Seller Central</span><span className="text-muted-foreground"> · On-hand, reserved, inbound &amp; velocity · last sync 18 min ago</span></span>
-        <Badge tone="info" className="ml-auto">FBA Inventory API</Badge>
-      </div>
+      {/* sync status strip — reflects the real Amazon integration state */}
+      {amazonConnected ? (
+        <div className="flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "hsl(var(--info) / 0.06)", borderColor: "hsl(var(--info) / 0.22)" }}>
+          <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><RefreshCw className="h-4 w-4" /></span>
+          <span><span className="font-medium">Synced from Seller Central</span><span className="text-muted-foreground"> · On-hand, reserved, inbound &amp; velocity · last sync {intgAgo(lastSync)}</span></span>
+          <Badge tone="info" className="ml-auto">FBA Inventory API</Badge>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>
+          <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-warning/12 text-warning"><AlertCircle className="h-4 w-4" /></span>
+          <span><span className="font-medium text-warning">Amazon not connected</span><span className="text-muted-foreground"> · Inventory is pulled from Amazon FBA — connect Seller Central to sync live on-hand, inbound &amp; velocity. Figures below are seeded.</span></span>
+          <Link href="/integrations/amazon" className="vy-btn vy-btn--outline vy-btn--sm ml-auto inline-flex items-center gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Connect Amazon</Link>
+        </div>
+      )}
 
       {/* filter bar */}
       <Card className="p-3">

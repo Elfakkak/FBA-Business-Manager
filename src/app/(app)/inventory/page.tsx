@@ -6,6 +6,8 @@ export default async function InventoryPage() {
   const supabase = await createClient();
   const { data: products } = await supabase.from("products").select("*");
   const { data: variants } = await supabase.from("product_variants").select("*").order("family_id").order("sku");
+  const { data: amazon } = await supabase.from("integrations").select("status, last_sync").eq("id", "amazon").maybeSingle();
+  const amazonConnected = amazon?.status === "connected";
 
   const productById = new Map<string, Product>();
   for (const p of (products ?? []) as Product[]) productById.set(p.id, p);
@@ -34,5 +36,5 @@ export default async function InventoryPage() {
     };
   });
 
-  return <InventoryTable rows={rows} />;
+  return <InventoryTable rows={rows} amazonConnected={amazonConnected} lastSync={amazon?.last_sync ?? null} />;
 }

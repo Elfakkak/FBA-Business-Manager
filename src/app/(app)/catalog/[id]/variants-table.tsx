@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge, SourceTag, SectionTitle } from "@/components/ui/primitives";
-import { Card } from "@/components/ui/primitives";
+import { Badge, SourceTag, TableCard } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { variantEco, marginTone, VARIANT_STATUS_TONE, money, num } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -20,12 +19,8 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
   const eco = peek ? variantEco(peek as never, weightLb) : null;
 
   return (
-    <Card>
-      <div className="px-4 pt-5">
-        <SectionTitle icon={Package} tone="brand" title="Variants" count={variants.length}
-          action={<AddVariantButton familyId={familyId} />} />
-      </div>
-      <div className="overflow-x-auto">
+    <>
+      <TableCard icon={Package} tone="brand" title="Variants" count={variants.length} action={<AddVariantButton familyId={familyId} />}>
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -63,7 +58,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
             })}
           </tbody>
         </table>
-      </div>
+      </TableCard>
 
       <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.sku}>
         {peek && eco && (
@@ -110,7 +105,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
           </div>
         )}
       </Drawer>
-    </Card>
+    </>
   );
 }
 

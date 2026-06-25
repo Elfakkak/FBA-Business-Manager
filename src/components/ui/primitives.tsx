@@ -23,13 +23,46 @@ export function Avatar({ name, tone = "brand", size = 32 }: { name: string; tone
 
 export function SectionTitle({ icon: Icon, tone = "muted", title, count, action }: { icon: React.ElementType; tone?: Tone; title: string; count?: number; action?: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-center justify-between">
+    <div className="mb-3 flex items-center justify-between gap-2">
       <div className="flex items-center gap-2.5">
         <span className={cn("inline-grid h-7 w-7 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>
         <span className="font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</span>
       </div>
       {action}
     </div>
+  );
+}
+
+// Standard padded card header for edge-to-edge cards (tables). One source of truth
+// for header spacing so the title/action never hug the card edges.
+export function CardHeader({
+  icon: Icon, tone = "muted", title, count, caption, action,
+}: {
+  icon?: React.ElementType; tone?: Tone; title: React.ReactNode; count?: number; caption?: React.ReactNode; action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+      <div className="flex items-center gap-2.5">
+        {Icon && <span className={cn("inline-grid h-7 w-7 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>}
+        <span className="text-sm font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</span>
+      </div>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">{caption}{action}</div>
+    </div>
+  );
+}
+
+// Card with a padded header + edge-to-edge body (for tables). Use everywhere a
+// full-width table needs a header — guarantees consistent spacing.
+export function TableCard({
+  icon, tone, title, count, caption, action, children,
+}: {
+  icon?: React.ElementType; tone?: Tone; title: React.ReactNode; count?: number; caption?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader icon={icon} tone={tone} title={title} count={count} caption={caption} action={action} />
+      <div className="overflow-x-auto">{children}</div>
+    </Card>
   );
 }
 
