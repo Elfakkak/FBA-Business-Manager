@@ -233,7 +233,7 @@ function Row({ r, editing, onSave, router }: {
           </span>
           <div className="min-w-0">
             <Link href={`/catalog/${r.familyId}`} className="font-mono text-[12px] font-semibold hover:text-primary">{r.sku}</Link>
-            <div className="text-[11px] text-muted-foreground">{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
+            <div className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={r.family}>{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
           </div>
         </div>
       </td>

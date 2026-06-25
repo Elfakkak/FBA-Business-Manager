@@ -49,15 +49,19 @@ async function fetchInventory(token) {
 const famId = (r) => "amz-" + String(r.asin || r.sku).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Catalog Items API — real product title, brand and image by ASIN.
+// Catalog Items API — real title, brand, image, and the VARIATION parent ASIN
+// (so we can group SKUs into the same family Amazon uses).
 async function fetchCatalogItem(token, asin) {
-  const qs = new URLSearchParams({ marketplaceIds: marketplace, includedData: "summaries,images" });
+  const qs = new URLSearchParams({ marketplaceIds: marketplace, includedData: "summaries,images,relationships" });
   const res = await fetch(`${SP_HOST[region] || SP_HOST.na}/catalog/2022-04-01/items/${asin}?${qs}`, { headers: { "x-amz-access-token": token } });
   if (!res.ok) return null;
   const j = await res.json();
   const sum = (j.summaries ?? []).find((s) => s.marketplaceId === marketplace) ?? j.summaries?.[0];
   const imgGroup = (j.images ?? []).find((i) => i.marketplaceId === marketplace) ?? j.images?.[0];
-  return { title: sum?.itemName ?? null, brand: sum?.brand ?? null, image: imgGroup?.images?.[0]?.link ?? null };
+  const relGroup = (j.relationships ?? []).find((r) => r.marketplaceId === marketplace) ?? j.relationships?.[0];
+  const variation = (relGroup?.relationships ?? []).find((r) => r.type === "VARIATION");
+  const parentAsin = variation?.parentAsins?.[0] ?? null; // present only on child items
+  return { title: sum?.itemName ?? null, brand: sum?.brand ?? null, image: imgGroup?.images?.[0]?.link ?? null, parentAsin };
 }
 
 // ── Phase 1: fetch inventory + catalog details from Amazon, cache to disk ──
@@ -72,8 +76,14 @@ if (MODE === "fetch" || MODE === "all") {
     if (++i % 10 === 0) console.log(`  …catalog ${i}/${asins.length}`);
     await sleep(600); // respect getCatalogItem rate limit (~2/s)
   }
+  // also fetch the parent ASINs (family heads) we discovered, for their title/image
+  const parents = [...new Set(Object.values(catalog).map((c) => c?.parentAsin).filter((p) => p && !catalog[p]))];
+  for (const p of parents) {
+    try { catalog[p] = await fetchCatalogItem(token, p); } catch { catalog[p] = null; }
+    await sleep(600);
+  }
   writeFileSync(CACHE, JSON.stringify({ rows: inv, catalog }));
-  console.log(`Fetched ${inv.length} SKUs + ${asins.length} catalog titles → cached.`);
+  console.log(`Fetched ${inv.length} SKUs + ${asins.length} catalog titles + ${parents.length} variation parents → cached.`);
   if (MODE === "fetch") process.exit(0);
 }
 
@@ -84,16 +94,24 @@ const cached = JSON.parse(readFileSync(CACHE, "utf8"));
 const inv = cached.rows ?? cached; // tolerate old cache shape
 const catalog = cached.catalog ?? {};
 console.log(`Loading ${inv.length} SKUs into Supabase…`);
-const titleFor = (r) => catalog[r.asin]?.title || r.asin || r.sku;
+// Resolve each SKU to its Amazon variation FAMILY (parent ASIN when present).
+const familyAsin = (r) => catalog[r.asin]?.parentAsin || r.asin || r.sku;
+const famKey = (r) => "amz-" + String(familyAsin(r)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const titleFor = (r) => catalog[familyAsin(r)]?.title || catalog[r.asin]?.title || r.asin || r.sku;
 
-// 1) product family per ASIN/SKU — set real title/image (only touches amz- families)
+// 1) one product family per variation parent — set real title/image (only amz- families)
 const famParent = new Map();
-for (const r of inv) if (!famParent.has(famId(r))) famParent.set(famId(r), { title: titleFor(r), image: catalog[r.asin]?.image ?? null });
+for (const r of inv) {
+  const fa = familyAsin(r);
+  const id = famKey(r);
+  if (!famParent.has(id)) famParent.set(id, { title: catalog[fa]?.title || titleFor(r), image: catalog[fa]?.image ?? catalog[r.asin]?.image ?? null });
+}
 for (const [id, meta] of famParent) {
   await db.from("products").upsert({ id, parent: meta.title, category: "Imported (Amazon)", images: meta.image ? [meta.image] : [] }, { onConflict: "id" });
 }
 
-// 2) upsert variants by SKU; enrich imported (amz-) variant names with the real title
+// 2) upsert variants by SKU; re-parent imported variants to the real Amazon family
+const childTitle = (r) => catalog[r.asin]?.title || r.sku;
 const { data: existing } = await db.from("product_variants").select("sku, family_id");
 const bySku = new Map((existing ?? []).map((v) => [v.sku, v]));
 let created = 0, updated = 0;
@@ -101,13 +119,21 @@ for (const r of inv) {
   const patch = { fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved ?? 0, fnsku: r.fnsku, asin: r.asin, status: r.fnsku ? "Ready" : "Not linked" };
   const cur = bySku.get(r.sku);
   if (cur) {
-    // only rename imported families' variants — never clobber a seeded product's name
-    if (String(cur.family_id).startsWith("amz-") && catalog[r.asin]?.title) patch.name = catalog[r.asin].title;
+    // re-parent + rename ONLY imported families' variants — never touch a seeded product
+    if (String(cur.family_id).startsWith("amz-")) { patch.family_id = famKey(r); patch.name = childTitle(r); }
     await db.from("product_variants").update(patch).eq("sku", r.sku); updated++;
   } else {
-    const { error } = await db.from("product_variants").insert({ family_id: famId(r), sku: r.sku, name: titleFor(r), ...patch });
+    const { error } = await db.from("product_variants").insert({ family_id: famKey(r), sku: r.sku, name: childTitle(r), ...patch });
     if (error) { console.error(`  insert ${r.sku}: ${error.message}`); continue; }
     created++;
   }
 }
-console.log(`\n✅ Import done — ${created} new, ${updated} updated, ${famParent.size} families, ${Object.values(catalog).filter((c) => c?.title).length} titles enriched.`);
+
+// 3) clean up now-empty imported families (left behind by re-parenting)
+const { data: allFams } = await db.from("products").select("id").like("id", "amz-%");
+const { data: used } = await db.from("product_variants").select("family_id");
+const usedSet = new Set((used ?? []).map((v) => v.family_id));
+const orphans = (allFams ?? []).map((f) => f.id).filter((id) => !usedSet.has(id));
+if (orphans.length) await db.from("products").delete().in("id", orphans);
+
+console.log(`\n✅ Import done — ${created} new, ${updated} updated, ${famParent.size} Amazon families, ${orphans.length} empty families removed.`);
