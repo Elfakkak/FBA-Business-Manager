@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Badge, SourceTag, TableCard } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
-import { variantEco, marginTone, VARIANT_STATUS_TONE, money, num } from "@/lib/derive";
+import { variantEco, marginTone, VARIANT_STATUS_TONE, INV_HEALTH_TONE, money, num, type InvHealth } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { Package, ArrowUpRight } from "lucide-react";
 import { AddVariantButton, EditVariantButton } from "./variant-actions";
@@ -12,6 +12,7 @@ import { AddVariantButton, EditVariantButton } from "./variant-actions";
 export type VRow = {
   id: string; sku: string; name: string; pack: string; fnsku: string | null; asin: string | null;
   fba_stock: number; last_cost_usd: number | null; sale_price: number | null; status: string; prep: string; reorder_point: number | null;
+  invHealth: InvHealth;
 };
 
 export function VariantsTable({ familyId, weightLb, variants }: { familyId: string; weightLb: number; variants: VRow[] }) {
@@ -27,7 +28,8 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
               <th className="px-4 py-2 font-medium">SKU</th>
               <th className="px-4 py-2 font-medium">Variant</th>
               <th className="px-4 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU <SourceTag source="amazon" /></span></th>
-              <th className="px-4 py-2 text-right font-medium">FBA</th>
+              <th className="px-4 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">FBA <SourceTag source="amazon" /></span></th>
+              <th className="px-4 py-2 font-medium">Stock</th>
               <th className="px-4 py-2 text-right font-medium">Cost</th>
               <th className="px-4 py-2 text-right font-medium">Price</th>
               <th className="px-4 py-2 font-medium">Status</th>
@@ -43,7 +45,13 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
                   <td className="px-4 py-2.5 font-mono text-[12px] font-semibold">{v.sku}</td>
                   <td className="px-4 py-2.5">{v.name}<span className="text-muted-foreground"> · {v.pack}</span></td>
                   <td className="px-4 py-2.5 font-mono text-[12px]">{v.fnsku ? v.fnsku : <Badge tone="warning">Not linked</Badge>}</td>
-                  <td className={cn("tabular px-4 py-2.5 text-right font-mono", (v.fba_stock ?? 0) <= 40 && "text-warning")}>{num(v.fba_stock)}</td>
+                  <td className="px-4 py-2.5 text-right" onClick={(ev) => ev.stopPropagation()}>
+                    <Link href={`/inventory?q=${encodeURIComponent(v.sku)}`} title="View in Inventory"
+                      className={cn("inline-flex items-center justify-end gap-1 font-mono tabular hover:underline", (v.fba_stock ?? 0) <= 40 ? "text-warning" : "hover:text-primary")}>
+                      {num(v.fba_stock)} <ArrowUpRight className="h-3 w-3 opacity-60" />
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5"><Badge tone={INV_HEALTH_TONE[v.invHealth]}>{v.invHealth}</Badge></td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{money(v.last_cost_usd)}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{e.price > 0 ? money(e.price) : "—"}</td>
                   <td className="px-4 py-2.5"><Badge tone={VARIANT_STATUS_TONE[v.status] ?? "muted"}>{v.status}</Badge></td>
@@ -67,6 +75,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
               <div className="text-sm font-medium">{peek.name} · {peek.pack}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <Badge tone={VARIANT_STATUS_TONE[peek.status] ?? "muted"}>{peek.status}</Badge>
+                <Badge tone={INV_HEALTH_TONE[peek.invHealth]}>{peek.invHealth}</Badge>
                 <Badge tone={peek.prep === "Stickerless" ? "warning" : "muted"}>{peek.prep}</Badge>
                 {eco.marginPct != null && <Badge tone={marginTone(eco.marginPct)}>{eco.marginPct}% margin</Badge>}
               </div>

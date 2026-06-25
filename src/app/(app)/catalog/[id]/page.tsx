@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/components/ui/primitives";
 import {
-  catFamilyStats, familyEco, familyWeightLb, marginTone,
+  catFamilyStats, familyEco, familyWeightLb, marginTone, invStats,
   FAMILY_HEALTH_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
   money, num, type Variant, type Product,
 } from "@/lib/derive";
@@ -135,6 +135,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           id: v.id, sku: v.sku, name: v.name, pack: v.pack, fnsku: v.fnsku, asin: v.asin,
           fba_stock: v.fba_stock ?? 0, last_cost_usd: v.last_cost_usd, sale_price: v.sale_price,
           status: v.status, prep: v.prep, reorder_point: v.reorder_point,
+          // same invStats the Inventory page uses → product & inventory always agree
+          invHealth: invStats(v, p.lead_time_days ?? 0).health,
         }))}
       />
 

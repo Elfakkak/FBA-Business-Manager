@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { invStats, INV_FCS, type Variant, type Product } from "@/lib/derive";
 import { InventoryTable, type InvRow } from "./inventory-table";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q } = await searchParams;
   const supabase = await createClient();
   const { data: products } = await supabase.from("products").select("*");
   const { data: variants } = await supabase.from("product_variants").select("*").order("family_id").order("sku");
@@ -33,8 +34,10 @@ export default async function InventoryPage() {
       reorderPoint: st.reorderPoint,
       health: st.health,
       fc: INV_FCS[i % INV_FCS.length],
+      image: Array.isArray(p?.images) && p!.images.length ? (p!.images[0] as string) : null,
+      lastCost: v.last_cost_usd ?? null,
     };
   });
 
-  return <InventoryTable rows={rows} amazonConnected={amazonConnected} lastSync={amazon?.last_sync ?? null} />;
+  return <InventoryTable rows={rows} amazonConnected={amazonConnected} lastSync={amazon?.last_sync ?? null} initialQ={q} />;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
@@ -17,19 +18,20 @@ export type InvRow = {
   id: string; sku: string; fnsku: string | null; familyId: string; family: string; color: string | null;
   category: string; supplier: string | null; onHand: number; reserved: number; available: number;
   inbound: number; unfulfillable: number; daysCover: number | null; reorderPoint: number; health: InvHealth; fc: string;
+  image: string | null; lastCost: number | null;
 };
 
 const CHIPS: { key: "all" | InvHealth; label: string }[] = [
   { key: "all", label: "All" }, { key: "Reorder", label: "Reorder" }, { key: "Low", label: "Low" }, { key: "Healthy", label: "Healthy" },
 ];
 
-export function InventoryTable({ rows, amazonConnected, lastSync }: { rows: InvRow[]; amazonConnected: boolean; lastSync: string | null }) {
+export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { rows: InvRow[]; amazonConnected: boolean; lastSync: string | null; initialQ?: string }) {
   const router = useRouter();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQ ?? "");
   const [category, setCategory] = useState("all");
   const [supplier, setSupplier] = useState("all");
   const [health, setHealth] = useState<"all" | InvHealth>("all");
-  const [view, setView] = useState<"family" | "sku">("family");
+  const [view, setView] = useState<"family" | "sku">(initialQ ? "sku" : "family");
   const [editing, setEditing] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [, start] = useTransition();
@@ -225,8 +227,15 @@ function Row({ r, editing, onSave, router }: {
   return (
     <tr className="hover:bg-accent/40">
       <td className="px-3 py-2.5">
-        <Link href={`/catalog/${r.familyId}`} className="font-mono text-[12px] font-semibold hover:text-primary">{r.sku}</Link>
-        <div className="text-[11px] text-muted-foreground">{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
+        <div className="flex items-center gap-2.5">
+          <span className="relative inline-grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
+            {r.image ? <Image src={r.image} alt="" fill sizes="32px" className="object-cover" /> : <Package className="h-4 w-4" />}
+          </span>
+          <div className="min-w-0">
+            <Link href={`/catalog/${r.familyId}`} className="font-mono text-[12px] font-semibold hover:text-primary">{r.sku}</Link>
+            <div className="text-[11px] text-muted-foreground">{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
+          </div>
+        </div>
       </td>
       <td className="px-3 py-2.5 font-mono text-[12px] text-muted-foreground">{r.fnsku ?? "—"}</td>
       <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{num(r.onHand)}</td>
@@ -243,7 +252,7 @@ function Row({ r, editing, onSave, router }: {
       <td className="px-3 py-2.5"><Badge tone={INV_HEALTH_TONE[r.health]}>{r.health}</Badge></td>
       <td className="px-3 py-2.5 text-right">
         {r.health !== "Healthy" && (
-          <button onClick={() => router.push(`/orders?reorder=1&sku=${encodeURIComponent(r.sku)}`)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1">
+          <button onClick={() => router.push(`/orders?reorder=1&sku=${encodeURIComponent(r.sku)}&name=${encodeURIComponent(r.family)}${r.supplier ? `&supplier=${encodeURIComponent(r.supplier)}` : ""}${r.lastCost != null ? `&cost=${r.lastCost}` : ""}`)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1">
             <Plus className="h-3 w-3" /> Reorder
           </button>
         )}
