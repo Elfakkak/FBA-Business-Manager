@@ -53,7 +53,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
-  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref").eq("family_id", id);
+  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref, file_size").eq("family_id", id);
   const dimHistory = Array.isArray(p.dim_history) ? (p.dim_history as never[]) : [];
 
   return (

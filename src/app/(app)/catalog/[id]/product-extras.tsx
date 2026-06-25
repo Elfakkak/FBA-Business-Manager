@@ -178,7 +178,27 @@ function LogSizeModal({ id, onClose }: { id: string; onClose: () => void }) {
 }
 
 // ---------- Tech pack ----------
-type Pack = { id: string; version: number; file_name: string; note: string | null; doc_date: string | null; asset_ref?: string | null };
+type Pack = { id: string; version: number; file_name: string; note: string | null; doc_date: string | null; asset_ref?: string | null; file_size?: number | null };
+
+const fmtSize = (b?: number | null) => (b == null ? null : b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+
+// Tech packs live in a private bucket; open them through a short-lived signed URL.
+function ViewTechPackButton({ path }: { path: string }) {
+  const supabase = createClient();
+  const [busy, setBusy] = useState(false);
+  async function open() {
+    setBusy(true);
+    const { data } = await supabase.storage.from("tech-packs").createSignedUrl(path, 3600);
+    setBusy(false);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+  return (
+    <button onClick={open} disabled={busy} className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline disabled:opacity-60">
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />} View PDF
+    </button>
+  );
+}
+
 export function TechPackCard({ familyId, packs }: { familyId: string; packs: Pack[] }) {
   const [open, setOpen] = useState(false);
   const sorted = [...packs].sort((a, b) => b.version - a.version);
@@ -186,27 +206,31 @@ export function TechPackCard({ familyId, packs }: { familyId: string; packs: Pac
 
   return (
     <Card className="p-5">
-      <SectionTitle icon={FileText} tone="warning" title="Tech pack"
-        action={<GhostButton onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add version</GhostButton>} />
+      <SectionTitle icon={FileText} tone="warning" title="Tech pack" sub="The product spec (PDF) the factory builds to. Every upload is a new version — history is kept."
+        action={<GhostButton onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Upload new version</GhostButton>} />
       {sorted.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-background/40 px-4 py-8 text-center text-sm text-muted-foreground">
-          No tech pack uploaded yet. Record the spec version (file upload wires with Storage next).
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-background/40 px-4 py-8 text-center">
+          <span className="inline-grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground"><FileText className="h-5 w-5" /></span>
+          <div className="text-sm text-muted-foreground">No tech pack yet — upload the factory spec PDF.</div>
+          <PrimaryButton onClick={() => setOpen(true)} className="mt-1 inline-flex items-center gap-1.5"><Upload className="h-4 w-4" /> Upload tech pack</PrimaryButton>
         </div>
       ) : (
         <div className="space-y-2">
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
             <div className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4 text-primary" /><span className="font-medium">v{latest.version}</span><Badge tone="brand">Latest</Badge>
-              {latest.asset_ref && <a href={latest.asset_ref} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">View PDF <ExternalLink className="h-3.5 w-3.5" /></a>}
+              {latest.asset_ref && <span className="ml-auto"><ViewTechPackButton path={latest.asset_ref} /></span>}
             </div>
-            <div className="mt-1 text-[12px] text-muted-foreground">{latest.file_name} · {latest.doc_date}</div>
+            <div className="mt-1 text-[12px] text-muted-foreground">{[latest.file_name, fmtSize(latest.file_size), latest.doc_date].filter(Boolean).join(" · ")}</div>
             {latest.note && <div className="text-[12px] text-muted-foreground">{latest.note}</div>}
           </div>
+          {sorted.length > 1 && <div className="vy-kicker pt-1">Previous versions</div>}
           {sorted.slice(1).map((p) => (
             <div key={p.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]">
               <FileText className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-medium">v{p.version}</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{p.file_name}{p.note ? ` · ${p.note}` : ""}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{[p.file_name, p.note].filter(Boolean).join(" · ")}</span>
               <span className="text-muted-foreground">{p.doc_date}</span>
+              {p.asset_ref && <ViewTechPackButton path={p.asset_ref} />}
             </div>
           ))}
         </div>
@@ -229,18 +253,22 @@ function TechPackModal({ familyId, nextVersion, onClose }: { familyId: string; n
     if (!file) { setError("Choose a PDF first."); return; }
     setError(null); setBusy(true);
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const path = `${familyId}/techpacks/v${nextVersion}-${safe}`;
-    const { error: upErr } = await supabase.storage.from("product-media").upload(path, file, { upsert: true });
+    // private bucket — tech packs are confidential factory specs, served via signed URLs
+    const path = `${familyId}/v${nextVersion}-${safe}`;
+    const { error: upErr } = await supabase.storage.from("tech-packs").upload(path, file, { upsert: true });
     if (upErr) { setError(upErr.message); setBusy(false); return; }
-    const url = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
     const form = new FormData();
     form.set("file_name", file.name);
-    form.set("asset_ref", url);
+    form.set("asset_ref", path); // store the path, not a public URL
     form.set("file_size", String(file.size));
     form.set("note", note);
     const res = await addTechPack(familyId, form);
     setBusy(false);
-    if (!res.ok) { setError(res.error); return; }
+    if (!res.ok) {
+      await supabase.storage.from("tech-packs").remove([path]); // roll back orphan
+      setError(res.error);
+      return;
+    }
     onClose(); router.refresh();
   }
 
