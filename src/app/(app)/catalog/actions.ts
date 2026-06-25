@@ -81,8 +81,10 @@ export async function updateVariant(variantId: string, familyId: string, form: F
   const reorder = parseInt(String(form.get("reorder_point") ?? ""));
   const status = String(form.get("status") ?? "").trim();
 
+  const price = parseFloat(String(form.get("sale_price") ?? ""));
   const patch: VariantUpdate = {};
   if (String(form.get("cost") ?? "") !== "") patch.last_cost_usd = Number.isFinite(cost) ? cost : null;
+  if (String(form.get("sale_price") ?? "") !== "") patch.sale_price = Number.isFinite(price) ? price : null;
   if (String(form.get("reorder_point") ?? "") !== "") patch.reorder_point = Number.isFinite(reorder) ? reorder : null;
   if (status) patch.status = status as VariantUpdate["status"];
   if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to update." };

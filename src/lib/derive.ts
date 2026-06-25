@@ -170,6 +170,50 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
   closed: "Closed",
 };
 
+// ---------- unit economics (Amazon FBA, estimated) ----------
+export const FBA_REFERRAL_DEFAULT = 0.15;
+
+export function estFbaFee(weightLb: number) {
+  const w = weightLb > 0 ? weightLb : 0.5;
+  if (w <= 0.75) return 3.49;   // small standard
+  if (w <= 1) return 4.2;
+  if (w <= 2) return 5.4;       // large standard
+  return 5.4 + (w - 2) * 0.4;
+}
+
+export function familyWeightLb(p: Product) {
+  if (p.weight_lbs) return p.weight_lbs;
+  if (p.weight_kg) return Math.round(p.weight_kg * 2.205 * 100) / 100;
+  return 0;
+}
+
+export function variantEco(v: Variant, weightLb: number) {
+  const cogs = v.last_cost_usd ?? 0;
+  const price = v.sale_price && v.sale_price > 0 ? v.sale_price : cogs > 0 ? Math.round(cogs * 3 * 100) / 100 : 0;
+  const referral = price * FBA_REFERRAL_DEFAULT;
+  const fba = price > 0 ? estFbaFee(weightLb) : 0;
+  const net = price - cogs - referral - fba;
+  const marginPct = price > 0 ? Math.round((net / price) * 100) : null;
+  return { cogs, price, referral, fba, net, marginPct };
+}
+
+export function familyEco(variants: Variant[], weightLb: number) {
+  const ecos = variants.map((v) => variantEco(v, weightLb));
+  const priced = ecos.filter((e) => e.marginPct != null);
+  const avgMargin = priced.length ? Math.round(priced.reduce((s, e) => s + (e.marginPct ?? 0), 0) / priced.length) : null;
+  const costs = variants.map((v) => v.last_cost_usd).filter((c): c is number => c != null);
+  const avgCogs = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
+  const avgFba = estFbaFee(weightLb);
+  return { avgMargin, avgCogs, avgFba, pricedCount: priced.length, total: variants.length };
+}
+
+export function marginTone(marginPct: number | null): Tone {
+  if (marginPct == null) return "muted";
+  if (marginPct <= 0) return "danger";
+  if (marginPct < 20) return "warning";
+  return "success";
+}
+
 // ---------- formatting ----------
 export function money(n: number | null | undefined) {
   if (n == null) return "—";

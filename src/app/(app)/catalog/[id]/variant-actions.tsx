@@ -59,6 +59,7 @@ export function EditVariantButton({
   familyId,
   sku,
   cost,
+  salePrice,
   status,
   reorderPoint,
 }: {
@@ -66,6 +67,7 @@ export function EditVariantButton({
   familyId: string;
   sku: string;
   cost: number | null;
+  salePrice: number | null;
   status: string;
   reorderPoint: number | null;
 }) {
@@ -93,8 +95,9 @@ export function EditVariantButton({
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={`Edit ${sku}`}>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Unit cost (USD)"><input name="cost" type="number" step="0.01" className={inputCls} defaultValue={cost ?? ""} /></Field>
+            <Field label="Sale price (USD)"><input name="sale_price" type="number" step="0.01" className={inputCls} defaultValue={salePrice ?? ""} /></Field>
             <Field label="Reorder point"><input name="reorder_point" type="number" className={inputCls} defaultValue={reorderPoint ?? ""} /></Field>
           </div>
           <Field label="Status">
