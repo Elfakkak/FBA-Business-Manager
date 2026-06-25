@@ -11,7 +11,7 @@ import { setReorderPoint, setFavorite } from "./actions";
 import { cn } from "@/lib/utils";
 import {
   Boxes, Package, Truck, AlertCircle, Info, ChevronDown, ChevronRight,
-  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star,
+  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star, Copy,
 } from "lucide-react";
 
 export type InvRow = {
@@ -38,8 +38,17 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [view, setView] = useState<"family" | "sku">(initialQ ? "sku" : "family");
   const [editing, setEditing] = useState(false);
   const [favOnly, setFavOnly] = useState(false);
+  const [dupOnly, setDupOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [, start] = useTransition();
+
+  // duplicate listings: the same ASIN sold under more than one SKU (splits your stock)
+  const dupAsins = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) if (r.asin) counts.set(r.asin, (counts.get(r.asin) ?? 0) + 1);
+    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([a]) => a));
+  }, [rows]);
+  const isDup = (r: InvRow) => !!r.asin && dupAsins.has(r.asin);
 
   const categories = useMemo(() => [...new Set(rows.map((r) => r.category))].sort(), [rows]);
   const suppliers = useMemo(() => [...new Set(rows.map((r) => r.supplier).filter((s): s is string => !!s))].sort(), [rows]);
@@ -51,12 +60,14 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
       if (supplier !== "all" && r.supplier !== supplier) return false;
       if (health !== "all" && r.health !== health) return false;
       if (favOnly && !r.favorite) return false;
-      if (n && !`${r.family} ${r.color ?? ""} ${r.sku} ${r.fnsku ?? ""} ${r.supplier ?? ""} ${r.category}`.toLowerCase().includes(n)) return false;
+      if (dupOnly && !(r.asin && dupAsins.has(r.asin))) return false;
+      if (n && !`${r.family} ${r.color ?? ""} ${r.sku} ${r.fnsku ?? ""} ${r.asin ?? ""} ${r.supplier ?? ""} ${r.category}`.toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [rows, q, category, supplier, health, favOnly]);
+  }, [rows, q, category, supplier, health, favOnly, dupOnly, dupAsins]);
 
   const favCount = rows.filter((r) => r.favorite).length;
+  const dupCount = rows.filter((r) => r.asin && dupAsins.has(r.asin)).length;
 
   // KPIs over ALL rows
   const onHand = rows.reduce((s, r) => s + r.onHand, 0);
@@ -146,6 +157,9 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
           <button onClick={() => setFavOnly((f) => !f)} className={cn("vy-chip ml-1 inline-flex items-center gap-1", favOnly && "is-active")} title="Show only favorited SKUs">
             <Star className={cn("h-3 w-3", favOnly && "fill-current")} /> Favorites{favCount ? ` (${favCount})` : ""}
           </button>
+          <button onClick={() => setDupOnly((d) => !d)} className={cn("vy-chip inline-flex items-center gap-1", dupOnly && "is-active", dupCount > 0 && !dupOnly && "text-danger")} title="ASINs sold under more than one SKU — your stock is split across duplicate listings">
+            <Copy className="h-3 w-3" /> Duplicate ASINs{dupCount ? ` (${dupCount})` : ""}
+          </button>
         </div>
       </Card>
 
@@ -172,34 +186,43 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               {filtered.length === 0 ? (
                 <tr><td colSpan={COLS} className="px-4 py-9 text-center text-muted-foreground">No SKUs match your filters.</td></tr>
               ) : view === "sku" ? (
-                filtered.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} router={router} />)
+                filtered.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
               ) : (
                 groups.map(([fid, members]) => {
                   const open = collapsed[fid] !== true;
                   const needs = members.filter((m) => m.health === "Reorder").length;
                   const gOn = members.reduce((s, m) => s + m.onHand, 0);
+                  const gReserved = members.reduce((s, m) => s + m.reserved, 0);
+                  const gAvail = members.reduce((s, m) => s + m.available, 0);
                   const gIn = members.reduce((s, m) => s + m.inbound, 0);
                   const favd = members.some((m) => m.favorite);
                   const img = members.find((m) => m.image)?.image ?? null;
                   return (
                     <FragmentGroup key={fid}>
+                      {/* parent header — sums aligned under the same columns as the variants */}
                       <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => setCollapsed((c) => ({ ...c, [fid]: open }))}>
-                        <td colSpan={COLS} className="px-3 py-2">
+                        <td className="px-3 py-2">
                           <div className="flex items-center gap-2 text-[13px]">
                             {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
                             <span className="relative inline-grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded border bg-muted text-muted-foreground">
                               {img ? <Image src={img} alt="" fill sizes="28px" className="object-cover" /> : <Package className="h-3.5 w-3.5" />}
                             </span>
                             {favd && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                            <Link href={`/catalog/${fid}`} onClick={(e) => e.stopPropagation()} className="max-w-[360px] truncate font-semibold hover:text-primary" title={members[0].family}>{members[0].family}</Link>
+                            <Link href={`/catalog/${fid}`} onClick={(e) => e.stopPropagation()} className="max-w-[280px] truncate font-semibold hover:text-primary" title={members[0].family}>{members[0].family}</Link>
                             <span className="shrink-0 text-muted-foreground">{members.length} SKUs</span>
-                            <span className="ml-auto shrink-0 text-muted-foreground">On hand <strong className="text-foreground">{num(gOn)}</strong></span>
-                            <span className="shrink-0 text-muted-foreground">Inbound <strong className="text-foreground">{num(gIn)}</strong></span>
-                            {needs > 0 ? <Badge tone="danger">{needs} reorder</Badge> : <Badge tone="success">Healthy</Badge>}
                           </div>
                         </td>
+                        <td className="px-3 py-2" />
+                        <td className="tabular px-3 py-2 text-right font-mono font-semibold">{num(gOn)}</td>
+                        <td className="tabular px-3 py-2 text-right font-mono text-muted-foreground">{num(gReserved)}</td>
+                        <td className="tabular px-3 py-2 text-right font-mono font-semibold">{num(gAvail)}</td>
+                        <td className={cn("tabular px-3 py-2 text-right font-mono", gIn > 0 ? "text-info" : "text-muted-foreground")}>{gIn > 0 ? num(gIn) : "—"}</td>
+                        <td className="px-3 py-2" />
+                        <td className="px-3 py-2" />
+                        <td className="px-3 py-2">{needs > 0 ? <Badge tone="danger">{needs} reorder</Badge> : <Badge tone="success">Healthy</Badge>}</td>
+                        <td className="px-3 py-2" />
                       </tr>
-                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} router={router} />)}
+                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)}
                     </FragmentGroup>
                   );
                 })
@@ -238,8 +261,8 @@ function FragmentGroup({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function Row({ r, editing, onSave, onFav, router }: {
-  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void; onFav: (id: string, v: boolean) => void;
+function Row({ r, editing, onSave, onFav, dup, router }: {
+  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void; onFav: (id: string, v: boolean) => void; dup: boolean;
   router: ReturnType<typeof useRouter>;
 }) {
   const sticker = isStickerless(r);
@@ -255,7 +278,10 @@ function Row({ r, editing, onSave, onFav, router }: {
           </span>
           <div className="min-w-0">
             {/* SKU is the hero; the product it's linked to sits beneath, truncated */}
-            <Link href={`/catalog/${r.familyId}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
+            <div className="flex items-center gap-1.5">
+              <Link href={`/catalog/${r.familyId}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
+              {dup && <span title={`ASIN ${r.asin} is sold under more than one SKU — stock is split across duplicate listings`}><Badge tone="danger">Dup ASIN</Badge></span>}
+            </div>
             <div className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={r.family}>{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
           </div>
         </div>
