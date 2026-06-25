@@ -7,19 +7,23 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
 import { INV_HEALTH_TONE, INV_FCS, INV_SAFETY_DAYS, num, type InvHealth } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
-import { setReorderPoint } from "./actions";
+import { setReorderPoint, setFavorite } from "./actions";
 import { cn } from "@/lib/utils";
 import {
   Boxes, Package, Truck, AlertCircle, Info, ChevronDown, ChevronRight,
-  RefreshCw, ArrowUpRight, Pencil, Check, Plus,
+  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star,
 } from "lucide-react";
 
 export type InvRow = {
-  id: string; sku: string; fnsku: string | null; familyId: string; family: string; color: string | null;
+  id: string; sku: string; fnsku: string | null; asin: string | null; familyId: string; family: string; color: string | null;
   category: string; supplier: string | null; onHand: number; reserved: number; available: number;
   inbound: number; unfulfillable: number; daysCover: number | null; reorderPoint: number; health: InvHealth; fc: string;
-  image: string | null; lastCost: number | null;
+  image: string | null; lastCost: number | null; favorite: boolean;
 };
+
+// Amazon ships commingled/stickerless units when the FNSKU equals the ASIN
+// (no FNSKU label applied). Otherwise the unit is FNSKU-labeled.
+const isStickerless = (r: InvRow) => !!r.fnsku && !!r.asin && r.fnsku === r.asin;
 
 const CHIPS: { key: "all" | InvHealth; label: string }[] = [
   { key: "all", label: "All" }, { key: "Reorder", label: "Reorder" }, { key: "Low", label: "Low" }, { key: "Healthy", label: "Healthy" },
@@ -33,6 +37,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [health, setHealth] = useState<"all" | InvHealth>("all");
   const [view, setView] = useState<"family" | "sku">(initialQ ? "sku" : "family");
   const [editing, setEditing] = useState(false);
+  const [favOnly, setFavOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [, start] = useTransition();
 
@@ -45,10 +50,13 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
       if (category !== "all" && r.category !== category) return false;
       if (supplier !== "all" && r.supplier !== supplier) return false;
       if (health !== "all" && r.health !== health) return false;
+      if (favOnly && !r.favorite) return false;
       if (n && !`${r.family} ${r.color ?? ""} ${r.sku} ${r.fnsku ?? ""} ${r.supplier ?? ""} ${r.category}`.toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [rows, q, category, supplier, health]);
+  }, [rows, q, category, supplier, health, favOnly]);
+
+  const favCount = rows.filter((r) => r.favorite).length;
 
   // KPIs over ALL rows
   const onHand = rows.reduce((s, r) => s + r.onHand, 0);
@@ -69,6 +77,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   }, [filtered]);
 
   const saveReorder = (id: string, v: string) => start(async () => { await setReorderPoint(id, v === "" ? null : Number(v)); router.refresh(); });
+  const toggleFav = (id: string, v: boolean) => start(async () => { await setFavorite(id, v); router.refresh(); });
 
   const COLS = 10;
   return (
@@ -130,10 +139,13 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
             {editing ? <><Check className="h-3.5 w-3.5" /> Done</> : <><Pencil className="h-3.5 w-3.5" /> Edit reorder pts</>}
           </button>
         </div>
-        <div className="mt-2 flex gap-1">
+        <div className="mt-2 flex flex-wrap items-center gap-1">
           {CHIPS.map((c) => (
             <button key={c.key} onClick={() => setHealth(c.key)} className={cn("vy-chip", health === c.key && "is-active")}>{c.label}</button>
           ))}
+          <button onClick={() => setFavOnly((f) => !f)} className={cn("vy-chip ml-1 inline-flex items-center gap-1", favOnly && "is-active")} title="Show only favorited SKUs">
+            <Star className={cn("h-3 w-3", favOnly && "fill-current")} /> Favorites{favCount ? ` (${favCount})` : ""}
+          </button>
         </div>
       </Card>
 
@@ -145,7 +157,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Product / SKU</th>
-                <th className="px-3 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU <SourceTag source="amazon" /></span></th>
+                <th className="px-3 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU / Prep <SourceTag source="amazon" /></span></th>
                 <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">On hand <SourceTag source="amazon" /></span></th>
                 <th className="px-3 py-2 text-right font-medium">Reserved</th>
                 <th className="px-3 py-2 text-right font-medium">Avail</th>
@@ -160,28 +172,34 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               {filtered.length === 0 ? (
                 <tr><td colSpan={COLS} className="px-4 py-9 text-center text-muted-foreground">No SKUs match your filters.</td></tr>
               ) : view === "sku" ? (
-                filtered.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} router={router} />)
+                filtered.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} router={router} />)
               ) : (
                 groups.map(([fid, members]) => {
                   const open = collapsed[fid] !== true;
                   const needs = members.filter((m) => m.health === "Reorder").length;
                   const gOn = members.reduce((s, m) => s + m.onHand, 0);
                   const gIn = members.reduce((s, m) => s + m.inbound, 0);
+                  const favd = members.some((m) => m.favorite);
+                  const img = members.find((m) => m.image)?.image ?? null;
                   return (
                     <FragmentGroup key={fid}>
                       <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => setCollapsed((c) => ({ ...c, [fid]: open }))}>
                         <td colSpan={COLS} className="px-3 py-2">
                           <div className="flex items-center gap-2 text-[13px]">
-                            {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                            <strong>{members[0].family}</strong>
-                            <span className="text-muted-foreground">{members.length} SKUs</span>
-                            <span className="ml-auto text-muted-foreground">On hand <strong className="text-foreground">{num(gOn)}</strong></span>
-                            <span className="text-muted-foreground">Inbound <strong className="text-foreground">{num(gIn)}</strong></span>
+                            {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                            <span className="relative inline-grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded border bg-muted text-muted-foreground">
+                              {img ? <Image src={img} alt="" fill sizes="28px" className="object-cover" /> : <Package className="h-3.5 w-3.5" />}
+                            </span>
+                            {favd && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                            <Link href={`/catalog/${fid}`} onClick={(e) => e.stopPropagation()} className="max-w-[360px] truncate font-semibold hover:text-primary" title={members[0].family}>{members[0].family}</Link>
+                            <span className="shrink-0 text-muted-foreground">{members.length} SKUs</span>
+                            <span className="ml-auto shrink-0 text-muted-foreground">On hand <strong className="text-foreground">{num(gOn)}</strong></span>
+                            <span className="shrink-0 text-muted-foreground">Inbound <strong className="text-foreground">{num(gIn)}</strong></span>
                             {needs > 0 ? <Badge tone="danger">{needs} reorder</Badge> : <Badge tone="success">Healthy</Badge>}
                           </div>
                         </td>
                       </tr>
-                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} router={router} />)}
+                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} router={router} />)}
                     </FragmentGroup>
                   );
                 })
@@ -220,24 +238,33 @@ function FragmentGroup({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function Row({ r, editing, onSave, router }: {
-  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void;
+function Row({ r, editing, onSave, onFav, router }: {
+  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void; onFav: (id: string, v: boolean) => void;
   router: ReturnType<typeof useRouter>;
 }) {
+  const sticker = isStickerless(r);
   return (
     <tr className="hover:bg-accent/40">
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2.5">
+          <button onClick={() => onFav(r.id, !r.favorite)} className="shrink-0 text-muted-foreground hover:text-warning" title={r.favorite ? "Unfavorite" : "Mark favorite"} aria-label="Toggle favorite">
+            <Star className={cn("h-4 w-4", r.favorite && "fill-warning text-warning")} />
+          </button>
           <span className="relative inline-grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
             {r.image ? <Image src={r.image} alt="" fill sizes="32px" className="object-cover" /> : <Package className="h-4 w-4" />}
           </span>
           <div className="min-w-0">
-            <Link href={`/catalog/${r.familyId}`} className="font-mono text-[12px] font-semibold hover:text-primary">{r.sku}</Link>
+            {/* SKU is the hero; the product it's linked to sits beneath, truncated */}
+            <Link href={`/catalog/${r.familyId}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
             <div className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={r.family}>{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
           </div>
         </div>
       </td>
-      <td className="px-3 py-2.5 font-mono text-[12px] text-muted-foreground">{r.fnsku ?? "—"}</td>
+      <td className="px-3 py-2.5">
+        {sticker
+          ? <Badge tone="warning" >Stickerless</Badge>
+          : <span className="font-mono text-[12px] text-muted-foreground">{r.fnsku ?? "—"}</span>}
+      </td>
       <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{num(r.onHand)}</td>
       <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{num(r.reserved)}</td>
       <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{num(r.available)}</td>
