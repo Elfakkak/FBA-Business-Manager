@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { Plus, ChevronRight } from "lucide-react";
 
 export type OrderSummary = {
-  id: string; title: string; supplier: string | null; agent: string | null; route: string | null;
+  id: string; title: string; supplier: string | null; agent: string | null;
   status: string; placedOn: string | null; fbaEta: string | null;
   total: number; paid: number; balance: number; paidPct: number;
 };

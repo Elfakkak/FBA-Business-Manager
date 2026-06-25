@@ -14,7 +14,7 @@ export default async function OrdersPage() {
   const rows: OrderSummary[] = (orders ?? []).map((o) => {
     const r = orderRollup(o.id, (invoices ?? []) as InvoiceRow[]);
     return {
-      id: o.id, title: o.title, supplier: o.supplier, agent: o.agent, route: o.route,
+      id: o.id, title: o.title, supplier: o.supplier, agent: o.agent,
       status: o.status, placedOn: o.placed_on, fbaEta: o.fba_eta,
       total: r.total, paid: r.paid, balance: r.balance, paidPct: r.paidPct,
     };

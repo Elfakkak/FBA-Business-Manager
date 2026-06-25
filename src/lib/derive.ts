@@ -142,7 +142,7 @@ export const ORDER_PIPELINE: { key: string; label: string }[] = [
   { key: "draft", label: "Draft" },
   { key: "production", label: "Production" },
   { key: "inspection", label: "Inspection" },
-  { key: "transit", label: "Shipping" },
+  { key: "transit", label: "In transit" },
   { key: "fba", label: "At FBA" },
   { key: "closed", label: "Closed" },
 ];
@@ -159,7 +159,7 @@ export const ORDER_STATUS_TONE: Record<string, Tone> = {
   inspection: "warning",
   transit: "info",
   fba: "success",
-  closed: "muted",
+  closed: "success",
 };
 export const ORDER_STATUS_LABEL: Record<string, string> = {
   draft: "Draft",

@@ -32,6 +32,7 @@ const RLS_GUARDED = ["products", "product_variants", "orders", "invoices", "fina
 const ENDPOINTS = [
   ["/login", [200]], ["/", [307, 308]], ["/catalog", [307, 308]], ["/inventory", [307, 308]],
   ["/packaging", [307, 308]], ["/suppliers", [307, 308]], ["/partners", [307, 308]],
+  ["/orders", [307, 308]],
 ];
 
 let failures = 0;
