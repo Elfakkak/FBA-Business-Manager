@@ -24,7 +24,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
       <TableCard icon={Package} tone="brand" title="Variants" count={variants.length} action={<AddVariantButton familyId={familyId} />}>
         <table className="w-full min-w-[960px] text-sm">
           <thead>
-            <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b text-left text-[10px] uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-2 font-medium">SKU</th>
               <th className="px-4 py-2 font-medium">Variant</th>
               <th className="px-4 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU <SourceTag source="amazon" /></span></th>

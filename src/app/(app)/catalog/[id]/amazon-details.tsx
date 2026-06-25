@@ -42,7 +42,7 @@ export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId
       <div className="mb-4 flex flex-wrap gap-2">
         {variants.map((v) => (
           <button key={v.sku} onClick={() => setPrimary(v.sku)} disabled={pending}
-            className={cn("rounded-lg border px-3 py-2 text-left transition", v.sku === primary?.sku ? "border-primary bg-primary/5" : "hover:bg-accent")}>
+            className={cn("rounded-lg border px-3 py-2 text-left transition", v.sku === primary?.sku ? "border-primary bg-primary/12" : "hover:bg-accent")}>
             <div className="flex items-center gap-1.5">
               {v.sku === primary?.sku ? <Star className="h-3.5 w-3.5 fill-warning text-warning" /> : <Package className="h-3.5 w-3.5 text-muted-foreground" />}
               <span className="font-mono text-[12px] font-semibold">{v.sku}</span>
