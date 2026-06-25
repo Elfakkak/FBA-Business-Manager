@@ -29,12 +29,14 @@ export default async function CatalogPage() {
       category: p.category,
       supplier: p.supplier,
       lastOrdered: p.last_ordered,
+      leadTime: p.lead_time_days,
       skuCount: s.skuCount,
       stock: s.stock,
       inbound: s.inbound,
       costLabel: s.costLabel,
       health: s.health,
       lowStock: s.lowStock,
+      skus: vs.map((v) => ({ sku: v.sku, stock: v.fba_stock ?? 0, status: v.status })),
     };
   });
 
