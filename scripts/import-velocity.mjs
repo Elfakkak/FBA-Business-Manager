@@ -26,11 +26,10 @@ if (MODE === "fetch" || MODE === "all") {
   const end = new Date();
   const start = new Date(end.getTime() - WINDOW_DAYS * 864e5);
 
-  // 1) create the report
+  // 1) create the report — ALL_ORDERS (GENERAL = no PII) is covered by the Orders role
   const create = await fetch(`${host}/reports/2021-06-30/reports`, { method: "POST", headers: H, body: JSON.stringify({
-    reportType: "GET_SALES_AND_TRAFFIC_REPORT", marketplaceIds: [marketplace],
+    reportType: "GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL", marketplaceIds: [marketplace],
     dataStartTime: start.toISOString(), dataEndTime: end.toISOString(),
-    reportOptions: { asinGranularity: "CHILD", dateGranularity: "DAY" },
   }) });
   const cj = await create.json(); if (!create.ok) throw new Error(cj?.errors?.[0]?.message || `create HTTP ${create.status}`);
   const reportId = cj.reportId;
@@ -48,28 +47,38 @@ if (MODE === "fetch" || MODE === "all") {
   }
   if (!docId) throw new Error(`report not ready (status ${status})`);
 
-  // 3) download + (gunzip) + parse
+  // 3) download + (gunzip) + parse the TSV → units per SKU
   const doc = await (await fetch(`${host}/reports/2021-06-30/documents/${docId}`, { headers: H })).json();
   const raw = Buffer.from(await (await fetch(doc.url)).arrayBuffer());
   const text = doc.compressionAlgorithm === "GZIP" ? gunzipSync(raw).toString("utf8") : raw.toString("utf8");
-  const data = JSON.parse(text);
-  const byAsin = data.salesAndTrafficByAsin ?? [];
-  const velocityByAsin = {};
-  for (const row of byAsin) {
-    const asin = row.childAsin || row.parentAsin; if (!asin) continue;
-    const units = row.sales?.unitsOrdered ?? 0;
-    velocityByAsin[asin] = +((velocityByAsin[asin] ?? 0) + units / WINDOW_DAYS).toFixed(3);
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const header = (lines.shift() ?? "").split("\t");
+  console.log("  columns:", header.join(", "));
+  const find = (...names) => names.map((n) => header.indexOf(n)).find((i) => i >= 0) ?? -1;
+  const iSku = find("sku", "seller-sku");
+  const iQty = find("quantity-purchased", "quantity", "quantity-shipped", "shipped-quantity");
+  const iStatus = find("order-status", "item-status");
+  const unitsBySku = {};
+  for (const line of lines) {
+    const c = line.split("\t");
+    const status = (c[iStatus] || "").toLowerCase();
+    if (status.includes("cancel")) continue;
+    const sku = c[iSku]; const qty = parseInt(c[iQty]) || 0;
+    if (!sku || !qty) continue;
+    unitsBySku[sku] = (unitsBySku[sku] ?? 0) + qty;
   }
-  writeFileSync(CACHE, JSON.stringify({ velocityByAsin, window: WINDOW_DAYS, asins: Object.keys(velocityByAsin).length }));
-  console.log(`Parsed velocity for ${Object.keys(velocityByAsin).length} ASINs (last ${WINDOW_DAYS}d) → cached.`);
+  const velocityBySku = {};
+  for (const [sku, units] of Object.entries(unitsBySku)) velocityBySku[sku] = +(units / WINDOW_DAYS).toFixed(3);
+  writeFileSync(CACHE, JSON.stringify({ velocityBySku, window: WINDOW_DAYS }));
+  console.log(`Parsed ${Object.keys(velocityBySku).length} SKUs with sales (last ${WINDOW_DAYS}d) → cached.`);
   if (MODE === "fetch") process.exit(0);
 }
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-const { velocityByAsin } = JSON.parse(readFileSync(CACHE, "utf8"));
+const { velocityBySku } = JSON.parse(readFileSync(CACHE, "utf8"));
 let updated = 0;
-for (const [asin, vel] of Object.entries(velocityByAsin)) {
-  const { data } = await db.from("product_variants").update({ velocity: vel }).eq("asin", asin).select("id");
+for (const [sku, vel] of Object.entries(velocityBySku)) {
+  const { data } = await db.from("product_variants").update({ velocity: vel }).eq("sku", sku).select("id");
   updated += data?.length ?? 0;
 }
 console.log(`✅ Wrote velocity to ${updated} variants. Days-of-cover & reorder are now live.`);
