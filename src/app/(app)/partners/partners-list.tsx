@@ -108,7 +108,7 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
                   <td className="px-4 py-2.5"><Badge tone={PARTNER_TYPE_TONE[p.type] ?? "muted"}>{p.type}</Badge></td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{p.orderCount || "—"}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{p.invoiceCount || "—"}</td>
-                  <td className="tabular px-4 py-2.5 text-right font-mono font-semibold text-warning">{p.openBalance > 0 ? money(p.openBalance) : "—"}</td>
+                  <td className={cn("tabular px-4 py-2.5 text-right font-mono font-semibold", p.openBalance > 0 ? "text-warning" : "text-muted-foreground")}>{p.openBalance > 0 ? money(p.openBalance) : "—"}</td>
                 </tr>
               ))}
             </tbody>

@@ -11,7 +11,8 @@ import { ContactsSection, type Contact } from "@/components/contacts/contacts-se
 
 export default async function PartnerDetail({ params }: { params: Promise<{ name: string }> }) {
   const { name: raw } = await params;
-  const name = decodeURIComponent(raw);
+  let name: string;
+  try { name = decodeURIComponent(raw); } catch { name = raw; }
   const supabase = await createClient();
 
   const [{ data: partner }, { data: orders }, { data: invoices }, { data: contacts }] = await Promise.all([

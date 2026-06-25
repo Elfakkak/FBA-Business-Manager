@@ -12,7 +12,8 @@ import { Package } from "lucide-react";
 
 export default async function SupplierDetail({ params }: { params: Promise<{ name: string }> }) {
   const { name: raw } = await params;
-  const name = decodeURIComponent(raw);
+  let name: string;
+  try { name = decodeURIComponent(raw); } catch { name = raw; }
   const supabase = await createClient();
 
   const [{ data: supplier }, { data: orders }, { data: invoices }, { data: products }, { data: contacts }] = await Promise.all([

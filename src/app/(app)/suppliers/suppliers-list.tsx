@@ -7,7 +7,8 @@ import { Card, Badge, Kpi, PageHead } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { createSupplier } from "./actions";
 import { money, num } from "@/lib/derive";
-import { Factory, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Plus } from "lucide-react";
 
 export type SupplierSummary = {
   name: string;
@@ -93,7 +94,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
                   <td className="tabular px-4 py-2.5 text-right font-mono">{num(s.productCount)}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{num(s.orderCount)}<span className="text-[11px] text-info"> · {s.openOrders} open</span></td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{s.leadTimeDays ? `${s.leadTimeDays}d` : "—"}</td>
-                  <td className="tabular px-4 py-2.5 text-right font-mono font-semibold text-warning">{s.openBalance > 0 ? money(s.openBalance) : "—"}</td>
+                  <td className={cn("tabular px-4 py-2.5 text-right font-mono font-semibold", s.openBalance > 0 ? "text-warning" : "text-muted-foreground")}>{s.openBalance > 0 ? money(s.openBalance) : "—"}</td>
                 </tr>
               ))}
             </tbody>
