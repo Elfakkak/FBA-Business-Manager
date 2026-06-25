@@ -6,8 +6,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run on all routes except static assets and image optimization files.
+  // Run on all routes except static assets, image optimization, and /api/sync
+  // (that route does its own auth — Vercel cron bearer OR signed-in owner — so the
+  // session middleware must not redirect the cron's no-cookie request to /login).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/sync|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
