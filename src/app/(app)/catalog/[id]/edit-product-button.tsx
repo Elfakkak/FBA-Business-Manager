@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { updateProduct } from "../actions";
 import { Pencil } from "lucide-react";
 
@@ -21,24 +20,9 @@ export type ProductEdit = {
 };
 
 export function EditProductButton({ product, suppliers }: { product: ProductEdit; suppliers: string[] }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateProduct(product.id, form));
   const d = product.dim_cm ?? {};
   const c = product.carton_cm ?? {};
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await updateProduct(product.id, form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      router.refresh();
-    });
-  }
 
   return (
     <>

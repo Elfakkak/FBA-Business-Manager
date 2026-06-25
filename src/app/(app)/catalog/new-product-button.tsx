@@ -1,34 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { useFormModal } from "@/lib/use-form-modal";
 import { createProduct } from "./actions";
 import { Plus } from "lucide-react";
 
 const ADD_NEW = "__add_new__";
 
 export function NewProductButton({ categories }: { categories: string[] }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
   const [catChoice, setCatChoice] = useState("");
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
+  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => {
     // when "add new" is chosen, use the typed value as the category
     if (form.get("category") === ADD_NEW) form.set("category", String(form.get("category_new") ?? ""));
-    setError(null);
-    start(async () => {
-      const res = await createProduct(form);
-      if (!res.ok) { setError(res.error); return; }
-      setOpen(false);
-      setCatChoice("");
-      router.refresh();
-    });
-  }
+    return createProduct(form);
+  }, { onSuccess: () => setCatChoice("") });
 
   return (
     <>
