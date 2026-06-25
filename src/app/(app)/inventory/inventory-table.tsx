@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [favOnly, setFavOnly] = useState(false);
   const [dupOnly, setDupOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  const [pageSize, setPageSize] = useState(50);
+  const [page, setPage] = useState(1);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [, start] = useTransition();
 
@@ -95,12 +97,23 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const fcTotals = INV_FCS.map((fc) => ({ fc, total: filtered.filter((r) => r.fc === fc).reduce((s, r) => s + r.onHand, 0) }));
   const fcMax = Math.max(1, ...fcTotals.map((f) => f.total));
 
-  // grouping for family view
+  // grouping for family view (sort within each family)
   const groups = useMemo(() => {
     const m = new Map<string, InvRow[]>();
     for (const r of filtered) { if (!m.has(r.familyId)) m.set(r.familyId, []); m.get(r.familyId)!.push(r); }
     return [...m.entries()];
   }, [filtered]);
+
+  // pagination — in SKU view the unit is a SKU; in family view it's a family
+  const sortedSkus = useMemo(() => sortRows(filtered), [filtered, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const totalItems = view === "sku" ? sortedSkus.length : groups.length;
+  const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const from = (safePage - 1) * pageSize;
+  const pageSkus = sortedSkus.slice(from, from + pageSize);
+  const pageGroups = groups.slice(from, from + pageSize);
+  // reset to page 1 whenever the result set or view changes
+  useEffect(() => { setPage(1); }, [q, category, supplier, health, favOnly, dupOnly, view, pageSize]);
 
   const saveReorder = (id: string, v: string) => start(async () => { await setReorderPoint(id, v === "" ? null : Number(v)); router.refresh(); });
   const toggleFav = (id: string, v: boolean) => start(async () => { await setFavorite(id, v); router.refresh(); });
@@ -202,9 +215,9 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               {filtered.length === 0 ? (
                 <tr><td colSpan={COLS} className="px-4 py-9 text-center text-muted-foreground">No SKUs match your filters.</td></tr>
               ) : view === "sku" ? (
-                sortRows(filtered).map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
+                pageSkus.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
               ) : (
-                groups.map(([fid, members]) => {
+                pageGroups.map(([fid, members]) => {
                   const open = collapsed[fid] !== true;
                   const needs = members.filter((m) => m.health === "Reorder").length;
                   const gOn = members.reduce((s, m) => s + m.onHand, 0);
@@ -246,6 +259,21 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               )}
             </tbody>
           </table>
+        </div>
+        {/* pagination */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>Rows:</span>
+            {[25, 50, 100].map((n) => (
+              <button key={n} onClick={() => setPageSize(n)} className={cn("rounded px-2 py-0.5", pageSize === n ? "bg-primary/12 font-medium text-primary" : "hover:bg-accent")}>{n}</button>
+            ))}
+          </div>
+          <div>Showing {totalItems === 0 ? 0 : from + 1}–{Math.min(from + pageSize, totalItems)} of {num(totalItems)} {view === "sku" ? "SKUs" : "families"}</div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Prev</button>
+            <span>Page {safePage} / {pageCount}</span>
+            <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={safePage >= pageCount} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Next</button>
+          </div>
         </div>
       </Card>
 
