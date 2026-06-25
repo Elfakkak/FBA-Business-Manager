@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Kpi, PageHead, Badge, SectionTitle } from "@/components/ui/primitives";
-import { invStats, reorderQty, INV_HEALTH_TONE, num, type Variant, type Product } from "@/lib/derive";
+import { invStats, reorderQty, INV_HEALTH_TONE, INV_SAFETY_DAYS, num, type Variant, type Product } from "@/lib/derive";
 import { Radar } from "lucide-react";
 
 export default async function Dashboard() {
@@ -66,7 +66,7 @@ export default async function Dashboard() {
                   return (
                     <tr key={v.id} className="hover:bg-accent/40">
                       <td className="px-3 py-2"><Link href={`/catalog/${v.family_id}`} className="font-mono text-[12px] font-bold hover:text-primary">{v.sku}</Link><div className="max-w-[240px] truncate text-[11px] text-muted-foreground">{product}</div></td>
-                      <td className={`tabular px-3 py-2 text-right font-mono ${st.daysCover != null && st.daysCover < 14 ? "text-danger" : "text-warning"}`}>{st.daysCover == null ? "∞" : `${st.daysCover}d`}</td>
+                      <td className={`tabular px-3 py-2 text-right font-mono ${st.daysCover !== Infinity && st.daysCover < INV_SAFETY_DAYS ? "text-danger" : "text-warning"}`}>{st.daysCover === Infinity ? "∞" : `${Math.round(st.daysCover)}d`}</td>
                       <td className="tabular px-3 py-2 text-right font-mono">{num(st.available)}</td>
                       <td className={`tabular px-3 py-2 text-right font-mono ${st.inbound > 0 ? "text-info" : "text-muted-foreground"}`}>{st.inbound > 0 ? num(st.inbound) : "—"}</td>
                       <td className="tabular px-3 py-2 text-right font-mono font-semibold">{num(qty)}</td>
