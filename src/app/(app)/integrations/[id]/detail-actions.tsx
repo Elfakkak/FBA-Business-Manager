@@ -2,30 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
-import { connectIntegration, syncIntegration, disconnectIntegration } from "../actions";
+import { syncIntegration, disconnectIntegration } from "../actions";
+import { ConnectIntegrationModal } from "../connect-modal";
 import type { IntegrationDef } from "@/lib/integrations";
 import { RefreshCw, Plug } from "lucide-react";
 
 export function IntegrationDetailActions({ def, connected }: { def: IntegrationDef; connected: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => { const r = await fn(); if (!r.ok) setError(r.error ?? "Failed"); router.refresh(); });
-
-  function onConnect(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const r = await connectIntegration(def.id, form);
-      if (!r.ok) { setError(r.error); return; }
-      setOpen(false); router.refresh();
-    });
-  }
 
   if (connected) {
     return (
@@ -41,28 +30,7 @@ export function IntegrationDetailActions({ def, connected }: { def: IntegrationD
   return (
     <>
       <button onClick={() => setOpen(true)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Plug className="h-4 w-4" /> Connect</button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Connect ${def.name}`}>
-        <p className="-mt-2 mb-4 text-sm text-muted-foreground">Credentials are stored server-side (owner-only). Live sync activates once the {def.name} fetch is wired.</p>
-        <div className="mb-4 rounded-lg border bg-accent/40 p-3">
-          <div className="vy-kicker mb-1.5">How to get these</div>
-          <ol className="list-decimal space-y-1 pl-4 text-[12px] text-muted-foreground">
-            {def.howto.map((step, i) => <li key={i}>{step}</li>)}
-          </ol>
-          {def.docsUrl && <a href={def.docsUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[12px] font-medium text-primary hover:underline">Open {def.name} docs →</a>}
-        </div>
-        <form onSubmit={onConnect} className="space-y-4">
-          {def.creds.map((f) => (
-            <Field key={f.name} label={f.label}>
-              <input name={f.name} type={f.type === "password" ? "password" : "text"} required autoComplete="off" className={inputCls} />
-            </Field>
-          ))}
-          {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>
-            <PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save & connect"}</PrimaryButton>
-          </div>
-        </form>
-      </Modal>
+      <ConnectIntegrationModal def={def} open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

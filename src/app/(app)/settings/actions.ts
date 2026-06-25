@@ -36,6 +36,14 @@ export async function saveBrand(form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+export async function saveBrandLogo(url: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("brand").upsert({ id: 1, logo_url: url || null } as never);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 export async function saveNotifications(form: FormData): Promise<Result> {
   const supabase = await createClient();
   const prefs: Record<string, boolean> = {};

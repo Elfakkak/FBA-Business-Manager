@@ -1,21 +1,27 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, PageHead } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Toggle } from "@/components/ui/toggle";
+import { createClient } from "@/lib/supabase/client";
 import { INTG_STATUS_TONE, INTG_STATUS_LABEL, intgAgo, type IntegrationDef } from "@/lib/integrations";
-import { connectIntegration, syncIntegration, disconnectIntegration } from "../integrations/actions";
-import { saveBusiness, saveBrand, saveNotifications, inviteMember, updateMember, removeMember } from "./actions";
-import { initials } from "@/lib/utils";
-import { cn } from "@/lib/utils";
-import { Activity, Factory, Package, User, Bell, RefreshCw, Plug, Pencil, Plus, X } from "lucide-react";
+import { syncIntegration, disconnectIntegration } from "../integrations/actions";
+import { ConnectIntegrationModal } from "../integrations/connect-modal";
+import { saveBusiness, saveBrand, saveBrandLogo, saveNotifications, inviteMember, updateMember, removeMember } from "./actions";
+import { initials, cn } from "@/lib/utils";
+import { Activity, Factory, Package, User, Bell, RefreshCw, Plug, Pencil, Plus, ImageIcon, Loader2 } from "lucide-react";
 
 type IntgState = { def: IntegrationDef; status: string; lastSync: string | null; note: string | null };
 type Member = { id: string; name: string; email: string | null; role: string; status: string; is_you: boolean; is_owner: boolean; share: number | null; fin_id: string | null };
-type BrandRow = Record<string, unknown> | null;
-type BizRow = Record<string, unknown> | null;
+type Row = Record<string, unknown> | null;
+
+type FieldDef = { name: string; label: string; ph?: string; w?: "full" | "third" };
+type ToggleDef = { name: string; label: string; sub?: string };
+type Group = { label: string; fields?: FieldDef[]; toggles?: ToggleDef[] };
 
 const SECTIONS = [
   { key: "integrations", label: "Integrations", icon: Activity },
@@ -25,13 +31,13 @@ const SECTIONS = [
   { key: "notifications", label: "Notifications", icon: Bell },
 ] as const;
 
-export function SettingsView(props: { integrations: IntgState[]; brand: BrandRow; business: BizRow; prefs: Record<string, boolean>; members: Member[] }) {
+export function SettingsView(props: { integrations: IntgState[]; brand: Row; business: Row; prefs: Record<string, boolean>; members: Member[] }) {
   const [section, setSection] = useState<string>("integrations");
   return (
     <div className="space-y-6">
       <PageHead kicker="Workspace" title="Settings" sub="Connections, business details and the people who can access Vyonix." />
       <div className="flex flex-col gap-6 lg:flex-row">
-        <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-52 lg:flex-col">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto lg:sticky lg:top-4 lg:w-52 lg:flex-col lg:self-start">
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             return (
@@ -45,7 +51,7 @@ export function SettingsView(props: { integrations: IntgState[]; brand: BrandRow
         </nav>
         <div className="min-w-0 flex-1">
           {section === "integrations" && <IntegrationsHub items={props.integrations} />}
-          {section === "business" && <BusinessSection business={props.business} />}
+          {section === "business" && <BusinessSection business={props.business} members={props.members} onGotoTeam={() => setSection("team")} />}
           {section === "brand" && <BrandSection brand={props.brand} />}
           {section === "team" && <TeamSection members={props.members} />}
           {section === "notifications" && <NotificationsSection prefs={props.prefs} />}
@@ -81,11 +87,10 @@ function Dot({ tone, label, value }: { tone: string; label: string; value: numbe
 function IntgRow({ state }: { state: IntgState }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const { def, status, lastSync, note } = state;
   const connected = status === "connected";
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => start(async () => { const r = await fn(); if (!r.ok) setError(r.error ?? "Failed"); router.refresh(); });
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => start(async () => { await fn(); router.refresh(); });
 
   return (
     <Card className="flex flex-wrap items-center gap-3 p-4">
@@ -111,47 +116,121 @@ function IntgRow({ state }: { state: IntgState }) {
           <button onClick={() => setOpen(true)} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5"><Plug className="h-3.5 w-3.5" /> Connect</button>
         )}
       </div>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Connect ${def.name}`}>
-        <p className="-mt-2 mb-4 text-sm text-muted-foreground">Credentials stored server-side (owner-only). Live sync activates once the {def.name} fetch is wired.</p>
-        <div className="mb-4 rounded-lg border bg-accent/40 p-3">
-          <div className="vy-kicker mb-1.5">How to get these</div>
-          <ol className="list-decimal space-y-1 pl-4 text-[12px] text-muted-foreground">{def.howto.map((step, i) => <li key={i}>{step}</li>)}</ol>
-        </div>
-        <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); setError(null); start(async () => { const r = await connectIntegration(def.id, f); if (!r.ok) { setError(r.error); return; } setOpen(false); router.refresh(); }); }} className="space-y-4">
-          {def.creds.map((c) => <Field key={c.name} label={c.label}><input name={c.name} type={c.type === "password" ? "password" : "text"} required autoComplete="off" className={inputCls} /></Field>)}
-          {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-          <div className="flex justify-end gap-2"><GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save & connect"}</PrimaryButton></div>
-        </form>
-      </Modal>
+      <ConnectIntegrationModal def={def} open={open} onClose={() => setOpen(false)} />
     </Card>
   );
 }
 
 // ---------- Business profile ----------
-const BIZ_FIELDS: [string, string][] = [
-  ["company", "Legal company name"], ["entity_type", "Entity type"], ["state_of_formation", "State of formation"],
-  ["formation_date", "Formation date"], ["ein", "EIN"], ["registered_agent", "Registered agent"],
-  ["email", "Email"], ["phone", "Phone"], ["website", "Website"],
-  ["address", "Street"], ["city", "City"], ["state", "State"], ["zip", "ZIP"], ["country", "Country"],
+const BIZ_GROUPS: Group[] = [
+  { label: "Legal entity", fields: [
+    { name: "company", label: "Legal company name", ph: "e.g. Vyonix Commerce LLC" },
+    { name: "entity_type", label: "Entity type", ph: "LLC / Corp / Sole prop" },
+    { name: "state_of_formation", label: "State of formation", ph: "e.g. Wyoming", w: "third" },
+    { name: "formation_date", label: "Formation date", ph: "YYYY-MM-DD", w: "third" },
+    { name: "ein", label: "EIN", ph: "88-1234567", w: "third" },
+    { name: "registered_agent", label: "Registered agent", ph: "Agent name", w: "full" },
+    { name: "duns_number", label: "DUNS number (optional)", ph: "optional" },
+    { name: "website", label: "Website", ph: "vyonix.co" },
+  ] },
+  { label: "Contact", fields: [
+    { name: "email", label: "Email", ph: "you@company.com" },
+    { name: "phone", label: "Phone", ph: "+1 …" },
+  ] },
+  { label: "Principal address", fields: [
+    { name: "address", label: "Street", ph: "Street address", w: "full" },
+    { name: "city", label: "City", ph: "City", w: "third" },
+    { name: "state", label: "State", ph: "State", w: "third" },
+    { name: "zip", label: "ZIP", ph: "ZIP", w: "third" },
+    { name: "country", label: "Country", ph: "United States" },
+  ] },
 ];
-function BusinessSection({ business }: { business: BizRow }) {
-  return <EditCard title="Business profile" sub="Your LLC's legal details — appear on POs, invoices and exports." action={saveBusiness} fields={BIZ_FIELDS} data={business} />;
+function BusinessSection({ business, members, onGotoTeam }: { business: Row; members: Member[]; onGotoTeam: () => void }) {
+  return (
+    <div className="space-y-4">
+      <EditCard title="Business profile" sub="Your LLC's legal details — appear on POs, invoices and exports." action={saveBusiness} groups={BIZ_GROUPS} data={business} />
+      <OwnershipCard members={members} onGotoTeam={onGotoTeam} />
+    </div>
+  );
+}
+
+function OwnershipCard({ members, onGotoTeam }: { members: Member[]; onGotoTeam: () => void }) {
+  const [editing, setEditing] = useState<Member | null>(null);
+  const owners = members.filter((m) => m.is_owner);
+  const total = owners.reduce((n, m) => n + (m.share ?? 0), 0);
+  return (
+    <Card className="p-5">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Ownership &amp; members</h2>
+          <p className="text-[12px] text-muted-foreground">Who owns the company and their split. Drives the partner capital accounts in Finance.</p>
+        </div>
+        <GhostButton onClick={onGotoTeam} className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Team &amp; roles</GhostButton>
+      </div>
+      <div className="space-y-2">
+        {members.map((m) => (
+          <div key={m.id} className="flex items-center gap-3 rounded-[10px] border bg-background/40 px-3.5 py-3">
+            <span className={cn("inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-semibold", m.is_owner ? "bg-primary/12 text-primary" : "bg-muted text-muted-foreground")}>{initials(m.name)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">{m.name}{m.is_you && <span className="font-normal text-muted-foreground"> (you)</span>}</div>
+              <div className="text-[11.5px] text-muted-foreground">{m.role} · {m.email}</div>
+            </div>
+            {m.is_owner ? (
+              <>
+                <Badge tone="info">{Math.round((m.share ?? 0) * 100)}% ownership</Badge>
+                <button onClick={() => setEditing(m)} className="vy-icon-btn" aria-label="Edit ownership"><Pencil className="h-3.5 w-3.5" /></button>
+              </>
+            ) : (
+              <button onClick={() => setEditing(m)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3 w-3" /> Make owner</button>
+            )}
+          </div>
+        ))}
+      </div>
+      {owners.length > 0 && (
+        <div className={cn("mt-3 text-[12px]", Math.abs(total - 1) > 0.001 ? "text-warning" : "text-muted-foreground")}>
+          Ownership total: {Math.round(total * 100)}% {Math.abs(total - 1) > 0.001 ? "— should equal 100%." : "✓"}
+        </div>
+      )}
+      {editing && <MemberModal member={editing} onClose={() => setEditing(null)} ownerDefault={!editing.is_owner} />}
+    </Card>
+  );
 }
 
 // ---------- Brand ----------
-const BRAND_FIELDS: [string, string][] = [
-  ["name", "Brand name"], ["tagline", "Tagline"], ["color", "Brand color (hex)"], ["established", "Established"],
-  ["registry_id", "Brand Registry ID"], ["store_url", "Amazon Store URL"],
-  ["tm_number", "Trademark number"], ["tm_status", "TM status"], ["tm_jurisdiction", "Jurisdiction"], ["tm_owner", "TM owner"],
-  ["website", "Website"], ["support_email", "Support email"],
+const BRAND_GROUPS: Group[] = [
+  { label: "Identity", fields: [
+    { name: "name", label: "Brand name", ph: "e.g. Vyonix" },
+    { name: "color", label: "Brand color (hex)", ph: "#E8602C", w: "third" },
+    { name: "established", label: "Established", ph: "2024", w: "third" },
+    { name: "tagline", label: "Tagline", ph: "Short brand line", w: "full" },
+  ] },
+  { label: "Amazon Brand Registry",
+    toggles: [
+      { name: "registry_enrolled", label: "Enrolled in Brand Registry", sub: "Amazon brand protection" },
+      { name: "gtin_exempt", label: "GTIN exemption", sub: "Sell without UPC barcodes" },
+    ],
+    fields: [
+      { name: "registry_id", label: "Brand Registry ID", ph: "BR-…" },
+      { name: "store_url", label: "Amazon Store URL", ph: "amazon.com/yourbrand" },
+    ] },
+  { label: "Trademark", fields: [
+    { name: "tm_number", label: "Trademark number", ph: "US 97/…" },
+    { name: "tm_status", label: "Status", ph: "Registered / Pending" },
+    { name: "tm_jurisdiction", label: "Jurisdiction", ph: "USPTO" },
+    { name: "tm_owner", label: "Owner", ph: "Legal owner" },
+  ] },
+  { label: "Presence", fields: [
+    { name: "website", label: "Website", ph: "brand.co" },
+    { name: "support_email", label: "Support email", ph: "support@brand.co" },
+  ] },
 ];
-function BrandSection({ brand }: { brand: BrandRow }) {
+function BrandSection({ brand }: { brand: Row }) {
   const b = brand ?? {};
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center gap-4 p-5">
-        <span className="inline-grid h-20 w-20 place-items-center rounded-2xl bg-muted text-2xl font-bold text-muted-foreground">{String(b.name ?? "V")[0]}</span>
-        <div>
+      <Card className="flex flex-wrap items-start gap-4 p-5">
+        <BrandLogo url={(b.logo_url as string) ?? null} name={String(b.name ?? "V")} />
+        <div className="min-w-0 flex-1">
           <div className="text-2xl font-bold tracking-tight">{String(b.name ?? "—")}</div>
           <div className="text-sm text-muted-foreground">{String(b.tagline ?? "")}</div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -161,17 +240,48 @@ function BrandSection({ brand }: { brand: BrandRow }) {
           </div>
         </div>
       </Card>
-      <EditCard title="Brand" sub="Your private-label brand registry — the catalog and listings read these details."
-        action={saveBrand} fields={BRAND_FIELDS} data={brand}
-        toggles={[["registry_enrolled", "Enrolled in Brand Registry"], ["gtin_exempt", "GTIN exemption"]]} />
+      <EditCard title="Brand" sub="Your private-label brand registry — the catalog and listings read these details." action={saveBrand} groups={BRAND_GROUPS} data={brand} />
     </div>
   );
 }
 
-// generic editable card (view tiles -> edit inputs)
-function EditCard({ title, sub, action, fields, data, toggles }: {
-  title: string; sub: string; action: (f: FormData) => Promise<{ ok: boolean; error?: string }>;
-  fields: [string, string][]; data: Record<string, unknown> | null; toggles?: [string, string][];
+function BrandLogo({ url, name }: { url: string | null; name: string }) {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const supabase = createClient();
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `brand/logo-${Date.now()}-${safe}`;
+    const { error } = await supabase.storage.from("product-media").upload(path, file, { upsert: true });
+    if (!error) {
+      const u = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
+      const res = await saveBrandLogo(u);
+      if (!res.ok) await supabase.storage.from("product-media").remove([path]);
+    }
+    setBusy(false);
+    router.refresh();
+  }
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <button onClick={() => !busy && fileRef.current?.click()} className="relative h-[84px] w-[84px] overflow-hidden rounded-2xl border border-dashed bg-muted text-muted-foreground transition hover:border-primary/40" aria-label="Upload logo">
+        {url ? <Image src={url} alt={name} fill sizes="84px" className="object-cover" /> : (
+          <span className="grid h-full w-full place-items-center text-2xl font-bold">{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : name[0]}</span>
+        )}
+      </button>
+      <span className="text-[10.5px] text-muted-foreground">{busy ? "Uploading…" : url ? "Replace logo" : "Drop logo"}</span>
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
+    </div>
+  );
+}
+
+// generic grouped editable card (view tiles -> edit inputs); used by Business & Brand
+const span = (w?: "full" | "third") => (w === "full" ? "col-span-6" : w === "third" ? "col-span-2" : "col-span-3");
+function EditCard({ title, sub, action, groups, data }: {
+  title: string; sub: string; action: (f: FormData) => Promise<{ ok: boolean; error?: string }>; groups: Group[]; data: Row;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -194,21 +304,36 @@ function EditCard({ title, sub, action, fields, data, toggles }: {
       </div>
       {editing ? (
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {fields.map(([name, label]) => <Field key={name} label={label}><input name={name} defaultValue={String(d[name] ?? "")} className={inputCls} /></Field>)}
+          <div className="grid grid-cols-6 gap-3">
+            {groups.map((g) => (
+              <div key={g.label} className="contents">
+                <div className="col-span-6 mt-1 vy-kicker text-primary">{g.label}</div>
+                {g.toggles?.map((t) => (
+                  <div key={t.name} className="col-span-3 rounded-md border bg-background/40 px-3 py-2"><Toggle name={t.name} label={t.label} sub={t.sub} defaultChecked={!!d[t.name]} /></div>
+                ))}
+                {g.fields?.map((f) => (
+                  <div key={f.name} className={span(f.w)}><Field label={f.label}><input name={f.name} defaultValue={String(d[f.name] ?? "")} placeholder={f.ph} className={inputCls} /></Field></div>
+                ))}
+              </div>
+            ))}
           </div>
-          {toggles && <div className="space-y-2">{toggles.map(([name, label]) => (
-            <label key={name} className="flex items-center gap-2 text-sm"><input type="checkbox" name={name} defaultChecked={!!d[name]} /> {label}</label>
-          ))}</div>}
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2"><GhostButton type="button" onClick={() => setEditing(false)}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</PrimaryButton></div>
         </form>
       ) : (
-        <dl className="grid gap-3 sm:grid-cols-2">
-          {fields.map(([name, label]) => (
-            <div key={name}><dt className="vy-kicker">{label}</dt><dd className="mt-0.5 rounded-md border bg-card px-2.5 py-1.5 text-sm">{String(d[name] ?? "—") || "—"}</dd></div>
+        <div className="grid grid-cols-6 gap-3">
+          {groups.map((g) => (
+            <div key={g.label} className="contents">
+              <div className="col-span-6 mt-1 vy-kicker text-primary">{g.label}</div>
+              {g.toggles?.map((t) => (
+                <div key={t.name} className="col-span-3"><dt className="vy-kicker">{t.label}</dt><dd className="mt-0.5"><Badge tone={d[t.name] ? "success" : "muted"}>{d[t.name] ? "Enabled" : "Off"}</Badge></dd></div>
+              ))}
+              {g.fields?.map((f) => (
+                <div key={f.name} className={span(f.w)}><dt className="vy-kicker">{f.label}</dt><dd className="mt-0.5 rounded-md border bg-card px-2.5 py-1.5 text-sm">{String(d[f.name] ?? "—") || "—"}</dd></div>
+              ))}
+            </div>
           ))}
-        </dl>
+        </div>
       )}
     </Card>
   );
@@ -246,11 +371,11 @@ function TeamSection({ members }: { members: Member[] }) {
     </Card>
   );
 }
-function MemberModal({ member, onClose }: { member: Member | null; onClose: () => void }) {
+function MemberModal({ member, onClose, ownerDefault }: { member: Member | null; onClose: () => void; ownerDefault?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [owner, setOwner] = useState(member?.is_owner ?? false);
+  const [owner, setOwner] = useState(member?.is_owner ?? ownerDefault ?? false);
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -274,7 +399,9 @@ function MemberModal({ member, onClose }: { member: Member | null; onClose: () =
         </Field>
         {member && (
           <>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="is_owner" defaultChecked={owner} onChange={(e) => setOwner(e.target.checked)} /> Company owner (counts toward the partner split)</label>
+            <div className="rounded-md border px-3 py-2">
+              <Toggle name="is_owner" label="Company owner" sub="Counts toward the partner split" defaultChecked={owner} tone="primary" onChange={setOwner} />
+            </div>
             {owner && <Field label="Ownership %"><input name="share" type="number" min={0} max={100} defaultValue={Math.round((member.share ?? 0) * 100)} className={inputCls} /></Field>}
           </>
         )}
@@ -311,13 +438,12 @@ function NotificationsSection({ prefs }: { prefs: Record<string, boolean> }) {
       <p className="text-sm text-muted-foreground">Choose what Vyonix alerts you about.</p>
       <form onSubmit={onSubmit} className="mt-4 space-y-1">
         {NOTIF.map(([name, label, sub]) => (
-          <label key={name} className="flex items-center justify-between border-b py-3 last:border-0">
-            <span><span className="text-sm font-medium">{label}</span><span className="block text-[12px] text-muted-foreground">{sub}</span></span>
-            <input type="checkbox" name={name} defaultChecked={prefs[name] ?? true} />
-          </label>
+          <div key={name} className="border-b py-1.5 last:border-0">
+            <Toggle name={name} label={label} sub={sub} defaultChecked={prefs[name] ?? true} />
+          </div>
         ))}
         {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-        <div className="flex justify-end pt-2"><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save preferences"}</PrimaryButton></div>
+        <div className="flex justify-end pt-3"><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save preferences"}</PrimaryButton></div>
       </form>
     </Card>
   );
