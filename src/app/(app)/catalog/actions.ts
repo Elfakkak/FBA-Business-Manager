@@ -109,6 +109,39 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+// Move a variant (SKU) to another product family — or to a brand-new product.
+// Absorbs orphan SKUs into a parent, creates parents on the fly, and regroups.
+export async function moveVariant(variantId: string, targetFamilyId: string, newProductName?: string): Promise<Result> {
+  const supabase = await createClient();
+  let familyId = targetFamilyId;
+
+  if (newProductName?.trim()) {
+    const name = newProductName.trim();
+    const id = "p-" + (name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "product") + "-" + Math.random().toString(36).slice(2, 6);
+    const { error: e1 } = await supabase.from("products").insert({ id, parent: name, category: "Uncategorized" });
+    if (e1) return { ok: false, error: e1.message };
+    familyId = id;
+  }
+  if (!familyId) return { ok: false, error: "Pick a product to move this SKU into." };
+
+  const { data: cur } = await supabase.from("product_variants").select("family_id").eq("id", variantId).maybeSingle();
+  const oldFamily = cur?.family_id;
+  if (oldFamily === familyId) return { ok: true };
+
+  const { error } = await supabase.from("product_variants").update({ family_id: familyId }).eq("id", variantId);
+  if (error) return { ok: false, error: error.message };
+
+  // remove the old family if it's now empty AND was an auto-imported orphan
+  if (oldFamily && String(oldFamily).startsWith("amz-")) {
+    const { count } = await supabase.from("product_variants").select("id", { count: "exact", head: true }).eq("family_id", oldFamily);
+    if (!count) await supabase.from("products").delete().eq("id", oldFamily);
+  }
+  revalidatePath("/catalog");
+  revalidatePath(`/catalog/${familyId}`);
+  if (oldFamily) revalidatePath(`/catalog/${oldFamily}`);
+  return { ok: true };
+}
+
 // Choose which SKU's Amazon details (size/weight/fee) represent this product family.
 export async function setPrimarySku(familyId: string, sku: string): Promise<Result> {
   const supabase = await createClient();

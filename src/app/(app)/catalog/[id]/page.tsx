@@ -26,6 +26,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const { data: variantsData } = await supabase.from("product_variants").select("*").eq("family_id", id).order("sku");
   const variants = (variantsData ?? []) as Variant[];
   const p = product as Product;
+  // all products — for the "move SKU to another product" picker in the variant editor
+  const { data: allProducts } = await supabase.from("products").select("id, parent").order("parent");
+  const productOptions = (allProducts ?? []) as { id: string; parent: string }[];
 
   // inbound shipments touching this family's SKUs → "what's coming to FBA & when"
   const skus = variants.map((v) => v.sku);
@@ -182,6 +185,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <VariantsTable
         familyId={id}
         weightLb={weightLb}
+        products={productOptions}
         variants={variants.map((v) => ({
           id: v.id, sku: v.sku, name: v.name, pack: v.pack, fnsku: v.fnsku, asin: v.asin,
           fba_stock: v.fba_stock ?? 0, last_cost_usd: v.last_cost_usd, sale_price: v.sale_price,

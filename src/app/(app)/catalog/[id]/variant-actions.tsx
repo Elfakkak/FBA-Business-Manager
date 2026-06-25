@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
-import { addVariant, updateVariant } from "../actions";
+import { addVariant, updateVariant, moveVariant } from "../actions";
 import { Plus, Pencil } from "lucide-react";
 
 const STATUSES = ["Ready", "Reorder", "SKU mislabeled", "Not linked"];
@@ -46,6 +47,7 @@ export function EditVariantButton({
   salePrice,
   status,
   reorderPoint,
+  products,
 }: {
   variantId: string;
   familyId: string;
@@ -54,8 +56,19 @@ export function EditVariantButton({
   salePrice: number | null;
   status: string;
   reorderPoint: number | null;
+  products: { id: string; parent: string }[];
 }) {
-  const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateVariant(variantId, familyId, form));
+  const [fam, setFam] = useState(familyId);
+  // move-to-product runs first (if changed), then the field update
+  const { open, setOpen, error, pending, onSubmit } = useFormModal(async (form) => {
+    const target = String(form.get("family") ?? familyId);
+    const newName = String(form.get("new_product") ?? "").trim();
+    if (newName || (target && target !== familyId)) {
+      const mv = await moveVariant(variantId, newName ? "" : target, newName || undefined);
+      if (!mv.ok) return mv;
+    }
+    return updateVariant(variantId, familyId, form);
+  });
 
   return (
     <>
@@ -74,6 +87,14 @@ export function EditVariantButton({
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
+          <Field label="Belongs to product">
+            <select name="family" value={fam} onChange={(e) => setFam(e.target.value)} className={inputCls}>
+              {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.parent}</option>)}
+              <option value="__new__">＋ New product…</option>
+            </select>
+          </Field>
+          {fam === "__new__" && <Field label="New product name"><input name="new_product" required className={inputCls} placeholder="e.g. 15&quot; Carbon Steering Wheel Cover" /></Field>}
+          {fam !== "__new__" && fam !== familyId && <p className="text-[12px] text-muted-foreground">Moving this SKU to another product.</p>}
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
             <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>

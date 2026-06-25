@@ -15,7 +15,7 @@ export type VRow = {
   invHealth: InvHealth; fbaFee: number | null; inbound: number;
 };
 
-export function VariantsTable({ familyId, weightLb, variants }: { familyId: string; weightLb: number; variants: VRow[] }) {
+export function VariantsTable({ familyId, weightLb, variants, products }: { familyId: string; weightLb: number; variants: VRow[]; products: { id: string; parent: string }[] }) {
   const [peek, setPeek] = useState<VRow | null>(null);
   const eco = peek ? variantEco(peek as never, weightLb) : null;
 
@@ -63,7 +63,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
                     {e.marginPct != null ? <Badge tone={marginTone(e.marginPct)}>{e.marginPct}%</Badge> : <span className="text-[11px] text-muted-foreground">No price</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right" onClick={(ev) => ev.stopPropagation()}>
-                    <EditVariantButton variantId={v.id} familyId={familyId} sku={v.sku} cost={v.last_cost_usd} salePrice={v.sale_price} status={v.status} reorderPoint={v.reorder_point} />
+                    <EditVariantButton variantId={v.id} familyId={familyId} sku={v.sku} cost={v.last_cost_usd} salePrice={v.sale_price} status={v.status} reorderPoint={v.reorder_point} products={products} />
                   </td>
                 </tr>
               );
@@ -110,7 +110,7 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
             </div>
 
             <div className="flex gap-2">
-              <EditVariantButton variantId={peek.id} familyId={familyId} sku={peek.sku} cost={peek.last_cost_usd} salePrice={peek.sale_price} status={peek.status} reorderPoint={peek.reorder_point} />
+              <EditVariantButton variantId={peek.id} familyId={familyId} sku={peek.sku} cost={peek.last_cost_usd} salePrice={peek.sale_price} status={peek.status} reorderPoint={peek.reorder_point} products={products} />
               <Link href={`/inventory?q=${encodeURIComponent(peek.sku)}`} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5">
                 View in Inventory <ArrowUpRight className="h-4 w-4" />
               </Link>
