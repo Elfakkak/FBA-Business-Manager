@@ -90,7 +90,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const saveReorder = (id: string, v: string) => start(async () => { await setReorderPoint(id, v === "" ? null : Number(v)); router.refresh(); });
   const toggleFav = (id: string, v: boolean) => start(async () => { await setFavorite(id, v); router.refresh(); });
 
-  const COLS = 10;
+  const COLS = 11;
   return (
     <div className="space-y-6">
       <PageHead
@@ -170,7 +170,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
           <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Product / SKU</th>
+                <th className="px-3 py-2 font-medium">Product</th>
+                <th className="px-3 py-2 font-medium">SKU</th>
                 <th className="px-3 py-2 font-medium"><span className="inline-flex items-center gap-1">FNSKU / Prep <SourceTag source="amazon" /></span></th>
                 <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">On hand <SourceTag source="amazon" /></span></th>
                 <th className="px-3 py-2 text-right font-medium">Reserved</th>
@@ -213,6 +214,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                           </div>
                         </td>
                         <td className="px-3 py-2" />
+                        <td className="px-3 py-2" />
                         <td className="tabular px-3 py-2 text-right font-mono font-semibold">{num(gOn)}</td>
                         <td className="tabular px-3 py-2 text-right font-mono text-muted-foreground">{num(gReserved)}</td>
                         <td className="tabular px-3 py-2 text-right font-mono font-semibold">{num(gAvail)}</td>
@@ -222,7 +224,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                         <td className="px-3 py-2">{needs > 0 ? <Badge tone="danger">{needs} reorder</Badge> : <Badge tone="success">Healthy</Badge>}</td>
                         <td className="px-3 py-2" />
                       </tr>
-                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)}
+                      {open && members.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} indent router={router} />)}
                     </FragmentGroup>
                   );
                 })
@@ -261,14 +263,15 @@ function FragmentGroup({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function Row({ r, editing, onSave, onFav, dup, router }: {
-  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void; onFav: (id: string, v: boolean) => void; dup: boolean;
+function Row({ r, editing, onSave, onFav, dup, indent, router }: {
+  r: InvRow; editing: boolean; onSave: (id: string, v: string) => void; onFav: (id: string, v: boolean) => void; dup: boolean; indent?: boolean;
   router: ReturnType<typeof useRouter>;
 }) {
   const sticker = isStickerless(r);
   return (
     <tr className="hover:bg-accent/40">
-      <td className="px-3 py-2.5">
+      {/* Product — indented under its parent in family view (tree hierarchy) */}
+      <td className={cn("py-2.5 pr-3", indent ? "pl-9" : "pl-3")}>
         <div className="flex items-center gap-2.5">
           <button onClick={() => onFav(r.id, !r.favorite)} className="shrink-0 text-muted-foreground hover:text-warning" title={r.favorite ? "Unfavorite" : "Mark favorite"} aria-label="Toggle favorite">
             <Star className={cn("h-4 w-4", r.favorite && "fill-warning text-warning")} />
@@ -276,15 +279,18 @@ function Row({ r, editing, onSave, onFav, dup, router }: {
           <span className="relative inline-grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
             {r.image ? <Image src={r.image} alt="" fill sizes="32px" className="object-cover" /> : <Package className="h-4 w-4" />}
           </span>
-          <div className="min-w-0">
-            {/* SKU is the hero; the product it's linked to sits beneath, truncated */}
-            <div className="flex items-center gap-1.5">
-              <Link href={`/catalog/${r.familyId}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
-              {dup && <span title={`ASIN ${r.asin} is sold under more than one SKU — stock is split across duplicate listings`}><Badge tone="danger">Dup ASIN</Badge></span>}
-            </div>
-            <div className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={r.family}>{r.family}{r.color ? ` · ${r.color}` : ""} · {r.fc}</div>
-          </div>
+          <Link href={`/catalog/${r.familyId}`} className="block max-w-[260px] truncate text-[13px] font-medium hover:text-primary" title={r.family}>
+            {r.family}{r.color ? ` · ${r.color}` : ""}
+          </Link>
         </div>
+      </td>
+      {/* SKU — the hero, in its own column */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <Link href={`/inventory?q=${encodeURIComponent(r.sku)}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
+          {dup && <span title={`ASIN ${r.asin} is sold under more than one SKU — stock is split across duplicate listings`}><Badge tone="danger">Dup</Badge></span>}
+        </div>
+        <div className="text-[10px] text-muted-foreground">{r.fc}</div>
       </td>
       <td className="px-3 py-2.5">
         {sticker
