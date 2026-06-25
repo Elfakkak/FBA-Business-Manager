@@ -54,6 +54,35 @@ export async function updateOrder(id: string, form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+export async function addOrderLine(orderId: string, form: FormData): Promise<Result> {
+  const variantId = String(form.get("variant_id") ?? "").trim();
+  const qty = parseInt(String(form.get("qty") ?? ""));
+  const unitCost = parseFloat(String(form.get("unit_cost") ?? ""));
+  if (!variantId) return { ok: false, error: "Pick a variant." };
+  if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "Quantity must be positive." };
+
+  const supabase = await createClient();
+  const { data: v } = await supabase.from("product_variants").select("id, sku, family_id, name, last_cost_usd").eq("id", variantId).maybeSingle();
+  if (!v) return { ok: false, error: "Variant not found." };
+  const { error } = await supabase.from("order_lines").insert({
+    order_id: orderId, variant_id: v.id, family_id: v.family_id, sku: v.sku, product_name: v.name,
+    qty, unit_cost: Number.isFinite(unitCost) ? unitCost : v.last_cost_usd,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  return { ok: true };
+}
+
+export async function deleteOrderLine(id: string, orderId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_lines").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  return { ok: true };
+}
+
 export async function setOrderStatus(id: string, status: string): Promise<Result> {
   if (!isValidStatus(status)) return { ok: false, error: "Invalid status." };
   const supabase = await createClient();

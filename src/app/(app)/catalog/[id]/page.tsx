@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/components/ui/primitives";
 import {
   catFamilyStats, familyEco, variantEco, familyWeightLb, marginTone,
-  FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, money, num, type Variant, type Product,
+  FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
+  money, num, type Variant, type Product,
 } from "@/lib/derive";
 import { AddVariantButton, EditVariantButton } from "./variant-actions";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,25 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const { data: variantsData } = await supabase.from("product_variants").select("*").eq("family_id", id).order("sku");
   const variants = (variantsData ?? []) as Variant[];
   const p = product as Product;
+
+  // order-line history for this family → cost history + order history
+  const { data: lineRows } = await supabase
+    .from("order_lines")
+    .select("id, order_id, qty, unit_cost, orders(title, status, placed_on)")
+    .eq("family_id", id);
+  type LineJoin = { order_id: string; qty: number; unit_cost: number | null; orders: { title: string; status: string; placed_on: string | null } | null };
+  const lines = (lineRows ?? []) as unknown as LineJoin[];
+  const costHistory = lines
+    .filter((l) => l.unit_cost != null)
+    .map((l) => ({ date: l.orders?.placed_on ?? null, cost: l.unit_cost as number, order: l.order_id }))
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  const orderMap = new Map<string, { id: string; title: string; status: string; placedOn: string | null; qty: number }>();
+  for (const l of lines) {
+    const cur = orderMap.get(l.order_id) ?? { id: l.order_id, title: l.orders?.title ?? l.order_id, status: l.orders?.status ?? "draft", placedOn: l.orders?.placed_on ?? null, qty: 0 };
+    cur.qty += l.qty ?? 0;
+    orderMap.set(l.order_id, cur);
+  }
+  const orderHistory = [...orderMap.values()].sort((a, b) => (b.placedOn ?? "").localeCompare(a.placedOn ?? ""));
 
   const s = catFamilyStats(variants);
   const weightLb = familyWeightLb(p);
@@ -178,12 +198,37 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {/* cost + order history */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <SectionTitle icon={History} tone="muted" title="Cost history" />
-          <EmptyBlock>No cost history yet — it builds as you place orders for this product.</EmptyBlock>
+          <SectionTitle icon={History} tone="muted" title="Cost history" count={costHistory.length || undefined} />
+          {costHistory.length === 0 ? (
+            <EmptyBlock>No cost history yet — it builds as you place orders for this product.</EmptyBlock>
+          ) : (
+            <ul className="divide-y">
+              {costHistory.map((c, i) => (
+                <li key={i} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-24 text-[12px] text-muted-foreground">{c.date ?? "—"}</span>
+                  <span className="font-mono text-[12px] text-muted-foreground">{c.order}</span>
+                  <span className={cn("tabular ml-auto font-mono font-semibold", i === costHistory.length - 1 && "text-primary")}>{money(c.cost)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
         <Card className="p-5">
-          <SectionTitle icon={ShoppingCart} tone="muted" title="Order history" />
-          <EmptyBlock>Not ordered yet — orders that include this product will appear here.</EmptyBlock>
+          <SectionTitle icon={ShoppingCart} tone="muted" title="Order history" count={orderHistory.length || undefined} />
+          {orderHistory.length === 0 ? (
+            <EmptyBlock>Not ordered yet — orders that include this product will appear here.</EmptyBlock>
+          ) : (
+            <ul className="divide-y">
+              {orderHistory.map((o) => (
+                <li key={o.id} className="flex items-center gap-3 py-2">
+                  <Link href={`/orders/${o.id}`} className="font-mono text-[12px] font-semibold hover:text-primary">{o.id}</Link>
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{o.title}</span>
+                  <span className="tabular font-mono text-[12px]">{num(o.qty)} u</span>
+                  <Badge tone={ORDER_STATUS_TONE[o.status] ?? "muted"}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </div>

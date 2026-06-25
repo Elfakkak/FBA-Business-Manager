@@ -695,6 +695,67 @@ export type Database = {
         }
         Relationships: []
       }
+      order_lines: {
+        Row: {
+          created_at: string
+          family_id: string | null
+          id: string
+          order_id: string
+          product_name: string | null
+          qty: number
+          sku: string | null
+          unit_cost: number | null
+          updated_at: string
+          variant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          order_id: string
+          product_name?: string | null
+          qty?: number
+          sku?: string | null
+          unit_cost?: number | null
+          updated_at?: string
+          variant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          order_id?: string
+          product_name?: string | null
+          qty?: number
+          sku?: string | null
+          unit_cost?: number | null
+          updated_at?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_lines_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_lines_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_lines_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_payment_terms: {
         Row: {
           created_at: string

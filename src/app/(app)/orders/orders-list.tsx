@@ -14,6 +14,7 @@ export type OrderSummary = {
   id: string; title: string; supplier: string | null; agent: string | null;
   status: string; placedOn: string | null; fbaEta: string | null;
   total: number; paid: number; balance: number; paidPct: number;
+  units: number; skuCount: number;
 };
 
 const CHIPS = [{ key: "all", label: "All" }, ...ORDER_PIPELINE.filter((p) => p.key !== "draft")];
@@ -76,6 +77,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Order</th>
                 <th className="px-4 py-2 font-medium">Supplier</th>
+                <th className="px-4 py-2 text-right font-medium">Units</th>
                 <th className="px-4 py-2 font-medium">Dates</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 text-right font-medium">Total</th>
@@ -85,7 +87,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
             </thead>
             <tbody className="divide-y">
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">No orders match your filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No orders match your filters.</td></tr>
               ) : filtered.map((o) => (
                 <tr key={o.id} className="vy-order-row hover:bg-accent/40">
                   <td className="px-4 py-2.5">
@@ -95,6 +97,9 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
                   <td className="px-4 py-2.5">
                     <div>{o.supplier ?? "—"}</div>
                     {o.agent && <div className="text-[11px] text-muted-foreground">via {o.agent}</div>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    {o.units > 0 ? <><span className="tabular font-mono font-semibold">{num(o.units)}</span><div className="text-[11px] text-muted-foreground">{o.skuCount} SKU{o.skuCount === 1 ? "" : "s"}</div></> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-4 py-2.5 text-[12px]">
                     <div className="text-muted-foreground">Placed <span className="text-foreground">{o.placedOn ?? "—"}</span></div>
