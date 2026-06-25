@@ -21,8 +21,10 @@ export function VariantsTable({ familyId, weightLb, variants }: { familyId: stri
 
   return (
     <Card>
-      <SectionTitle icon={Package} tone="brand" title="Variants" count={variants.length}
-        action={<AddVariantButton familyId={familyId} />} />
+      <div className="px-4 pt-5">
+        <SectionTitle icon={Package} tone="brand" title="Variants" count={variants.length}
+          action={<AddVariantButton familyId={familyId} />} />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
