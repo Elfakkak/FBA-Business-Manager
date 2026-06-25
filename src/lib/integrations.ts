@@ -29,7 +29,11 @@ export const INTG_DEFS: IntegrationDef[] = [
     account: "Seller ID A1B2C3DEF4",
     blurb: "Pulls live FBA stock, inbound shipment status and order data into Vyonix.",
     syncs: "FBA inventory · inbound shipments · orders",
-    creds: OAUTH,
+    creds: [
+      ...OAUTH,
+      { name: "marketplace_id", label: "Marketplace ID (e.g. ATVPDKIKX0DER for US)" },
+      { name: "region", label: "Region (na / eu / fe)" },
+    ],
     docsUrl: "https://developer-docs.amazon.com/sp-api/",
     streams: [
       { name: "Sales & units", api: "Sales & Traffic report", feeds: "P&L · Performance", detail: "Units sold + gross sales per SKU/day" },
@@ -38,11 +42,11 @@ export const INTG_DEFS: IntegrationDef[] = [
       { name: "Orders", api: "Orders API", feeds: "Orders", detail: "Customer orders + fulfillment status" },
     ],
     howto: [
-      "Go to Amazon Developer Central and register an SP-API application.",
-      "Create a Login with Amazon (LWA) security profile — copy its Client ID & Client Secret.",
-      "In Seller Central → Apps & Services → Develop Apps, authorize the app on your seller account.",
-      "Complete the OAuth consent to generate a Refresh token.",
-      "Paste the three values below — they're encrypted server-side.",
+      "In Seller Central → Apps & Services → Develop Apps, create an SP-API app (NOT the Ads API app) with the Inventory, Orders and Finance roles.",
+      "Copy its LWA Client ID & Client Secret.",
+      "Authorize the app on your own seller account and complete the OAuth consent to get a Refresh token.",
+      "Enter your Marketplace ID (US = ATVPDKIKX0DER) and Region (na / eu / fe).",
+      "Save — Vyonix immediately pulls your live FBA inventory. Values are encrypted server-side.",
     ],
   },
   {
