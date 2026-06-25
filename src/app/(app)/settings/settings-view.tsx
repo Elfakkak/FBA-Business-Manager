@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { INTG_STATUS_TONE, INTG_STATUS_LABEL, intgAgo, type IntegrationDef } from "@/lib/integrations";
 import { syncIntegration, disconnectIntegration } from "../integrations/actions";
 import { ConnectIntegrationModal } from "../integrations/connect-modal";
+import { AmazonConnect } from "../integrations/amazon-connect";
 import { saveBusiness, saveBrand, saveBrandLogo, saveNotifications, inviteMember, updateMember, removeMember } from "./actions";
 import { initials, cn } from "@/lib/utils";
 import { Activity, Factory, Package, User, Bell, RefreshCw, Plug, Pencil, Plus, ImageIcon, Loader2 } from "lucide-react";
@@ -112,11 +113,13 @@ function IntgRow({ state }: { state: IntgState }) {
             <button onClick={() => run(() => syncIntegration(def.id))} disabled={pending} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Sync now</button>
             <button onClick={() => run(() => disconnectIntegration(def.id))} disabled={pending} className="vy-btn vy-btn--ghost vy-btn--sm text-danger">Disconnect</button>
           </>
+        ) : def.id === "amazon" ? (
+          <AmazonConnect def={def} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5" />
         ) : (
           <button onClick={() => setOpen(true)} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5"><Plug className="h-3.5 w-3.5" /> Connect</button>
         )}
       </div>
-      <ConnectIntegrationModal def={def} open={open} onClose={() => setOpen(false)} />
+      {def.id !== "amazon" && <ConnectIntegrationModal def={def} open={open} onClose={() => setOpen(false)} />}
     </Card>
   );
 }

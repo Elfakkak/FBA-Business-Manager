@@ -43,6 +43,27 @@ export async function connectIntegration(id: string, form: FormData): Promise<Re
   return { ok: true };
 }
 
+// Saves the SP-API app details (App ID + LWA Client ID/Secret + marketplace/region)
+// so the "Connect with Amazon" OAuth flow can use them. The refresh token is filled
+// in by the OAuth callback, not here.
+export async function saveAmazonSetup(form: FormData): Promise<Result> {
+  const get = (k: string) => String(form.get(k) ?? "").trim();
+  const app_id = get("app_id"), client_id = get("client_id"), client_secret = get("client_secret");
+  if (!app_id || !client_id || !client_secret) return { ok: false, error: "App ID, Client ID and Client Secret are required." };
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from("integrations").select("oauth_token").eq("id", "amazon").maybeSingle();
+  const prev = (cur?.oauth_token ?? {}) as Record<string, string>;
+  const token = {
+    ...prev, app_id, client_id, client_secret,
+    marketplace_id: get("marketplace_id") || "ATVPDKIKX0DER",
+    region: get("region") || "na",
+  };
+  const { error } = await supabase.from("integrations")
+    .update({ oauth_token: token, note: "Setup saved — authorizing with Amazon…" }).eq("id", "amazon");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function syncIntegration(id: string): Promise<Result> {
   if (id === "amazon") return syncAmazonInventory();
   const supabase = await createClient();

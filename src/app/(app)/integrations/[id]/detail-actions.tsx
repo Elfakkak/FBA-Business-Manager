@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { syncIntegration, disconnectIntegration } from "../actions";
 import { ConnectIntegrationModal } from "../connect-modal";
+import { AmazonConnect } from "../amazon-connect";
 import type { IntegrationDef } from "@/lib/integrations";
 import { RefreshCw, Plug } from "lucide-react";
 
@@ -26,6 +27,8 @@ export function IntegrationDetailActions({ def, connected }: { def: IntegrationD
       </>
     );
   }
+
+  if (def.id === "amazon") return <AmazonConnect def={def} />;
 
   return (
     <>

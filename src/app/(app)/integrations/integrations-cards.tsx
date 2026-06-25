@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, PageHead } from "@/components/ui/primitives";
 import { ConnectIntegrationModal } from "./connect-modal";
+import { AmazonConnect } from "./amazon-connect";
 import { INTG_STATUS_TONE, type IntegrationDef } from "@/lib/integrations";
 import { disconnectIntegration } from "./actions";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,8 @@ function IntegrationCard({ state, onConnect }: { state: IntegrationState; onConn
             <button onClick={() => start(async () => { await disconnectIntegration(def.id); router.refresh(); })} disabled={pending}
               className="vy-btn vy-btn--ghost text-danger">Disconnect</button>
           </>
+        ) : def.id === "amazon" ? (
+          <AmazonConnect def={def} />
         ) : (
           <button onClick={onConnect} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Plug className="h-4 w-4" /> Connect</button>
         )}
