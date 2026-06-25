@@ -45,6 +45,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   // restock signal: variants below their reorder point (same invStats the inventory uses)
   const restock = variants.filter((v) => { const h = invStats(v, p.lead_time_days ?? 0).health; return h === "Reorder" || h === "Low"; });
 
+  // demand snapshot (last 30d, from velocity + price) — the other half of keep/kill
+  const famVelocity = variants.reduce((s, v) => s + (v.velocity ?? 0), 0);
+  const unitsSold30 = Math.round(famVelocity * 30);
+  const revenue30 = variants.reduce((s, v) => s + (v.velocity ?? 0) * 30 * (v.sale_price ?? 0), 0);
+  const famAvailable = variants.reduce((s, v) => s + invStats(v, p.lead_time_days ?? 0).available, 0);
+  const famDaysCover = famVelocity > 0 ? Math.round(famAvailable / famVelocity) : null;
+  const haveVelocity = famVelocity > 0;
+
   // order-line history for this family → cost history + order history
   const { data: lineRows } = await supabase
     .from("order_lines")
@@ -116,6 +124,19 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <Kpi label="Avg COGS" value={eco.avgCogs != null ? money(eco.avgCogs) : "—"} sub="from last orders" icon={Boxes} source="manual" />
         <Kpi label="FBA stock" value={num(s.stock)} sub={`${s.skuCount} SKUs`} icon={Warehouse} source="amazon" tone="success" />
       </div>
+
+      {/* demand snapshot — last 30 days, from live velocity */}
+      {haveVelocity && (
+        <div>
+          <div className="vy-kicker mb-2">Demand · last 30 days</div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Kpi label="Units sold" value={num(unitsSold30)} sub={`${famVelocity.toFixed(1)} / day`} icon={ShoppingCart} source="amazon" tone="info" />
+            <Kpi label="Revenue" value={money(revenue30)} sub="gross sales (30d)" icon={Wallet} source="amazon" />
+            <Kpi label="Velocity" value={famVelocity.toFixed(1)} sub="units / day" icon={TrendingUp} source="amazon" />
+            <Kpi label="Days of cover" value={famDaysCover == null ? "∞" : `${famDaysCover}d`} sub="at current pace" icon={Warehouse} tone={famDaysCover != null && famDaysCover < 14 ? "danger" : famDaysCover != null && famDaysCover < 30 ? "warning" : undefined} />
+          </div>
+        </div>
+      )}
 
       {restock.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>
