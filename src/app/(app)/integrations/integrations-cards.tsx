@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, PageHead } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
@@ -50,7 +51,10 @@ function IntegrationCard({ state, onConnect }: { state: IntegrationState; onConn
             {def.name[0]}
           </span>
           <div>
-            <div className="flex items-center gap-2 font-medium">{def.name}{def.primary && <Badge tone="brand">Primary</Badge>}</div>
+            <div className="flex items-center gap-2 font-medium">
+              <Link href={`/integrations/${def.id}`} className="hover:text-primary">{def.name}</Link>
+              {def.primary && <Badge tone="brand">Primary</Badge>}
+            </div>
             <Badge tone={INTG_STATUS_TONE[status] ?? "muted"}>{status}</Badge>
           </div>
         </div>
@@ -59,8 +63,9 @@ function IntegrationCard({ state, onConnect }: { state: IntegrationState; onConn
       <p className="text-sm text-muted-foreground">{def.blurb}</p>
 
       <div className="flex flex-wrap gap-1.5">
-        {def.syncs.map((sy) => <span key={sy} className="vy-chip">{sy}</span>)}
+        {def.streams.map((s) => <span key={s.name} className="vy-chip">{s.name}</span>)}
       </div>
+      <Link href={`/integrations/${def.id}`} className="text-[12px] font-medium text-primary hover:underline">View details →</Link>
 
       {connected && note && <p className="rounded-md bg-success/10 px-3 py-2 text-[12px] text-success">{note}</p>}
       {connected && lastSync && <div className="text-[11px] text-muted-foreground">Connected · {new Date(lastSync).toLocaleString()}</div>}

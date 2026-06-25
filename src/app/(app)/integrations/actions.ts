@@ -31,6 +31,15 @@ export async function connectIntegration(id: string, form: FormData): Promise<Re
   return { ok: true };
 }
 
+export async function syncIntegration(id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("integrations").update({ last_sync: new Date().toISOString() }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/integrations");
+  revalidatePath(`/integrations/${id}`);
+  return { ok: true };
+}
+
 export async function disconnectIntegration(id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("integrations").update({

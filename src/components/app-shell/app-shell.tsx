@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Boxes, Factory, Receipt, Truck, Ship, Package, Warehouse,
   TrendingUp, PackageOpen, Calculator, Wallet, DollarSign, Users, Shield,
-  FileText, Settings, Plus, Search, Bell, Sun, Moon, Menu, X, Plug,
+  FileText, Settings, Plus, Search, Bell, Sun, Moon, Menu, X,
   ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 
@@ -48,7 +48,6 @@ const NAV: Group[] = [
       { label: "Trading partners", href: "/partners", section: "partners", icon: Users, ready: true },
     ],
   },
-  { title: "Integrations", icon: Plug, href: "/integrations", section: "settings" },
 ];
 
 const QUICK_CREATE = [
@@ -251,11 +250,10 @@ function Sidebar({
       </div>
 
       <div className="vy-sidebar-foot">
-        <span className="vy-nav-row vy-foot-row is-soon" aria-disabled>
+        <Link href="/settings" className={cn("vy-nav-row vy-foot-row", isActive(pathname, "/settings") && "is-active")} title="Settings">
           <Settings className={collapsed ? "h-4 w-4" : "h-3.5 w-3.5"} />
           {!collapsed && <span className="vy-nav-row-label">Settings</span>}
-          {!collapsed && <span className="vy-soon-badge">Soon</span>}
-        </span>
+        </Link>
       </div>
     </nav>
   );
