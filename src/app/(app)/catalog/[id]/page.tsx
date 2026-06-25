@@ -40,6 +40,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     .map((i) => ({ sku: i.sku, remaining: i.expected - i.received, expected: i.expected, received: i.received, shipmentId: i.fba_inbounds!.id, fc: i.fba_inbounds!.fc, status: i.fba_inbounds!.amazon_status, eta: i.fba_inbounds!.eta }))
     .sort((a, b) => (a.eta ?? "~").localeCompare(b.eta ?? "~"));
   const inboundUnits = inbItems.reduce((s, i) => s + i.remaining, 0);
+  // restock signal: variants below their reorder point (same invStats the inventory uses)
+  const restock = variants.filter((v) => { const h = invStats(v, p.lead_time_days ?? 0).health; return h === "Reorder" || h === "Low"; });
 
   // order-line history for this family → cost history + order history
   const { data: lineRows } = await supabase
@@ -112,6 +114,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <Kpi label="Avg COGS" value={eco.avgCogs != null ? money(eco.avgCogs) : "—"} sub="from last orders" icon={Boxes} source="manual" />
         <Kpi label="FBA stock" value={num(s.stock)} sub={`${s.skuCount} SKUs`} icon={Warehouse} source="amazon" tone="success" />
       </div>
+
+      {restock.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>
+          <span className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-md bg-warning/12 text-warning"><Warehouse className="h-4 w-4" /></span>
+          <span>
+            <span className="font-medium text-warning">{restock.length} SKU{restock.length > 1 ? "s" : ""} need restocking</span>
+            <span className="text-muted-foreground"> — {restock.map((v) => v.sku).slice(0, 4).join(", ")}{restock.length > 4 ? "…" : ""}. {inboundUnits > 0 ? `${num(inboundUnits)} units already inbound.` : "Nothing inbound yet."}</span>
+          </span>
+          <Link href={`/inventory?q=${encodeURIComponent(p.parent)}`} className="vy-btn vy-btn--outline vy-btn--sm ml-auto">View in Inventory</Link>
+        </div>
+      )}
 
       <StorageBar dimCm={dim} />
 
