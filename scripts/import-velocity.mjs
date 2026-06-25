@@ -58,7 +58,8 @@ if (MODE === "fetch" || MODE === "all") {
   const iSku = find("sku", "seller-sku");
   const iQty = find("quantity-purchased", "quantity", "quantity-shipped", "shipped-quantity");
   const iStatus = find("order-status", "item-status");
-  const unitsBySku = {};
+  const iPrice = find("item-price"); // line revenue (price × qty for that line)
+  const unitsBySku = {}, revBySku = {};
   for (const line of lines) {
     const c = line.split("\t");
     const status = (c[iStatus] || "").toLowerCase();
@@ -66,19 +67,26 @@ if (MODE === "fetch" || MODE === "all") {
     const sku = c[iSku]; const qty = parseInt(c[iQty]) || 0;
     if (!sku || !qty) continue;
     unitsBySku[sku] = (unitsBySku[sku] ?? 0) + qty;
+    const price = iPrice >= 0 ? parseFloat(c[iPrice]) : NaN;
+    if (!Number.isNaN(price)) revBySku[sku] = (revBySku[sku] ?? 0) + price; // sum line revenue
   }
-  const velocityBySku = {};
-  for (const [sku, units] of Object.entries(unitsBySku)) velocityBySku[sku] = +(units / WINDOW_DAYS).toFixed(3);
-  writeFileSync(CACHE, JSON.stringify({ velocityBySku, window: WINDOW_DAYS }));
-  console.log(`Parsed ${Object.keys(velocityBySku).length} SKUs with sales (last ${WINDOW_DAYS}d) → cached.`);
+  const velocityBySku = {}, priceBySku = {};
+  for (const [sku, units] of Object.entries(unitsBySku)) {
+    velocityBySku[sku] = +(units / WINDOW_DAYS).toFixed(3);
+    if (revBySku[sku] != null && units > 0) priceBySku[sku] = +(revBySku[sku] / units).toFixed(2); // realized avg unit price
+  }
+  writeFileSync(CACHE, JSON.stringify({ velocityBySku, priceBySku, window: WINDOW_DAYS }));
+  console.log(`Parsed ${Object.keys(velocityBySku).length} SKUs with sales (last ${WINDOW_DAYS}d) · ${Object.keys(priceBySku).length} with realized prices → cached.`);
   if (MODE === "fetch") process.exit(0);
 }
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-const { velocityBySku } = JSON.parse(readFileSync(CACHE, "utf8"));
-let updated = 0;
+const { velocityBySku, priceBySku = {} } = JSON.parse(readFileSync(CACHE, "utf8"));
+let updated = 0, priced = 0;
 for (const [sku, vel] of Object.entries(velocityBySku)) {
-  const { data } = await db.from("product_variants").update({ velocity: vel }).eq("sku", sku).select("id");
+  const patch = { velocity: vel };
+  if (priceBySku[sku] != null) { patch.sale_price = priceBySku[sku]; priced++; }
+  const { data } = await db.from("product_variants").update(patch).eq("sku", sku).select("id");
   updated += data?.length ?? 0;
 }
-console.log(`✅ Wrote velocity to ${updated} variants. Days-of-cover & reorder are now live.`);
+console.log(`✅ Wrote velocity to ${updated} variants, realized price to ${priced}. Profitability now uses the real Amazon price.`);
