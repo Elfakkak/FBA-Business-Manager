@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "vxawcfwnrslkuwjlioyy.supabase.co", pathname: "/storage/v1/object/public/**" },
+      // Amazon product image CDNs (catalog item images)
+      { protocol: "https", hostname: "m.media-amazon.com" },
+      { protocol: "https", hostname: "images-na.ssl-images-amazon.com" },
     ],
   },
 };

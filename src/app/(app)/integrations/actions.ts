@@ -96,7 +96,7 @@ export async function syncAmazonInventory(): Promise<Result> {
       if (!r.sellerSku) continue;
       const { data: upd } = await supabase
         .from("product_variants")
-        .update({ fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable } as never)
+        .update({ fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved } as never)
         .eq("sku", r.sellerSku)
         .select("id");
       if (upd?.length) matched += upd.length;

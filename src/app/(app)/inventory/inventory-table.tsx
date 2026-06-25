@@ -196,8 +196,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
         <div className="mb-3 flex items-center gap-2.5">
           <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Truck className="h-4 w-4" /></span>
           <div>
-            <div className="flex items-center gap-1.5 font-medium">By fulfillment center <SourceTag source="amazon" /></div>
-            <p className="text-[11px] text-muted-foreground">On-hand units across Amazon FCs ({filtered.length} of {rows.length} SKUs shown)</p>
+            <div className="flex items-center gap-1.5 font-medium">By fulfillment center <Badge tone="muted">Estimated</Badge></div>
+            <p className="text-[11px] text-muted-foreground">Indicative split — real per-FC data needs the FBA inbound/placement feed ({filtered.length} of {rows.length} SKUs shown)</p>
           </div>
         </div>
         <div className="space-y-2">
