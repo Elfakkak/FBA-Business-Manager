@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createPartner } from "./actions";
@@ -141,6 +142,7 @@ export function PartnersList({ partners }: { partners: PartnerSummary[] }) {
 
 function NewPartnerButton() {
   const router = useRouter();
+  const [type, setType] = useState("Forwarder");
   const { open, setOpen, error, pending, onSubmit } = useFormModal(
     (form) => createPartner(form),
     { onSuccess: (form) => router.push(`/partners/${encodeURIComponent(String(form.get("name")))}`) },
@@ -155,9 +157,7 @@ function NewPartnerButton() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Partner name"><input name="name" required autoFocus className={inputCls} placeholder="e.g. Flexport" /></Field>
             <Field label="Type">
-              <select name="type" className={inputCls} defaultValue="Forwarder">
-                <option>Agent</option><option>Forwarder</option><option>Inspection</option>
-              </select>
+              <Select name="type" value={type} onChange={setType} options={["Agent", "Forwarder", "Inspection"].map((t) => ({ value: t, label: t }))} />
             </Field>
           </div>
           <Field label="Specialty"><input name="specialty" className={inputCls} placeholder="Sea LCL · China → US West" /></Field>

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { addPackagingItem, receivePackaging } from "./actions";
 import { Plus } from "lucide-react";
@@ -9,6 +11,8 @@ const KINDS = ["Mailer", "Master carton", "Insert", "Polybag", "Label", "Box", "
 
 export function AddPackagingButton({ families }: { families: { id: string; parent: string }[] }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => addPackagingItem(form));
+  const [kind, setKind] = useState("Mailer");
+  const [familyId, setFamilyId] = useState("");
 
   return (
     <>
@@ -21,15 +25,11 @@ export function AddPackagingButton({ families }: { families: { id: string; paren
           <Field label="Size"><input name="size" className={inputCls} placeholder="e.g. 10×13 in" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
-              <select name="kind" className={inputCls} defaultValue="Mailer">
-                {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
+              <Select name="kind" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k }))} />
             </Field>
             <Field label="For product">
-              <select name="family_id" className={inputCls} defaultValue="">
-                <option value="">Any product</option>
-                {families.map((f) => <option key={f.id} value={f.id}>{f.parent}</option>)}
-              </select>
+              <Select name="family_id" value={familyId} onChange={setFamilyId} placeholder="Any product"
+                options={[{ value: "", label: "Any product" }, ...families.map((f) => ({ value: f.id, label: f.parent }))]} />
             </Field>
           </div>
           <div className="grid grid-cols-3 gap-3">

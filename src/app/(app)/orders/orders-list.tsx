@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
+import { Select } from "@/components/ui/select";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
 import { createOrder } from "./actions";
@@ -185,6 +186,8 @@ function PeekRow({ label, value, sub }: { label: string; value: string; sub?: st
 
 function NewOrderButton({ suppliers, agents }: { suppliers: string[]; agents: string[] }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => createOrder(form));
+  const [supplier, setSupplier] = useState("");
+  const [agent, setAgent] = useState("");
 
   return (
     <>
@@ -195,16 +198,12 @@ function NewOrderButton({ suppliers, agents }: { suppliers: string[]; agents: st
           <Field label="Order title"><input name="title" required autoFocus className={inputCls} placeholder="e.g. Q3 restock — beaded covers" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Supplier">
-              <select name="supplier" className={inputCls} defaultValue="">
-                <option value="">Select…</option>
-                {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select name="supplier" value={supplier} onChange={setSupplier} placeholder="Select…"
+                options={[{ value: "", label: "Select…" }, ...suppliers.map((s) => ({ value: s, label: s }))]} />
             </Field>
             <Field label="Agent (optional)">
-              <select name="agent" className={inputCls} defaultValue="">
-                <option value="">Direct supplier</option>
-                {agents.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
+              <Select name="agent" value={agent} onChange={setAgent} placeholder="Direct supplier"
+                options={[{ value: "", label: "Direct supplier" }, ...agents.map((a) => ({ value: a, label: a }))]} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">

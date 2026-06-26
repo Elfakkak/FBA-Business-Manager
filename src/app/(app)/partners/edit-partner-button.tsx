@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { updatePartner } from "./actions";
 import { Pencil } from "lucide-react";
@@ -14,6 +16,7 @@ export type PartnerProfile = {
 export function EditPartnerButton({ partner }: { partner: PartnerProfile }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updatePartner(partner.name, form));
   const v = partner;
+  const [type, setType] = useState<string>(v.type);
 
   return (
     <>
@@ -22,9 +25,7 @@ export function EditPartnerButton({ partner }: { partner: PartnerProfile }) {
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
-              <select name="type" defaultValue={v.type} className={inputCls}>
-                <option>Agent</option><option>Forwarder</option><option>Inspection</option>
-              </select>
+              <Select name="type" value={type} onChange={setType} options={["Agent", "Forwarder", "Inspection"].map((t) => ({ value: t, label: t }))} />
             </Field>
             <Field label="Specialty"><input name="specialty" defaultValue={v.specialty ?? ""} className={inputCls} /></Field>
             <Field label="Contact"><input name="contact" defaultValue={v.contact ?? ""} className={inputCls} /></Field>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { addVariant, updateVariant, moveVariant } from "../actions";
 import { Plus, Pencil } from "lucide-react";
@@ -59,6 +60,7 @@ export function EditVariantButton({
   products: { id: string; parent: string }[];
 }) {
   const [fam, setFam] = useState(familyId);
+  const [vStatus, setVStatus] = useState<string>(status);
   // move-to-product runs first (if changed), then the field update
   const { open, setOpen, error, pending, onSubmit } = useFormModal(async (form) => {
     const target = String(form.get("family") ?? familyId);
@@ -85,15 +87,11 @@ export function EditVariantButton({
             <Field label="Reorder point"><input name="reorder_point" type="number" className={inputCls} defaultValue={reorderPoint ?? ""} /></Field>
           </div>
           <Field label="Status">
-            <select name="status" className={inputCls} defaultValue={status}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Select name="status" value={vStatus} onChange={setVStatus} options={STATUSES.map((s) => ({ value: s, label: s }))} />
           </Field>
           <Field label="Belongs to product">
-            <select name="family" value={fam} onChange={(e) => setFam(e.target.value)} className={inputCls}>
-              {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.parent}</option>)}
-              <option value="__new__">＋ New product…</option>
-            </select>
+            <Select name="family" value={fam} onChange={setFam}
+              options={[...products.map((pr) => ({ value: pr.id, label: pr.parent })), { value: "__new__", label: "＋ New product…" }]} />
           </Field>
           {fam === "__new__" && <Field label="New product name"><input name="new_product" required className={inputCls} placeholder="e.g. 15&quot; Carbon Steering Wheel Cover" /></Field>}
           {fam !== "__new__" && fam !== familyId && <p className="text-[12px] text-muted-foreground">Moving this SKU to another product.</p>}

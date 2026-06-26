@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { updateProduct, deleteProduct } from "../actions";
 import { Pencil, Trash2 } from "lucide-react";
@@ -29,6 +30,10 @@ export function EditProductButton({ product, suppliers, categories }: { product:
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateProduct(product.id, form));
   const [delErr, setDelErr] = useState<string | null>(null);
   const [delPending, startDel] = useTransition();
+  const [category, setCategory] = useState<string>(product.category);
+  const [status, setStatus] = useState<string>(product.status);
+  const [supplier, setSupplier] = useState<string>(product.supplier ?? "");
+  const [route, setRoute] = useState<string>(product.supplier_route ?? "");
   const d = product.dim_cm ?? {};
   const c = product.carton_cm ?? {};
 
@@ -52,14 +57,10 @@ export function EditProductButton({ product, suppliers, categories }: { product:
           <Field label="Product name"><input name="parent" required defaultValue={product.parent} className={inputCls} placeholder="e.g. 18&quot; Semi Truck Steering Wheel Cover" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category">
-              <select name="category" defaultValue={product.category} className={inputCls}>
-                {[product.category, ...categories.filter((c) => c !== product.category)].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Select name="category" value={category} onChange={setCategory} options={[product.category, ...categories.filter((c) => c !== product.category)].map((c) => ({ value: c, label: c }))} />
             </Field>
             <Field label="Status">
-              <select name="status" defaultValue={product.status} className={inputCls}>
-                {["active", "draft", "archived"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-              </select>
+              <Select name="status" value={status} onChange={setStatus} options={["active", "draft", "archived"].map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))} />
             </Field>
           </div>
 
@@ -67,17 +68,10 @@ export function EditProductButton({ product, suppliers, categories }: { product:
           <div className="grid grid-cols-2 gap-3">
             <Field label="Material"><input name="material" defaultValue={product.material ?? ""} className={inputCls} placeholder="e.g. Microfiber leather" /></Field>
             <Field label="Supplier">
-              <select name="supplier" defaultValue={product.supplier ?? ""} className={inputCls}>
-                <option value="">— none —</option>
-                {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select name="supplier" value={supplier} onChange={setSupplier} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...suppliers.map((s) => ({ value: s, label: s }))]} />
             </Field>
             <Field label="Route">
-              <select name="supplier_route" defaultValue={product.supplier_route ?? ""} className={inputCls}>
-                <option value="">— none —</option>
-                <option value="Direct supplier">Direct supplier</option>
-                <option value="via Agent">via Agent</option>
-              </select>
+              <Select name="supplier_route" value={route} onChange={setRoute} placeholder="— none —" options={[{ value: "", label: "— none —" }, { value: "Direct supplier", label: "Direct supplier" }, { value: "via Agent", label: "via Agent" }]} />
             </Field>
             <Field label="Last ordered"><input name="last_ordered" defaultValue={product.last_ordered ?? ""} className={inputCls} placeholder="May 2026" /></Field>
             <Field label="Lead time (days)"><input name="lead_time_days" type="number" defaultValue={product.lead_time_days ?? ""} className={inputCls} /></Field>

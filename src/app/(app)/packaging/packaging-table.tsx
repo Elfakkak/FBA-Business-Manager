@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Field, inputCls, PrimaryButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { money, num, type PackagingItem, type PackagingMove } from "@/lib/derive";
 import { updatePackaging, savePackagingDesign, setPackagingSkus } from "./actions";
@@ -74,6 +75,8 @@ function PackagingDetail({ row, moves, products, variants, onDone }: { row: PkgR
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const it = row.item;
+  const [kind, setKind] = useState<string>(it.kind);
+  const [familyId, setFamilyId] = useState<string>(it.family_id ?? "");
 
   function onSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -97,13 +100,11 @@ function PackagingDetail({ row, moves, products, variants, onDone }: { row: PkgR
         <div className="vy-kicker">Details</div>
         <Field label="Name"><input name="name" defaultValue={it.name} required className={inputCls} /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Type"><select name="kind" defaultValue={it.kind} className={inputCls}>{KINDS.map((k) => <option key={k}>{k}</option>)}</select></Field>
+          <Field label="Type"><Select name="kind" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k }))} /></Field>
           <Field label="Size"><input name="size" defaultValue={it.size ?? ""} className={inputCls} placeholder="e.g. 10×13 in" /></Field>
           <Field label="For product">
-            <select name="family_id" defaultValue={it.family_id ?? ""} className={inputCls}>
-              <option value="">Any product</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.parent}</option>)}
-            </select>
+            <Select name="family_id" value={familyId} onChange={setFamilyId} placeholder="Any product"
+              options={[{ value: "", label: "Any product" }, ...products.map((p) => ({ value: p.id, label: p.parent }))]} />
           </Field>
           <Field label="Unit cost"><input name="unit_cost" type="number" step="0.01" defaultValue={it.unit_cost} className={inputCls} /></Field>
           <Field label="Reorder point"><input name="reorder_point" type="number" defaultValue={it.reorder_point ?? ""} className={inputCls} /></Field>
@@ -158,10 +159,9 @@ function UsedForSkus({ itemId, assigned, variants }: { itemId: string; assigned:
           })}
         </div>
       )}
-      <select value="" disabled={pending || available.length === 0} onChange={(e) => e.target.value && save([...assigned, e.target.value])} className={inputCls}>
-        <option value="">{available.length === 0 ? "All SKUs assigned" : "＋ Assign a SKU…"}</option>
-        {available.map((v) => <option key={v.id} value={v.id}>{v.sku} — {v.name}</option>)}
-      </select>
+      <Select value="" disabled={pending || available.length === 0} placeholder={available.length === 0 ? "All SKUs assigned" : "＋ Assign a SKU…"}
+        onChange={(v) => v && save([...assigned, v])}
+        options={available.map((v) => ({ value: v.id, label: v.sku, sub: v.name }))} />
     </div>
   );
 }

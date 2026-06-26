@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { createProduct } from "./actions";
 import { Plus } from "lucide-react";
@@ -32,16 +33,8 @@ export function NewProductButton({ categories }: { categories: string[] }) {
               <input name="name" required autoFocus className={inputCls} placeholder="e.g. Beaded seat cover" />
             </Field>
             <Field label="Category">
-              <select
-                name="category"
-                className={inputCls}
-                value={catChoice}
-                onChange={(e) => setCatChoice(e.target.value)}
-              >
-                <option value="">Select a category…</option>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-                <option value={ADD_NEW}>+ Add new category…</option>
-              </select>
+              <Select name="category" value={catChoice} onChange={setCatChoice} placeholder="Select a category…"
+                options={[...categories.map((c) => ({ value: c, label: c })), { value: ADD_NEW, label: "+ Add new category…" }]} />
             </Field>
           </div>
 

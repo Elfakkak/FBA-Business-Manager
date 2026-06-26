@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, PageHead } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { createClient } from "@/lib/supabase/client";
 import { INTG_STATUS_TONE, INTG_STATUS_LABEL, intgAgo, type IntegrationDef } from "@/lib/integrations";
@@ -379,6 +380,7 @@ function MemberModal({ member, onClose, ownerDefault }: { member: Member | null;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [owner, setOwner] = useState(member?.is_owner ?? ownerDefault ?? false);
+  const [role, setRole] = useState<string>(member?.role ?? "Viewer");
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -396,9 +398,7 @@ function MemberModal({ member, onClose, ownerDefault }: { member: Member | null;
         {member && <Field label="Name"><input name="name" defaultValue={member.name} className={inputCls} /></Field>}
         <Field label="Email"><input name="email" type="email" required defaultValue={member?.email ?? ""} autoFocus={!member} className={inputCls} /></Field>
         <Field label="Access role">
-          <select name="role" defaultValue={member?.role ?? "Viewer"} className={inputCls}>
-            {["Owner", "Partner", "Operations", "Viewer"].map((r) => <option key={r}>{r}</option>)}
-          </select>
+          <Select name="role" value={role} onChange={setRole} options={["Owner", "Partner", "Operations", "Viewer"].map((r) => ({ value: r, label: r }))} />
         </Field>
         {member && (
           <>

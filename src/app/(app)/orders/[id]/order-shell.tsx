@@ -525,6 +525,7 @@ function StagePanel({ tab, status }: { tab: string; status: string }) {
 
 function EditOrderModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
   const { error, pending, onSubmit } = useFormModal((form) => updateOrder(order.id, form), { onSuccess: onClose });
+  const [status, setStatus] = useState<string>(order.status);
 
   return (
     <Modal open onClose={onClose} title={`Edit ${order.id}`}>
@@ -532,9 +533,7 @@ function EditOrderModal({ order, onClose }: { order: OrderRow; onClose: () => vo
         <Field label="Title"><input name="title" defaultValue={order.title} className={inputCls} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status">
-            <select name="status" defaultValue={order.status} className={inputCls}>
-              {ORDER_PIPELINE.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-            </select>
+            <Select name="status" value={status} onChange={setStatus} options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} />
           </Field>
           <Field label="FBA ETA"><input name="fba_eta" type="date" defaultValue={order.fba_eta ?? ""} className={inputCls} /></Field>
         </div>

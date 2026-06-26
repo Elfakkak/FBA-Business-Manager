@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
+import { Select } from "@/components/ui/select";
 import { FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, marginTone, num, type FamilyHealth, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { ChevronRight, ChevronDown, Package, ArrowRight, ArrowUpRight, Layers, Star } from "lucide-react";
@@ -129,14 +130,8 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search product, SKU, FNSKU, ASIN, supplier"
             className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All categories</option>
-            {categoryNames.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All suppliers</option>
-            {supplierNames.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <Select value={category} onChange={setCategory} className="w-44" options={[{ value: "all", label: "All categories" }, ...categoryNames.map((c) => ({ value: c, label: c }))]} />
+          <Select value={supplier} onChange={setSupplier} className="w-44" options={[{ value: "all", label: "All suppliers" }, ...supplierNames.map((s) => ({ value: s, label: s }))]} />
           <div className="flex flex-wrap gap-1">
             {CHIPS.map((c) => (
               <button key={c.key} onClick={() => setChip(c.key)} className={cn("vy-chip", chip === c.key && "is-active")}>{c.label}</button>
