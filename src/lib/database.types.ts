@@ -892,31 +892,37 @@ export type Database = {
       packaging_items: {
         Row: {
           created_at: string
+          design_url: string | null
           family_id: string | null
           id: string
           kind: Database["public"]["Enums"]["packaging_kind"]
           name: string
           reorder_point: number | null
+          size: string | null
           unit_cost: number
           updated_at: string
         }
         Insert: {
           created_at?: string
+          design_url?: string | null
           family_id?: string | null
           id: string
           kind?: Database["public"]["Enums"]["packaging_kind"]
           name: string
           reorder_point?: number | null
+          size?: string | null
           unit_cost?: number
           updated_at?: string
         }
         Update: {
           created_at?: string
+          design_url?: string | null
           family_id?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["packaging_kind"]
           name?: string
           reorder_point?: number | null
+          size?: string | null
           unit_cost?: number
           updated_at?: string
         }

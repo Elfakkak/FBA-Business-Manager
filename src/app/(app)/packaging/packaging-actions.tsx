@@ -18,6 +18,7 @@ export function AddPackagingButton({ families }: { families: { id: string; paren
       <Modal open={open} onClose={() => setOpen(false)} title="Add packaging">
         <form onSubmit={onSubmit} className="space-y-4">
           <Field label="Name"><input name="name" required autoFocus className={inputCls} placeholder="Poly mailer 10x13" /></Field>
+          <Field label="Size"><input name="size" className={inputCls} placeholder="e.g. 10×13 in" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
               <select name="kind" className={inputCls} defaultValue="Mailer">

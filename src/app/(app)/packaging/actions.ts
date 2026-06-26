@@ -29,6 +29,7 @@ export async function addPackagingItem(form: FormData): Promise<Result> {
     family_id: familyId,
     unit_cost: unitCost,
     reorder_point: reorder,
+    size: String(form.get("size") ?? "").trim() || null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -44,6 +45,32 @@ export async function addPackagingItem(form: FormData): Promise<Result> {
       move_date: today,
     });
   }
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
+export async function updatePackaging(id: string, form: FormData): Promise<Result> {
+  const supabase = await createClient();
+  const name = String(form.get("name") ?? "").trim();
+  if (!name) return { ok: false, error: "Name is required." };
+  const reorderRaw = String(form.get("reorder_point") ?? "");
+  const { error } = await supabase.from("packaging_items").update({
+    name,
+    kind: (String(form.get("kind") ?? "Other").trim() || "Other") as never,
+    size: String(form.get("size") ?? "").trim() || null,
+    family_id: String(form.get("family_id") ?? "").trim() || null,
+    unit_cost: parseFloat(String(form.get("unit_cost") ?? "")) || 0,
+    reorder_point: reorderRaw === "" ? null : parseInt(reorderRaw),
+  }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
+export async function savePackagingDesign(id: string, url: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("packaging_items").update({ design_url: url || null }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
   revalidatePath("/packaging");
   return { ok: true };
 }
