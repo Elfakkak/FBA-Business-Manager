@@ -40,6 +40,16 @@ export async function runInboundSync(db: DB, creds: AmazonCreds) {
       );
     }
   }
+  // prune shipments Amazon no longer returns (e.g. stale legacy v0 rows)
+  const keep = shipments.map((s) => s.shipmentId);
+  if (keep.length) {
+    const { data: stale } = await db.from("fba_inbounds").select("id").not("id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
+    const staleIds = (stale ?? []).map((r) => r.id);
+    if (staleIds.length) {
+      await db.from("fba_inbound_items").delete().in("inbound_id", staleIds);
+      await db.from("fba_inbounds").delete().in("id", staleIds);
+    }
+  }
   return { shipments: shipments.length };
 }
 
