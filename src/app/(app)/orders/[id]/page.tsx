@@ -10,7 +10,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
+  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }, { data: brand }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
@@ -23,6 +23,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id").eq("order_id", id),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("partners").select("name, specialty").order("name"),
+    supabase.from("brand").select("name").maybeSingle(),
   ]);
   const invList = (invoices ?? []) as InvoiceRow[];
   const r = orderRollup(id, invList);
@@ -81,6 +82,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       lines={lines ?? []}
       costs={(orderCosts ?? []) as OrderCostRow[]}
       chargeTypes={(chargeTypes ?? []) as { id: string; label: string; owner: string }[]}
+      companyName={(brand as { name: string } | null)?.name ?? "Your Company"}
       variants={catalogVariants}
       packagingItems={(pkgItems ?? []) as { id: string; name: string; kind: string; unit_cost: number }[]}
       packaging={packaging}

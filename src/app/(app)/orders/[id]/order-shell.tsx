@@ -59,13 +59,14 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
   lines: OrderLine[];
   costs: OrderCostRow[];
   chargeTypes: ChargeTypeOpt[];
+  companyName: string;
   variants: CatalogVariant[];
   packagingItems: PkgItemOpt[];
   packaging: PkgUsed[];
@@ -115,7 +116,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
-          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} />
+          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : (
