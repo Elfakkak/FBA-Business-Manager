@@ -45,7 +45,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({}); // default collapsed
   const [, start] = useTransition();
 
   const toggleSort = (key: SortKey) =>
@@ -113,14 +113,22 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
     return [...m.entries()];
   }, [filtered]);
 
-  // pagination — in SKU view the unit is a SKU; in family view it's a family
+  // pagination always counts SKUs (the rows), so 25/50/100 limits both views.
   const sortedSkus = useMemo(() => sortRows(filtered), [filtered, sort]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalItems = view === "sku" ? sortedSkus.length : groups.length;
+  const totalItems = sortedSkus.length;
   const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(page, pageCount);
   const from = (safePage - 1) * pageSize;
   const pageSkus = sortedSkus.slice(from, from + pageSize);
-  const pageGroups = groups.slice(from, from + pageSize);
+  // family view: group only the current page's SKUs
+  const pageGroups = useMemo(() => {
+    const m = new Map<string, InvRow[]>();
+    for (const r of pageSkus) { if (!m.has(r.familyId)) m.set(r.familyId, []); m.get(r.familyId)!.push(r); }
+    return [...m.entries()];
+  }, [pageSkus]);
+  const multiFamilyIds = useMemo(() => groups.filter(([, m]) => m.length > 1).map(([id]) => id), [groups]);
+  const anyExpanded = multiFamilyIds.some((id) => expanded[id]);
+  const toggleAll = () => setExpanded(anyExpanded ? {} : Object.fromEntries(multiFamilyIds.map((id) => [id, true])));
   // reset to page 1 whenever the result set or view changes
   useEffect(() => { setPage(1); }, [q, category, supplier, health, favOnly, dupOnly, singleOnly, view, pageSize]);
 
@@ -205,7 +213,10 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
 
       {/* table */}
       <Card className="overflow-hidden p-0">
-        <CardHeader title={`${filtered.length} SKUs`} caption="Available = on-hand − reserved − unfulfillable" />
+        <CardHeader title={`${filtered.length} SKUs`} caption="Available = on-hand − reserved − unfulfillable"
+          action={view === "family" && multiFamilyIds.length > 0
+            ? <button onClick={toggleAll} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5">{anyExpanded ? <><ChevronDown className="h-3.5 w-3.5" /> Collapse all</> : <><ChevronRight className="h-3.5 w-3.5" /> Expand all</>}</button>
+            : undefined} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead>
@@ -232,7 +243,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                 pageGroups.map(([fid, members]) => {
                   // standalone product (one SKU) → a single flat row, no folder/tree
                   if (members.length === 1) return <Row key={fid} r={members[0]} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(members[0])} router={router} />;
-                  const open = collapsed[fid] !== true;
+                  const open = !!expanded[fid]; // default collapsed
                   const needs = members.filter((m) => m.health === "Reorder").length;
                   const gOn = members.reduce((s, m) => s + m.onHand, 0);
                   const gReserved = members.reduce((s, m) => s + m.reserved, 0);
@@ -243,7 +254,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                   return (
                     <FragmentGroup key={fid}>
                       {/* parent header — sums aligned under the same columns as the variants */}
-                      <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => setCollapsed((c) => ({ ...c, [fid]: open }))}>
+                      <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" title="Shift-click to expand/collapse all"
+                        onClick={(e) => { if (e.shiftKey) toggleAll(); else setExpanded((c) => ({ ...c, [fid]: !open })); }}>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2 text-[13px]">
                             {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
@@ -282,7 +294,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
               <button key={n} onClick={() => setPageSize(n)} className={cn("rounded px-2 py-0.5", pageSize === n ? "bg-primary/12 font-medium text-primary" : "hover:bg-accent")}>{n}</button>
             ))}
           </div>
-          <div>Showing {totalItems === 0 ? 0 : from + 1}–{Math.min(from + pageSize, totalItems)} of {num(totalItems)} {view === "sku" ? "SKUs" : "families"}</div>
+          <div>Showing {totalItems === 0 ? 0 : from + 1}–{Math.min(from + pageSize, totalItems)} of {num(totalItems)} SKUs</div>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Prev</button>
             <span>Page {safePage} / {pageCount}</span>
