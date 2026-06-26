@@ -21,8 +21,10 @@ type OrderLine = { id: string; sku: string | null; product_name: string | null; 
 type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
 type PkgItemOpt = { id: string; name: string; kind: string; unit_cost: number };
 type PkgUsed = { moveId: string; itemId: string; name: string; qty: number; unitCost: number };
+export type OrderShipment = { id: string; mode: string; stage: string; forwarder: string | null; origin: string | null; destination: string | null; eta: string | null; packed: number };
+export type OrderInbound = { id: string; fc: string; expected: number; received: number; amazon_status: string; sku_count: number; shipment_id: string | null };
 
-type Tone = "brand" | "success" | "info" | "warning" | "muted";
+type Tone = "brand" | "success" | "info" | "warning" | "muted" | "danger";
 const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Tone }[] = [
   { key: "overview", label: "Home", icon: LayoutDashboard, tone: "muted" },
   { key: "production", label: "Production", icon: Hammer, tone: "brand" },
@@ -38,13 +40,15 @@ function addDays(iso: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, rollup }: {
+export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, shipments, inbounds, rollup }: {
   order: OrderRow;
   invoices: InvoiceRow[];
   lines: OrderLine[];
   variants: VariantOpt[];
   packagingItems: PkgItemOpt[];
   packaging: PkgUsed[];
+  shipments: OrderShipment[];
+  inbounds: OrderInbound[];
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
 }) {
   const router = useRouter();
@@ -148,6 +152,8 @@ export function OrderShell({ order, invoices, lines, variants, packagingItems, p
         <Overview order={order} rollup={rollup} curIdx={curIdx} onJump={setTab} />
       ) : tab === "invoices" ? (
         <InvoicesPanel invoices={invoices} />
+      ) : tab === "shipping" ? (
+        <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
           <ProductionPanel orderId={order.id} lines={lines} variants={variants} units={units} cogs={cogs} />
@@ -232,11 +238,12 @@ function InvoicesPanel({ invoices }: { invoices: InvoiceRow[] }) {
             const bal = Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
             return (
               <li key={inv.id} className="flex items-center gap-3 py-2.5">
-                <span className="font-mono text-[12px] font-semibold">{inv.id}</span>
+                <Link href={`/invoices/${inv.id}`} className="font-mono text-[12px] font-semibold hover:text-primary">{inv.id}</Link>
                 <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{inv.vendor_type}</span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{inv.vendor} · due {inv.due ?? "—"}</span>
                 <span className="tabular font-mono text-sm">{money(inv.total)}</span>
                 {bal > 0 ? <Badge tone="warning">{money(bal)} due</Badge> : <Badge tone="success">Paid</Badge>}
+                <Link href={`/invoices/${inv.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
               </li>
             );
           })}
@@ -429,6 +436,56 @@ function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgI
         </form>
       </Modal>
     </Card>
+  );
+}
+
+function ShippingPanel({ shipments, inbounds }: { shipments: OrderShipment[]; inbounds: OrderInbound[] }) {
+  const SHIP_TONE: Record<string, Tone> = { Draft: "muted", Booked: "info", "Picked up": "info", "In transit": "info", Customs: "warning", Delivered: "success", "At FBA": "success" };
+  const FBA_TONE: Record<string, Tone> = { Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger" };
+  return (
+    <div className="space-y-6">
+      <Card className="p-5">
+        <SectionTitle icon={Truck} tone="info" title="Freight shipments" count={shipments.length} />
+        {shipments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No freight shipments linked to this order. Create one on the <Link href="/shipments" className="font-medium text-primary hover:underline">Shipments</Link> page and set its order to this one.</p>
+        ) : (
+          <ul className="divide-y">
+            {shipments.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                <Link href={`/shipments/${s.id}`} className="font-mono text-[12px] font-bold hover:text-primary">{s.id}</Link>
+                <Badge tone={SHIP_TONE[s.stage] ?? "muted"}>{s.stage}</Badge>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{s.mode}{s.forwarder ? ` · ${s.forwarder}` : ""} · {s.origin || "—"} → {s.destination || "—"}{s.eta ? ` · ETA ${s.eta}` : ""}</span>
+                <span className="tabular font-mono text-[12px] font-semibold">{num(s.packed)} packed</span>
+                <Link href={`/shipments/${s.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="p-5">
+        <SectionTitle icon={PackageCheck} tone="success" title="FBA inbounds" count={inbounds.length} />
+        {inbounds.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No Amazon inbounds linked yet. Open an inbound in <Link href="/fba-shipments" className="font-medium text-primary hover:underline">FBA Shipments</Link> and link it to this order.</p>
+        ) : (
+          <ul className="divide-y">
+            {inbounds.map((f) => {
+              const variance = f.received > 0 ? f.received - f.expected : 0;
+              return (
+                <li key={f.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                  <Link href={`/fba-shipments/${f.id}`} className="font-mono text-[12px] font-bold hover:text-primary">{f.id}</Link>
+                  <Badge tone="muted">{f.fc}</Badge>
+                  <Badge tone={FBA_TONE[f.amazon_status] ?? "muted"}>{f.amazon_status}</Badge>
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{f.sku_count} SKU{f.sku_count === 1 ? "" : "s"}</span>
+                  <span className="tabular font-mono text-[12px]"><span className={cn(f.received <= 0 ? "text-muted-foreground" : variance < 0 ? "text-danger" : variance > 0 ? "text-warning" : "text-success")}>{f.received > 0 ? num(f.received) : "—"}</span> / {num(f.expected)}</span>
+                  <Link href={`/fba-shipments/${f.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </div>
   );
 }
 

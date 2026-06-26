@@ -5,7 +5,8 @@ import { Card, Badge } from "@/components/ui/primitives";
 import { num, type Tone } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Package, Truck, Boxes, ClipboardCheck, MapPin, Check, ArrowUpRight, ArrowRight } from "lucide-react";
+import { ChevronRight, Package, Truck, Boxes, ClipboardCheck, MapPin, Check, ArrowRight } from "lucide-react";
+import { LinkInboundCard } from "./link-inbound";
 
 const STATUS_TONE: Record<string, Tone> = { Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger" };
 const FBA_EVENTS = [
@@ -30,9 +31,11 @@ export default async function FbaDetailPage({ params }: { params: Promise<{ id: 
   const { data: inbound } = await supabase.from("fba_inbounds").select("*").eq("id", id).maybeSingle();
   if (!inbound) notFound();
 
-  const [{ data: items }, { data: amazon }] = await Promise.all([
+  const [{ data: items }, { data: amazon }, { data: shipmentOpts }, { data: orderOpts }] = await Promise.all([
     supabase.from("fba_inbound_items").select("sku, fnsku, expected, received").eq("inbound_id", id),
     supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle(),
+    supabase.from("shipments").select("id, mode, order_id").order("created_at", { ascending: false }),
+    supabase.from("orders").select("id, title").order("placed_on", { ascending: false }),
   ]);
   const itemRows = (items ?? []) as { sku: string; fnsku: string | null; expected: number; received: number }[];
 
@@ -199,6 +202,15 @@ export default async function FbaDetailPage({ params }: { params: Promise<{ id: 
           </Card>
         </div>
       </div>
+
+      {/* Link to freight shipment + order */}
+      <LinkInboundCard
+        inboundId={inbound.id}
+        shipmentId={inbound.shipment_id}
+        orderId={inbound.order_id}
+        shipments={((shipmentOpts ?? []) as { id: string; mode: string; order_id: string | null }[]).map((s) => ({ id: s.id, label: `${s.id} · ${s.mode}`, order_id: s.order_id }))}
+        orders={(orderOpts ?? []) as { id: string; title: string }[]}
+      />
 
       {/* Shipment events */}
       {inbound.amazon_status !== "Problem" && (
