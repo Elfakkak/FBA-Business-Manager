@@ -74,6 +74,16 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, qty: h.qty,
     invoiceId: h.invoice_id, orderId: h.order_id, vendor: h.invoices?.vendor ?? null,
   }));
+  // Landed cost history — the all-in cost per unit, locked at closeout (kind='landed').
+  const { data: lvchRows } = await supabase
+    .from("variant_cost_history")
+    .select("unit_cost, recorded_at, order_id, orders(title)")
+    .eq("family_id", id).eq("kind", "landed")
+    .order("recorded_at", { ascending: true });
+  type LVCH = { unit_cost: number; recorded_at: string; order_id: string | null; orders: { title: string } | null };
+  const landedHistory = ((lvchRows ?? []) as unknown as LVCH[]).map((h) => ({
+    date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, orderId: h.order_id, orderTitle: h.orders?.title ?? null,
+  }));
   const orderMap = new Map<string, { id: string; title: string; status: string; placedOn: string | null; qty: number }>();
   for (const l of lines) {
     const cur = orderMap.get(l.order_id) ?? { id: l.order_id, title: l.orders?.title ?? l.order_id, status: l.orders?.status ?? "draft", placedOn: l.orders?.placed_on ?? null, qty: 0 };
@@ -372,8 +382,20 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           )}
         </Card>
         <Card className="p-5">
-          <SectionTitle icon={Layers} tone="muted" title="Landed cost history" sub="All-in cost per unit (goods + freight + duties), locked at closeout." />
-          <EmptyBlock>Lands here from the order&apos;s Landed cost section (coming soon) — the all-in cost per unit, not just the supplier price.</EmptyBlock>
+          <SectionTitle icon={Layers} tone="info" title="Landed cost history" sub="All-in cost per unit (goods + freight + duties), locked at closeout." count={landedHistory.length || undefined} />
+          {landedHistory.length === 0 ? (
+            <EmptyBlock>Lands here when an order&apos;s Landed cost is locked — the all-in cost per unit, not just the supplier price.</EmptyBlock>
+          ) : (
+            <ul className="divide-y">
+              {landedHistory.map((h, i) => (
+                <li key={i} className="flex items-center gap-2.5 py-2 text-sm">
+                  <span className="w-[88px] shrink-0 text-[12px] text-muted-foreground">{h.date ?? "—"}</span>
+                  {h.orderId ? <Link href={`/orders/${h.orderId}`} className="font-mono text-[12px] font-medium hover:text-primary" title={h.orderTitle ?? undefined}>{h.orderId}</Link> : <span className="text-[12px] text-muted-foreground">—</span>}
+                  <span className={cn("tabular ml-auto shrink-0 font-mono font-semibold", i === landedHistory.length - 1 && "text-info")}>{money(h.cost)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
 

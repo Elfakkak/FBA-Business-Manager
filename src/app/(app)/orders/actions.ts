@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { ORDER_PIPELINE } from "@/lib/derive";
+import { ORDER_PIPELINE, productionLanded } from "@/lib/derive";
 import type { Database } from "@/lib/database.types";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -208,6 +208,49 @@ export async function deleteOrderFile(orderId: string, slot: string): Promise<Re
   const { error } = await supabase.from("order_files").delete().eq("order_id", orderId).eq("slot", slot);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+// ---- Landed cost / Closeout ---------------------------------------------------
+// Lock the order's landed cost: compute the all-in cost per SKU, write a 'landed'
+// cost-history row per SKU (traced to this order), update the catalog last cost to
+// the landed figure (the truest cost), and close the order. Idempotent per order.
+export async function lockLandedCost(orderId: string): Promise<Result> {
+  const supabase = await createClient();
+  const [{ data: lines }, { data: costs }] = await Promise.all([
+    supabase.from("order_lines").select("id, sku, product_name, family_id, qty, unit_cost, unit_cny_ref").eq("order_id", orderId),
+    supabase.from("order_costs").select("amount, basis, treatment").eq("order_id", orderId),
+  ]);
+  type L = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
+  const roll = productionLanded((lines ?? []) as L[], (costs ?? []) as { amount: number; basis: string; treatment: string }[]);
+  const priced = roll.withLanded.filter((l) => l.sku && Number(l.qty) > 0);
+  if (!priced.length) return { ok: false, error: "Add priced production lines before locking landed cost." };
+
+  const skus = [...new Set(priced.map((l) => l.sku as string))];
+  const { data: vs } = await supabase.from("product_variants").select("id, sku, family_id").in("sku", skus);
+  const vmap = new Map(((vs ?? []) as { id: string; sku: string; family_id: string | null }[]).map((v) => [v.sku, v]));
+
+  // idempotent: replace this order's landed history on re-lock
+  await supabase.from("variant_cost_history").delete().eq("order_id", orderId).eq("kind", "landed");
+  const hist: Database["public"]["Tables"]["variant_cost_history"]["Insert"][] = [];
+  for (const l of priced) {
+    const unit = Math.round(l.landedUnit * 100) / 100;
+    const v = vmap.get(l.sku as string);
+    hist.push({ kind: "landed", order_id: orderId, sku: l.sku, variant_id: v?.id ?? null, family_id: v?.family_id ?? l.family_id ?? null, qty: Number(l.qty), unit_cost: unit, currency: "USD" });
+    await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", l.sku!);
+  }
+  const { error } = await supabase.from("variant_cost_history").insert(hist);
+  if (error) return { ok: false, error: error.message };
+  await supabase.from("orders").update({ status: "closed" }).eq("id", orderId);
+  revalidatePath(`/orders/${orderId}`); revalidatePath("/orders"); revalidatePath("/catalog");
+  return { ok: true };
+}
+
+export async function unlockLandedCost(orderId: string): Promise<Result> {
+  const supabase = await createClient();
+  await supabase.from("variant_cost_history").delete().eq("order_id", orderId).eq("kind", "landed");
+  await supabase.from("orders").update({ status: "fba" }).eq("id", orderId);
+  revalidatePath(`/orders/${orderId}`); revalidatePath("/orders"); revalidatePath("/catalog");
   return { ok: true };
 }
 
