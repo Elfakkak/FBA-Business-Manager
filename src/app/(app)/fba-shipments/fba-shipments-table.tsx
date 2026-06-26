@@ -10,7 +10,7 @@ import { syncFbaInbounds } from "../integrations/actions";
 import { num } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/derive";
-import { Truck, Boxes, PackageCheck, AlertCircle, RefreshCw, ArrowUpRight, Loader2 } from "lucide-react";
+import { Truck, Boxes, PackageCheck, AlertCircle, RefreshCw, ArrowUpRight, Loader2, Check } from "lucide-react";
 
 export type FbaRow = {
   id: string; fc: string; skuCount: number; expected: number; received: number; variance: number;
@@ -23,7 +23,23 @@ const STATUS_TONE: Record<string, Tone> = {
   Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger",
 };
 const STATUSES = ["all", "Working", "Shipped", "In transit", "Receiving", "Closed", "Problem"];
-const FBA_STEPS = ["Working", "Shipped", "In transit", "Receiving", "Closed"];
+
+// Amazon "Shipment events" model — mirrors Seller Central's timeline, derived from status + received.
+const FBA_EVENTS = [
+  { key: "created", label: "Shipment created" },
+  { key: "intransit", label: "In transit" },
+  { key: "delivered", label: "Delivered to FC" },
+  { key: "checkedin", label: "Checked in" },
+  { key: "received", label: "Received" },
+  { key: "closed", label: "Shipment closed" },
+];
+function fbaDoneIdx(r: FbaRow) {
+  if (r.status === "Closed") return 5;
+  if (r.received > 0) return 4;
+  if (r.status === "Receiving") return 3;
+  if (r.status === "Shipped" || r.status === "In transit") return 1;
+  return 0; // Working
+}
 
 export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: FbaRow[]; amazonConnected: boolean; lastSync: string | null }) {
   const router = useRouter();
@@ -172,47 +188,113 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
       )}
 
       <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id}>
-        {peek && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={STATUS_TONE[peek.status] ?? "muted"}>{peek.status}</Badge>
-              <Badge tone="muted">{peek.fc}</Badge>
-              {peek.eta && <Badge tone="info">ETA {peek.eta}</Badge>}
-            </div>
-            {/* Amazon progress timeline */}
-            {peek.status !== "Problem" && (
-              <div className="flex items-center gap-1">
-                {FBA_STEPS.map((s, i) => {
-                  const cur = FBA_STEPS.indexOf(peek.status);
-                  const done = i <= cur;
-                  return (
-                    <div key={s} className="flex flex-1 flex-col items-center gap-1">
-                      <div className={cn("h-1.5 w-full rounded-full", done ? "bg-success" : "bg-muted")} />
-                      <span className={cn("text-[9px]", done ? "font-medium text-foreground" : "text-muted-foreground")}>{s}</span>
-                    </div>
-                  );
-                })}
+        {peek && (() => {
+          const variance = peek.variance;
+          const vHint = peek.received <= 0 ? "Not yet received — units book as Amazon checks them in."
+            : variance === 0 ? "No discrepancies — received the expected units."
+            : variance < 0 ? `${Math.abs(variance)} units short of the expected count.`
+            : `+${variance} units over the expected count.`;
+          const doneIdx = fbaDoneIdx(peek);
+          return (
+            <div className="space-y-6">
+              {/* subtitle + chips */}
+              <div>
+                <div className="text-[12px] text-muted-foreground">Inbound to {peek.fc} · {peek.mode || "Amazon inbound"}</div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <Badge tone={STATUS_TONE[peek.status] ?? "muted"}>{peek.status}</Badge>
+                  <Badge tone="muted">{peek.fc}</Badge>
+                  {peek.orderId && <Link href={`/orders/${peek.orderId}`} onClick={(e) => e.stopPropagation()}><Badge tone="muted">{peek.orderId}</Badge></Link>}
+                </div>
               </div>
-            )}
-            <div className="grid grid-cols-3 gap-2">
-              <DrawerStat label="Expected" value={num(peek.expected)} />
-              <DrawerStat label="Received" value={num(peek.received)} />
-              <DrawerStat label="Variance" value={peek.received === 0 ? "—" : `${peek.variance > 0 ? "+" : ""}${num(peek.variance)}`} />
+
+              {/* order / forwarder seam */}
+              {peek.orderId ? (
+                <Link href={`/orders/${peek.orderId}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 rounded-lg border bg-accent/50 px-3 py-2.5 hover:border-primary/40">
+                  <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1"><div className="text-[11px] text-muted-foreground">Linked order</div><div className="font-mono text-[12px] font-bold">{peek.orderId}</div></div>
+                  <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/40 px-3 py-2.5">
+                  <PackageCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">Not linked to an order</div><div className="text-[11px] text-muted-foreground">Direct from Seller Central — order linking is coming.</div></div>
+                </div>
+              )}
+
+              {/* Receiving · Amazon leg */}
+              <div>
+                <div className="vy-kicker mb-2">Receiving · Amazon leg</div>
+                <div className="grid grid-cols-4 gap-2">
+                  <DrawerStat label="Expected" value={num(peek.expected)} />
+                  <DrawerStat label="Received" value={peek.received > 0 ? num(peek.received) : "—"} />
+                  <DrawerStat label="Variance" value={peek.received <= 0 ? "—" : `${variance > 0 ? "+" : ""}${num(variance)}`} />
+                  <DrawerStat label="SKUs" value={num(peek.skuCount)} />
+                </div>
+                <p className="mt-2 px-0.5 text-[11px] text-muted-foreground">{vHint}</p>
+              </div>
+
+              {/* Shipment events timeline */}
+              {peek.status === "Problem" ? (
+                <div className="rounded-lg border border-danger/30 bg-danger/8 px-3 py-2.5 text-[12px] text-danger">Cancelled in Seller Central — never received.</div>
+              ) : (
+                <div>
+                  <div className="vy-kicker mb-2.5">Shipment events · from Seller Central</div>
+                  <div className="flex flex-col">
+                    {FBA_EVENTS.map((e, i) => {
+                      const done = i <= doneIdx;
+                      const cur = i === doneIdx;
+                      const color = done ? (cur ? "hsl(var(--info))" : "hsl(var(--success))") : "hsl(var(--border))";
+                      const nextDone = i < FBA_EVENTS.length - 1 && i + 1 <= doneIdx;
+                      return (
+                        <div key={e.key} className="flex min-h-[30px] gap-3">
+                          <div className="flex flex-col items-center self-stretch">
+                            <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center rounded-full" style={{ background: done ? color : "hsl(var(--card))", border: `2px solid ${color}` }}>
+                              {done && <Check className="h-[7px] w-[7px] text-white" strokeWidth={4} />}
+                            </span>
+                            {i < FBA_EVENTS.length - 1 && <span className="my-0.5 w-0.5 flex-1" style={{ background: nextDone ? "hsl(var(--success))" : "hsl(var(--border))" }} />}
+                          </div>
+                          <div className={cn("min-w-0", i < FBA_EVENTS.length - 1 && "pb-2.5")}>
+                            <div className={cn("text-[12.5px]", cur ? "font-bold text-info" : done ? "font-semibold" : "font-semibold text-muted-foreground")}>{e.label}</div>
+                            <div className="mt-px text-[11px] text-muted-foreground">{done ? (cur ? "current" : "done") : <span className="italic">pending</span>}{cur && e.key === "checkedin" ? ` · ${peek.fc}` : ""}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Items */}
+              <div>
+                <div className="vy-kicker mb-2">Items ({peek.items.length})</div>
+                <ul className="space-y-1.5">
+                  {peek.items.map((i) => (
+                    <li key={i.sku} className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]">
+                      <Link href={`/inventory?q=${encodeURIComponent(i.sku)}`} onClick={(e) => e.stopPropagation()} className="min-w-0 flex-1 truncate font-mono hover:text-primary">{i.sku}</Link>
+                      <span className="tabular font-mono text-muted-foreground">{num(i.received)} / {num(i.expected)}</span>
+                      {i.received < i.expected && i.received > 0 ? <Badge tone="warning">short</Badge> : i.received >= i.expected && i.expected > 0 ? <Badge tone="success">✓</Badge> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Identifiers */}
+              <div>
+                <div className="vy-kicker mb-2">Amazon identifiers</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <DrawerStat label="FBA shipment ID" value={<span className="text-[11px]">{peek.id}</span>} />
+                  <DrawerStat label="Dest FC" value={peek.fc} />
+                  <DrawerStat label="Synced" value={<span className="text-[11px]">{intgAgo(peek.synced)}</span>} />
+                </div>
+              </div>
+
+              {/* Footer action */}
+              {peek.orderId && (
+                <Link href={`/orders/${peek.orderId}`} onClick={(e) => e.stopPropagation()} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5">Open order <ArrowUpRight className="h-4 w-4" /></Link>
+              )}
             </div>
-            <div>
-              <div className="vy-kicker mb-2">Items ({peek.items.length})</div>
-              <ul className="space-y-1.5">
-                {peek.items.map((i) => (
-                  <li key={i.sku} className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]">
-                    <Link href={`/inventory?q=${encodeURIComponent(i.sku)}`} onClick={(e) => e.stopPropagation()} className="min-w-0 flex-1 truncate font-mono hover:text-primary">{i.sku}</Link>
-                    <span className="tabular font-mono text-muted-foreground">{num(i.received)} / {num(i.expected)}</span>
-                    {i.received < i.expected && i.received > 0 ? <Badge tone="warning">short</Badge> : i.received >= i.expected && i.expected > 0 ? <Badge tone="success">✓</Badge> : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </Drawer>
     </div>
   );
