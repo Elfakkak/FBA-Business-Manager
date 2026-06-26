@@ -191,8 +191,27 @@ export function partnerRollup(name: string, type: string, orders: OrderRow[], in
   };
 }
 
+// FBA inbound "Shipment events" pipeline (Amazon custody leg) — shared by the FBA list
+// drawer and the FBA detail page so the timeline logic lives in one place.
+export const FBA_EVENTS = [
+  { key: "created", label: "Shipment created" },
+  { key: "intransit", label: "In transit" },
+  { key: "delivered", label: "Delivered to FC" },
+  { key: "checkedin", label: "Checked in" },
+  { key: "received", label: "Received" },
+  { key: "closed", label: "Shipment closed" },
+] as const;
+export function fbaDoneIdx(status: string, received: number): number {
+  if (status === "Closed") return 5;
+  if (received > 0) return 4;
+  if (status === "Receiving") return 3;
+  if (status === "Shipped" || status === "In transit") return 1;
+  return 0; // Working
+}
+
 // ---------- Invoices / accounts payable ----------
 export const INVOICE_STATUS_TONE: Record<string, Tone> = { Paid: "success", Partial: "warning", Unpaid: "danger" };
+export const PAY_STATUS_TONE: Record<string, Tone> = { Cleared: "success", Scheduled: "info", Pending: "warning" };
 export function invoiceBalance(i: Pick<InvoiceRow, "total" | "paid">) { return Math.max(0, (i.total ?? 0) - (i.paid ?? 0)); }
 export function invoiceStatus(i: Pick<InvoiceRow, "total" | "paid">): "Paid" | "Partial" | "Unpaid" {
   if (invoiceBalance(i) <= 0.005) return "Paid";

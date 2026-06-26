@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
+import { StatCard, GridField } from "@/components/ui/detail";
 import { num, money, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, type Tone } from "@/lib/derive";
 import { STATUS17_TONE } from "@/lib/track17";
 import { cn } from "@/lib/utils";
@@ -30,19 +31,6 @@ function incoterm(term: string | null): { customsBy: string; dutiesBy: string; n
     EXW: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "danger", blurb: "Ex Works — you handle everything from the factory door: export + import customs, freight and all duties. Broker needed." },
   };
   return map[t] || { customsBy: "—", dutiesBy: "—", needsBroker: true, tone: "muted", blurb: "Set the incoterm to see who clears customs and pays import duties." };
-}
-
-function StatCard({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: Tone }) {
-  return (
-    <Card className="p-4">
-      <div className="vy-kicker">{label}</div>
-      <div className="mt-1 text-lg font-bold" style={tone ? { color: `hsl(var(--${tone}))` } : undefined}>{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
-    </Card>
-  );
-}
-function GridField({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="p-3"><div className="vy-kicker mb-1">{label}</div><div className="text-[13px] font-semibold">{value}</div></div>;
 }
 
 export function ShipmentDetail({ row: s, checkpoints, liveStatus, track17Connected, orders, suppliers, forwarders }: {

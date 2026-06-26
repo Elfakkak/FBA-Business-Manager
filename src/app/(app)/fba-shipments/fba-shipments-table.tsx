@@ -7,7 +7,7 @@ import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { intgAgo } from "@/lib/integrations";
 import { syncFbaInbounds } from "../integrations/actions";
-import { num } from "@/lib/derive";
+import { num, FBA_EVENTS, fbaDoneIdx } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/derive";
 import { Truck, Boxes, PackageCheck, AlertCircle, RefreshCw, ArrowUpRight, Loader2, Check } from "lucide-react";
@@ -23,23 +23,6 @@ const STATUS_TONE: Record<string, Tone> = {
   Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger",
 };
 const STATUSES = ["all", "Working", "Shipped", "In transit", "Receiving", "Closed", "Problem"];
-
-// Amazon "Shipment events" model — mirrors Seller Central's timeline, derived from status + received.
-const FBA_EVENTS = [
-  { key: "created", label: "Shipment created" },
-  { key: "intransit", label: "In transit" },
-  { key: "delivered", label: "Delivered to FC" },
-  { key: "checkedin", label: "Checked in" },
-  { key: "received", label: "Received" },
-  { key: "closed", label: "Shipment closed" },
-];
-function fbaDoneIdx(r: FbaRow) {
-  if (r.status === "Closed") return 5;
-  if (r.received > 0) return 4;
-  if (r.status === "Receiving") return 3;
-  if (r.status === "Shipped" || r.status === "In transit") return 1;
-  return 0; // Working
-}
 
 export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: FbaRow[]; amazonConnected: boolean; lastSync: string | null }) {
   const router = useRouter();
@@ -220,7 +203,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
             : variance === 0 ? "No discrepancies — received the expected units."
             : variance < 0 ? `${Math.abs(variance)} units short of the expected count.`
             : `+${variance} units over the expected count.`;
-          const doneIdx = fbaDoneIdx(peek);
+          const doneIdx = fbaDoneIdx(peek.status, peek.received);
           return (
             <div className="space-y-6">
               {/* subtitle + chips */}

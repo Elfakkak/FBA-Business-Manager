@@ -2,28 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge } from "@/components/ui/primitives";
-import { num, type Tone } from "@/lib/derive";
+import { num, type Tone, FBA_EVENTS, fbaDoneIdx } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Package, Truck, Boxes, ClipboardCheck, MapPin, Check, ArrowRight } from "lucide-react";
 import { LinkInboundCard } from "./link-inbound";
 
 const STATUS_TONE: Record<string, Tone> = { Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger" };
-const FBA_EVENTS = [
-  { key: "created", label: "Shipment created" },
-  { key: "intransit", label: "In transit" },
-  { key: "delivered", label: "Delivered to FC" },
-  { key: "checkedin", label: "Checked in" },
-  { key: "received", label: "Received" },
-  { key: "closed", label: "Shipment closed" },
-];
-function doneIdx(status: string, received: number) {
-  if (status === "Closed") return 5;
-  if (received > 0) return 4;
-  if (status === "Receiving") return 3;
-  if (status === "Shipped" || status === "In transit") return 1;
-  return 0;
-}
 
 export default async function FbaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -56,7 +41,7 @@ export default async function FbaDetailPage({ params }: { params: Promise<{ id: 
 
   const received = inbound.received, expected = inbound.expected;
   const variance = received - expected;
-  const di = doneIdx(inbound.amazon_status, received);
+  const di = fbaDoneIdx(inbound.amazon_status, received);
   const pct = expected > 0 ? Math.min(100, Math.round((received / expected) * 100)) : 0;
 
   const kpis = [

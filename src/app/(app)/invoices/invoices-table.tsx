@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
-import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createInvoice, updateInvoice, deleteInvoice, recordPayment, deletePayment } from "./actions";
 import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, Trash2, Package } from "lucide-react";
@@ -16,7 +16,6 @@ export type InvRow = InvoiceRow & { orderTitle: string | null; payments: Payment
 
 const VENDOR_TYPES = ["Supplier", "Forwarder", "Agent", "Inspection"];
 const STATUS_CHIPS = ["All", "Overdue", "Unpaid", "Partial", "Paid"];
-const PAY_STATUS_TONE: Record<string, Tone> = { Cleared: "success", Scheduled: "info", Pending: "warning" };
 const fmtDue = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
 export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; orders: { id: string; title: string }[]; vendors: string[] }) {

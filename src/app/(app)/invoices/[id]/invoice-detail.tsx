@@ -5,8 +5,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
+import { StatCard } from "@/components/ui/detail";
 import { createClient } from "@/lib/supabase/client";
-import { num, money, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { RecordPaymentModal, InvoiceModal, type InvRow } from "../invoices-table";
 import { updateInvoice, deletePayment, saveInvoiceDocument } from "../actions";
@@ -15,7 +16,6 @@ import {
   ArrowUpRight, ArrowRight, Pencil, Trash2, ImagePlus, Loader2, ExternalLink, CalendarClock,
 } from "lucide-react";
 
-const PAY_STATUS_TONE: Record<string, Tone> = { Cleared: "success", Scheduled: "info", Pending: "warning" };
 const fmtDate = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
 export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; orders: { id: string; title: string }[]; vendors: string[] }) {
@@ -171,16 +171,6 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
       {payOpen && <RecordPaymentModal invoice={i} invoices={[i]} onClose={() => setPayOpen(false)} />}
       {editOpen && <InvoiceModal title={`Edit ${i.id}`} invoice={i} orders={orders} vendors={vendors} onClose={() => setEditOpen(false)} onSubmit={(fd) => updateInvoice(i.id, fd)} />}
     </div>
-  );
-}
-
-function StatCard({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: Tone }) {
-  return (
-    <Card className="p-4">
-      <div className="vy-kicker">{label}</div>
-      <div className="mt-1 text-lg font-bold" style={tone ? { color: `hsl(var(--${tone}))` } : undefined}>{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
-    </Card>
   );
 }
 
