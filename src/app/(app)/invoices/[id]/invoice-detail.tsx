@@ -9,10 +9,11 @@ import { StatCard } from "@/components/ui/detail";
 import { createClient } from "@/lib/supabase/client";
 import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary, type PayTermCfg, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { RecordPaymentModal, InvoiceModal, type InvRow } from "../invoices-table";
+import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../invoices-table";
 import { updateInvoice, deletePayment, saveInvoiceDocument } from "../actions";
 import { PaymentTermsCard } from "./payment-terms-card";
 import { PaymentProofCell } from "./payment-proof";
+import { InvoiceLinesTable, BilledOverBanner, EditChargesModal, type OrderLineLite, type ChargeTypeLite } from "../invoice-charges";
 import {
   ChevronRight, Factory, Calendar, Package, DollarSign, Receipt, ListChecks, FileText,
   ArrowUpRight, ArrowRight, Pencil, Trash2, ImagePlus, Loader2, ExternalLink,
@@ -22,10 +23,14 @@ function termCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTerm
 
 const fmtDate = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
-export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; orders: { id: string; title: string }[]; vendors: string[] }) {
+export function InvoiceDetailPage({ row: i, orders, vendors, orderLines, chargeTypes }: {
+  row: InvRow; orders: { id: string; title: string }[]; vendors: VendorOpt[];
+  orderLines: OrderLineLite[]; chargeTypes: ChargeTypeLite[];
+}) {
   const router = useRouter();
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [chargesOpen, setChargesOpen] = useState(false);
   const [, start] = useTransition();
 
   const bal = invoiceBalance(i);
@@ -76,7 +81,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Total" value={money(i.total)} sub="invoice amount" />
+        <StatCard label="Total" value={money(i.total)} sub={i.lines.length > 0 ? `${i.lines.length} ${i.lines.length === 1 ? "charge" : "charges"}` : "invoice amount"} />
         <StatCard label="Paid" value={money(i.paid)} sub={`${paidPct}% of total`} tone="success" />
         <StatCard label="Balance" value={bal > BALANCE_EPSILON ? money(bal) : money(0)} sub="outstanding" tone={bal > BALANCE_EPSILON ? "warning" : "success"} />
         <StatCard label="Due" value={fmtDate(i.due)} sub={dueBadge ?? "—"} />
@@ -85,24 +90,29 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="flex flex-col gap-4">
-          {/* Charges */}
+          {/* Charges — itemized goods (per SKU) + service charges */}
           <Card className="overflow-hidden p-0">
-            <div className="flex items-center gap-2.5 px-5 py-4"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Receipt className="h-4 w-4" /></span><div><div className="font-semibold">Charges</div><p className="text-[11px] text-muted-foreground">What this bill is composed of.</p></div></div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[440px] text-sm">
-                <thead><tr className="border-y bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground"><th className="px-5 py-2 font-medium">Description</th><th className="px-3 py-2 font-medium">Type</th><th className="px-5 py-2 text-right font-medium">Amount</th></tr></thead>
-                <tbody className="divide-y">
-                  <tr><td className="px-5 py-3 font-medium">{i.vendor} — invoice</td><td className="px-3 py-3 text-muted-foreground">{i.vendor_type}</td><td className="px-5 py-3 text-right font-mono">{money(i.total)}</td></tr>
-                </tbody>
-                <tfoot><tr className="border-t bg-muted/30 font-semibold"><td className="px-5 py-3" colSpan={2}>Total</td><td className="px-5 py-3 text-right font-mono">{money(i.total)}</td></tr></tfoot>
-              </table>
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Receipt className="h-4 w-4" /></span><div><div className="font-semibold">Charges</div><p className="text-[11px] text-muted-foreground">Goods (per SKU) + service charges on this bill.</p></div></div>
+              <button onClick={() => setChargesOpen(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3 w-3" /> Edit charges</button>
             </div>
-            <p className="px-5 py-3 text-[11px] text-muted-foreground">Line-item breakdown isn&apos;t tracked per charge — the invoice total is the source of truth.</p>
+            {i.lines.length === 0 ? (
+              <div className="border-t px-5 py-10 text-center">
+                <p className="text-sm text-muted-foreground">This bill isn&apos;t itemized yet.</p>
+                <button onClick={() => setChargesOpen(true)} className="mt-3 vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Itemize charges</button>
+              </div>
+            ) : (
+              <>
+                {i.order_id && <div className="px-5 pt-3"><BilledOverBanner lines={i.lines} orderId={i.order_id} /></div>}
+                <InvoiceLinesTable lines={i.lines} variant="page" />
+                <p className="px-5 py-3 text-[11px] text-muted-foreground"><span className="font-medium">Goods:</span> SKU &amp; quantity from Production · Ordered from Production, Billed from this invoice. <span className="font-medium">Services:</span> this invoice.</p>
+              </>
+            )}
           </Card>
 
           {/* Payments */}
           <Card className="overflow-hidden p-0">
-            <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-success/12 text-success"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Payments ({i.payments.length})</div><p className="text-[11px] text-muted-foreground">Every payment recorded against this bill, with the balance after each.</p></div></div>{bal > BALANCE_EPSILON && <button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><DollarSign className="h-3 w-3" /> Record</button>}</div>
+            <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-success/12 text-success"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Payments ({i.payments.length})</div><p className="text-[11px] text-muted-foreground">Every payment recorded against this bill, with the balance after each.</p></div></div><button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><DollarSign className="h-3 w-3" /> Record</button></div>
             {i.payments.length === 0 ? <p className="px-5 pb-4 text-[12px] text-muted-foreground">No payments recorded yet.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-sm">
@@ -171,6 +181,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
 
       {payOpen && <RecordPaymentModal invoice={i} invoices={[i]} onClose={() => setPayOpen(false)} />}
       {editOpen && <InvoiceModal title={`Edit ${i.id}`} invoice={i} orders={orders} vendors={vendors} onClose={() => setEditOpen(false)} onSubmit={(fd) => updateInvoice(i.id, fd)} />}
+      {chargesOpen && <EditChargesModal invoiceId={i.id} invoiceTotal={i.total ?? 0} vendorType={i.vendor_type} lines={i.lines} orderLines={orderLines} chargeTypes={chargeTypes} onClose={() => setChargesOpen(false)} />}
     </div>
   );
 }

@@ -245,6 +245,51 @@ export function invoiceAging(dueISO: string | null, balance: number, nowMs: numb
   return { days, label: "Upcoming", tone: "muted" };
 }
 
+// Vendor type derived from the vendor's own record: suppliers are always
+// "Supplier"; a partner's role is inferred from its free-text specialty.
+export type VendorType = "Supplier" | "Forwarder" | "Agent" | "Inspection";
+export function partnerVendorType(specialty: string | null | undefined): VendorType {
+  const s = (specialty || "").toLowerCase();
+  if (/agent|sourc/.test(s)) return "Agent";
+  if (/inspec|\baql\b|quality/.test(s)) return "Inspection";
+  return "Forwarder"; // freight / forwarding / express / logistics / sea / air
+}
+
+// ---------- Invoice lines / charges (V2 itemization) ----------
+export type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
+export type InvoiceLineKind = "goods" | "service" | "discount";
+export const INVOICE_LINE_KIND_LABEL: Record<string, string> = { goods: "Product lines", service: "Service charge", discount: "Discount" };
+// Sort lines for display: goods first (by position), then services, then discounts.
+const LINE_KIND_ORDER: Record<string, number> = { goods: 0, service: 1, discount: 2 };
+export function sortInvoiceLines<T extends Pick<InvoiceLineRow, "kind" | "position">>(lines: T[]): T[] {
+  return [...lines].sort((a, b) => (LINE_KIND_ORDER[a.kind] ?? 1) - (LINE_KIND_ORDER[b.kind] ?? 1) || (a.position ?? 0) - (b.position ?? 0));
+}
+// Roll up itemized lines: goods (per-SKU) vs services vs discounts, plus
+// billed-vs-ordered variance for goods (when lines link back to order_lines).
+export function invoiceLinesRollup(lines: InvoiceLineRow[]) {
+  const num = (v: number | null) => Number(v) || 0;
+  const goods = lines.filter((l) => l.kind === "goods");
+  const services = lines.filter((l) => l.kind === "service");
+  const discounts = lines.filter((l) => l.kind === "discount");
+  const sum = (a: InvoiceLineRow[]) => a.reduce((s, l) => s + num(l.billed), 0);
+  const goodsBilled = sum(goods);
+  // Variance compares only order-linked goods (a manual line has no ordered
+  // counterpart, so it must not inflate the billed-vs-ordered gap).
+  const orderLinked = goods.filter((l) => l.ordered_amount != null);
+  const goodsOrdered = orderLinked.reduce((s, l) => s + num(l.ordered_amount), 0);
+  const orderedGoodsBilled = orderLinked.reduce((s, l) => s + num(l.billed), 0);
+  const servicesBilled = sum(services);
+  const discountsBilled = sum(discounts); // negative
+  const itemized = goodsBilled + servicesBilled + discountsBilled;
+  return {
+    goods, services, discounts,
+    goodsBilled, goodsOrdered, orderedGoodsBilled, servicesBilled, discountsBilled, itemized,
+    variance: orderedGoodsBilled - goodsOrdered, // + = billed over the order
+    hasOrdered: orderLinked.length > 0,
+    count: lines.length,
+  };
+}
+
 // ---------- Structured supplier payment terms (T/T · L/C · O/A · D/P · D/A) ----------
 export type PayTermType = "TT" | "LC" | "OA" | "DP" | "DA";
 export type PayTermCfg = { type: PayTermType; depositPct?: number | null; netDays?: number | null };

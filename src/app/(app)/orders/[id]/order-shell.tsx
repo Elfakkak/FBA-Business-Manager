@@ -8,15 +8,19 @@ import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
+import { createInvoice, updateInvoice, deleteInvoice } from "../../invoices/actions";
+import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
+import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
-  type OrderRow, type InvoiceRow,
+  BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
+  type OrderRow, type PayTermCfg,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import {
   Factory, Route, Pencil, Check, Hammer, ClipboardCheck, Truck, Receipt,
   PackageCheck, LayoutDashboard, ChevronRight, ChevronLeft, AlertCircle, Plus, Trash2, Boxes,
-  Home, Activity, ArrowRight, Calendar,
+  Home, Activity, ArrowRight, Calendar, DollarSign, ShieldCheck,
 } from "lucide-react";
 
 // Top tab bar (matches the prototype: Home · Production · Shipping · Invoices · Landed cost)
@@ -54,9 +58,10 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
-  invoices: InvoiceRow[];
+  invoices: InvRow[];
+  vendors: VendorOpt[];
   lines: OrderLine[];
   variants: VariantOpt[];
   packagingItems: PkgItemOpt[];
@@ -103,7 +108,7 @@ export function OrderShell({ order, invoices, lines, variants, packagingItems, p
       {tab === "overview" ? (
         <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} />
       ) : tab === "invoices" ? (
-        <InvoicesPanel invoices={invoices} />
+        <InvoicesPanel order={order} invoices={invoices} vendors={vendors} />
       ) : tab === "shipping" ? (
         <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
@@ -242,30 +247,123 @@ function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, o
   );
 }
 
-function InvoicesPanel({ invoices }: { invoices: InvoiceRow[] }) {
+const fmtDue = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+const VENDOR_KIND: Record<string, string> = { Supplier: "Goods", Agent: "Service", Forwarder: "Freight", Inspection: "Inspection" };
+function invTermCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTermCfg["type"]) ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days }; }
+
+function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices: InvRow[]; vendors: VendorOpt[] }) {
+  const router = useRouter();
+  const [peek, setPeek] = useState<InvRow | null>(null);
+  const [payFor, setPayFor] = useState<InvRow | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [editing, setEditing] = useState<InvRow | null>(null);
+  const now = Date.now();
+
+  const total = invoices.reduce((s, i) => s + (i.total ?? 0), 0);
+  const paid = invoices.reduce((s, i) => s + (i.paid ?? 0), 0);
+  const balance = invoices.reduce((s, i) => s + invoiceBalance(i), 0);
+  const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+  const openInv = invoices.filter((i) => invoiceBalance(i) > BALANCE_EPSILON);
+  const nextDue = [...openInv].filter((i) => i.due).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""))[0] ?? null;
+  const proofMissing = invoices.reduce((n, i) => n + i.payments.filter((p) => p.status === "Cleared" && !p.proof_url).length, 0);
+  const partialCount = invoices.filter((i) => invoiceStatus(i) === "Partial").length;
+  const orderOpts = [{ id: order.id, title: order.title }];
+
   return (
-    <Card className="p-5">
-      <SectionTitle icon={Receipt} tone="warning" title="Invoices & payables" count={invoices.length} />
-      {invoices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No invoices on this order yet.</p>
-      ) : (
-        <ul className="divide-y">
-          {invoices.map((inv) => {
-            const bal = Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
-            return (
-              <li key={inv.id} className="flex items-center gap-3 py-2.5">
-                <Link href={`/invoices/${inv.id}`} className="font-mono text-[12px] font-semibold hover:text-primary">{inv.id}</Link>
-                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{inv.vendor_type}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{inv.vendor} · due {inv.due ?? "—"}</span>
-                <span className="tabular font-mono text-sm">{money(inv.total)}</span>
-                {bal > 0 ? <Badge tone="warning">{money(bal)} due</Badge> : <Badge tone="success">Paid</Badge>}
-                <Link href={`/invoices/${inv.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
-              </li>
-            );
-          })}
-        </ul>
+    <div className="space-y-5">
+      {/* Header + next action */}
+      <Card className="overflow-hidden p-0">
+        <div className="grid lg:grid-cols-[1.6fr_1fr]">
+          <div className="p-5">
+            <h2 className="text-2xl font-bold">Invoices</h2>
+            <p className="mt-1 max-w-[52ch] text-[13px] text-muted-foreground">Vendor bills, balances, payments, and proof of payment for this order.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {partialCount > 0 && <Badge tone="warning">{partialCount} partial</Badge>}
+              {proofMissing > 0 && <Badge tone="warning">{proofMissing} proof missing</Badge>}
+              {invoices.length === 0 && <Badge tone="muted">No invoices yet</Badge>}
+            </div>
+          </div>
+          {balance > BALANCE_EPSILON && (
+            <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
+              <div className="vy-kicker mb-1.5">Next action</div>
+              <div className="text-base font-bold">Settle balance due</div>
+              <p className="mb-3 mt-1 text-[12px] text-muted-foreground">{money(balance)} open across {openInv.length} {openInv.length === 1 ? "invoice" : "invoices"}{nextDue ? ` · next due ${fmtDue(nextDue.due)}` : ""}</p>
+              <button onClick={() => setPayFor(nextDue ?? openInv[0] ?? null)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Log payment</button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi label="Total invoiced" value={total > 0 ? money(total) : "—"} sub={`${invoices.length} ${invoices.length === 1 ? "invoice" : "invoices"}`} icon={Receipt} />
+        <Kpi label="Paid" value={money(paid)} sub={`${paidPct}% of total`} icon={Check} tone="success" progress={paidPct} />
+        <Kpi label="Balance due" value={money(balance)} sub={`${openInv.length} open`} icon={DollarSign} tone={balance > BALANCE_EPSILON ? "warning" : "success"} />
+        <Kpi label="Next due" value={nextDue ? fmtDue(nextDue.due) : "—"} sub={nextDue?.id ?? "All settled"} icon={Calendar} />
+        <Kpi label="Proof missing" value={String(proofMissing)} sub="Receipts needed" icon={ShieldCheck} tone={proofMissing ? "warning" : "success"} />
+      </div>
+
+      {/* Action banner */}
+      {balance > BALANCE_EPSILON && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>
+          <Badge tone="warning">Action needed</Badge>
+          <span><span className="font-semibold">{money(balance)} balance due before shipment release</span><span className="text-muted-foreground"> · Log the payment, then upload its receipt as proof.</span></span>
+          <button onClick={() => setPayFor(nextDue ?? openInv[0] ?? null)} className="vy-btn vy-btn--primary vy-btn--sm ml-auto inline-flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5" /> Log payment</button>
+        </div>
       )}
-    </Card>
+
+      {/* Invoice cards */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {invoices.map((inv) => {
+          const bal = invoiceBalance(inv); const st = invoiceStatus(inv); const a = invoiceAging(inv.due, bal, now);
+          const pct = (inv.total ?? 0) > 0 ? Math.round(((inv.paid ?? 0) / (inv.total ?? 1)) * 100) : 0;
+          const pm = inv.payments.filter((p) => p.status === "Cleared" && !p.proof_url).length;
+          return (
+            <Card key={inv.id} className="flex flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <button onClick={() => setPeek(inv)} className="font-mono text-[13px] font-bold hover:text-primary">{inv.id}</button>
+                  <div className="mt-0.5 truncate text-[12px] text-muted-foreground">{inv.vendor} · {inv.vendor_type} · {VENDOR_KIND[inv.vendor_type] ?? "—"}</div>
+                </div>
+                <Badge tone={INVOICE_STATUS_TONE[st]}>{st}</Badge>
+              </div>
+              <div className="mt-2"><span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{payTermSummary(invTermCfg(inv))}</span></div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", st === "Paid" ? "bg-success" : "bg-primary")} style={{ width: `${pct}%` }} /></div>
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground"><span>{pct}% paid</span><span>{inv.payments.length} {inv.payments.length === 1 ? "payment" : "payments"}</span></div>
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3">
+                <div><div className="vy-kicker">Total</div><div className="mt-0.5 font-mono text-[13px] font-semibold">{money(inv.total)}</div></div>
+                <div><div className="vy-kicker">Paid</div><div className="mt-0.5 font-mono text-[13px] font-semibold text-success">{money(inv.paid)}</div></div>
+                <div><div className="vy-kicker">Balance</div><div className="mt-0.5 font-mono text-[13px] font-semibold text-warning">{bal > BALANCE_EPSILON ? money(bal) : money(0)}</div></div>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t pt-2.5">
+                {pm > 0 ? <span className="inline-flex items-center gap-1 text-[12px] text-warning"><AlertCircle className="h-3.5 w-3.5" /> {pm} proof missing</span>
+                  : a.label !== "Settled" && inv.due ? <span className="text-[12px] text-muted-foreground">Due {fmtDue(inv.due)}</span> : <span className="text-[12px] text-muted-foreground">Settled</span>}
+                <button onClick={() => setPeek(inv)} className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">Quick view <ArrowRight className="h-3.5 w-3.5" /></button>
+              </div>
+            </Card>
+          );
+        })}
+
+        {/* New invoice card */}
+        <button onClick={() => setNewOpen(true)} className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-muted-foreground transition hover:border-primary/40 hover:text-foreground">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-muted"><Plus className="h-5 w-5" /></span>
+          <span className="text-[13px] font-semibold">New invoice</span>
+          <span className="text-[11px]">Add a vendor bill to this order</span>
+        </button>
+      </div>
+
+      <InvoiceQuickDrawer
+        open={!!peek}
+        invoice={peek}
+        onClose={() => setPeek(null)}
+        onRecord={() => peek && setPayFor(peek)}
+        onEdit={() => { if (peek) { setEditing(peek); setPeek(null); } }}
+        onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }}
+      />
+      {payFor && <RecordPaymentModal invoice={payFor} invoices={invoices} onClose={() => setPayFor(null)} />}
+      {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
+      {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
+    </div>
   );
 }
 

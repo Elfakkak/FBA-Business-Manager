@@ -648,6 +648,79 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_lines: {
+        Row: {
+          billed: number
+          charge_type_id: string | null
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          kind: string
+          order_line_id: string | null
+          ordered_amount: number | null
+          owner: string | null
+          position: number
+          qty: number | null
+          sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          billed?: number
+          charge_type_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id: string
+          kind?: string
+          order_line_id?: string | null
+          ordered_amount?: number | null
+          owner?: string | null
+          position?: number
+          qty?: number | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billed?: number
+          charge_type_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          kind?: string
+          order_line_id?: string | null
+          ordered_amount?: number | null
+          owner?: string | null
+          position?: number
+          qty?: number | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_lines_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_lines_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_payments: {
         Row: {
           amount: number
@@ -660,6 +733,7 @@ export type Database = {
           payment_date: string | null
           proof_kind: string | null
           proof_url: string | null
+          reference: string | null
           status: Database["public"]["Enums"]["payment_status"]
         }
         Insert: {
@@ -673,6 +747,7 @@ export type Database = {
           payment_date?: string | null
           proof_kind?: string | null
           proof_url?: string | null
+          reference?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Update: {
@@ -686,6 +761,7 @@ export type Database = {
           payment_date?: string | null
           proof_kind?: string | null
           proof_url?: string | null
+          reference?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Relationships: [

@@ -109,12 +109,71 @@ export async function recordPayment(invoiceId: string, form: FormData): Promise<
     id: randomUUID(), invoice_id: invoiceId, amount,
     payment_date: txt(form.get("payment_date")) ?? new Date().toISOString().slice(0, 10),
     method: txt(form.get("method")), status: asPayStatus(String(form.get("status") ?? "Cleared")),
+    reference: txt(form.get("reference")),
     proof_kind: proofUrl ? "receipt" : null, proof_url: proofUrl,
   });
   if (pe) return { ok: false, error: pe.message };
   const { error: ie } = await supabase.from("invoices").update({ paid: (inv.paid ?? 0) + amount }).eq("id", invoiceId);
   if (ie) return { ok: false, error: ie.message };
   revalidatePath("/invoices");
+  return { ok: true, id: invoiceId };
+}
+
+// ---- Invoice lines / charges (V2 itemization) --------------------------------
+// One goods/service/discount line on an invoice. Goods may link to an order_line
+// (carries the ORDERED snapshot for billed-vs-ordered variance); service/discount
+// reference the charge_types catalog. `billed` is negative for discounts.
+export type InvoiceLineInput = {
+  kind: "goods" | "service" | "discount";
+  order_line_id?: string | null;
+  sku?: string | null;
+  description: string;
+  qty?: number | null;
+  ordered_amount?: number | null;
+  charge_type_id?: string | null;
+  owner?: string | null;
+  billed: number;
+};
+
+// Replace-all save from the Edit charges modal. Does NOT touch invoice.total —
+// the total stays the source of truth; the UI surfaces any itemized-vs-total gap.
+export async function saveInvoiceLines(invoiceId: string, lines: InvoiceLineInput[]): Promise<Result> {
+  const supabase = await createClient();
+  const { data: inv } = await supabase.from("invoices").select("order_id").eq("id", invoiceId).maybeSingle();
+  if (!inv) return { ok: false, error: "Invoice not found." };
+
+  // Snapshot existing line ids so we can insert-first, then delete the old set.
+  // (Insert-first means a failed insert leaves the prior lines intact — no data
+  //  loss; the worst case on a failed delete is harmless duplicates.)
+  const { data: existing } = await supabase.from("invoice_lines").select("id").eq("invoice_id", invoiceId);
+  const oldIds = ((existing ?? []) as { id: string }[]).map((r) => r.id);
+
+  const rows = (lines ?? [])
+    .filter((l) => (l.description ?? "").trim() !== "" || (Number(l.billed) || 0) !== 0)
+    .map((l, idx) => ({
+      invoice_id: invoiceId,
+      kind: l.kind ?? "goods",
+      position: idx,
+      order_line_id: l.order_line_id ?? null,
+      sku: txt(l.sku ?? null),
+      description: String(l.description ?? "").trim(),
+      qty: l.qty == null ? null : Number(l.qty),
+      ordered_amount: l.ordered_amount == null ? null : Number(l.ordered_amount),
+      charge_type_id: l.charge_type_id ?? null,
+      owner: txt(l.owner ?? null),
+      billed: Number(l.billed) || 0,
+    }));
+  if (rows.length) {
+    const { error: ins } = await supabase.from("invoice_lines").insert(rows);
+    if (ins) return { ok: false, error: ins.message };
+  }
+  if (oldIds.length) {
+    const { error: del } = await supabase.from("invoice_lines").delete().in("id", oldIds);
+    if (del) return { ok: false, error: del.message };
+  }
+  revalidatePath("/invoices");
+  revalidatePath(`/invoices/${invoiceId}`);
+  if (inv.order_id) revalidatePath(`/orders/${inv.order_id}`);
   return { ok: true, id: invoiceId };
 }
 
