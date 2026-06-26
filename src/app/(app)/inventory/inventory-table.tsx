@@ -11,7 +11,7 @@ import { setReorderPoint, setFavorite } from "./actions";
 import { cn } from "@/lib/utils";
 import {
   Boxes, Package, Truck, AlertCircle, Info, ChevronDown, ChevronRight,
-  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star, Copy, Layers,
+  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star, StarHalf, Copy, Layers,
 } from "lucide-react";
 
 export type InvRow = {
@@ -134,6 +134,11 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
 
   const saveReorder = (id: string, v: string) => start(async () => { await setReorderPoint(id, v === "" ? null : Number(v)); router.refresh(); });
   const toggleFav = (id: string, v: boolean) => start(async () => { await setFavorite(id, v); router.refresh(); });
+  // parent star = select-all: favorite/unfavorite every variant under the family
+  const toggleFamilyFav = (members: InvRow[], makeFav: boolean) => start(async () => {
+    await Promise.all(members.filter((m) => m.favorite !== makeFav).map((m) => setFavorite(m.id, makeFav)));
+    router.refresh();
+  });
 
   const COLS = 11;
   return (
@@ -249,7 +254,9 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                   const gReserved = members.reduce((s, m) => s + m.reserved, 0);
                   const gAvail = members.reduce((s, m) => s + m.available, 0);
                   const gIn = members.reduce((s, m) => s + m.inbound, 0);
-                  const favd = members.some((m) => m.favorite);
+                  const favCount = members.filter((m) => m.favorite).length;
+                  const allFav = favCount === members.length;
+                  const someFav = favCount > 0 && !allFav;
                   const img = members.find((m) => m.image)?.image ?? null;
                   return (
                     <FragmentGroup key={fid}>
@@ -262,7 +269,9 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                             <span className="relative inline-grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded border bg-muted text-muted-foreground">
                               {img ? <Image src={img} alt="" fill sizes="28px" className="object-cover" /> : <Package className="h-3.5 w-3.5" />}
                             </span>
-                            {favd && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                            <button onClick={(e) => { e.stopPropagation(); toggleFamilyFav(members, !allFav); }} className="shrink-0" title={allFav ? "Unfavorite all variants" : "Favorite all variants"} aria-label="Toggle favorite for all variants">
+                              {allFav ? <Star className="h-3.5 w-3.5 fill-warning text-warning" /> : someFav ? <StarHalf className="h-3.5 w-3.5 fill-warning text-warning" /> : <Star className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-warning" />}
+                            </button>
                             <Link href={`/catalog/${fid}`} onClick={(e) => e.stopPropagation()} className="max-w-[280px] truncate font-semibold hover:text-primary" title={members[0].family}>{members[0].family}</Link>
                             <span className="shrink-0 text-muted-foreground">{members.length} SKUs</span>
                           </div>
