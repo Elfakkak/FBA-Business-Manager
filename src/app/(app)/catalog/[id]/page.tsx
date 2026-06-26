@@ -15,7 +15,7 @@ import { AmazonDetailsCard } from "./amazon-details";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp, Wallet, Warehouse, Boxes, FileText, History,
-  ShoppingCart, ImageIcon, Truck,
+  ShoppingCart, ImageIcon, Truck, Layers,
 } from "lucide-react";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -63,10 +63,17 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     .eq("family_id", id);
   type LineJoin = { order_id: string; qty: number; unit_cost: number | null; orders: { title: string; status: string; placed_on: string | null } | null };
   const lines = (lineRows ?? []) as unknown as LineJoin[];
-  const costHistory = lines
-    .filter((l) => l.unit_cost != null)
-    .map((l) => ({ date: l.orders?.placed_on ?? null, cost: l.unit_cost as number, order: l.order_id }))
-    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+  // Product cost history — the ACTUAL unit price paid, sourced from invoices (provenance).
+  const { data: vchRows } = await supabase
+    .from("variant_cost_history")
+    .select("unit_cost, qty, recorded_at, invoice_id, order_id, invoices(vendor), orders(title)")
+    .eq("family_id", id).eq("kind", "product")
+    .order("recorded_at", { ascending: true });
+  type VCH = { unit_cost: number; qty: number | null; recorded_at: string; invoice_id: string | null; order_id: string | null; invoices: { vendor: string } | null; orders: { title: string } | null };
+  const costHistory = ((vchRows ?? []) as unknown as VCH[]).map((h) => ({
+    date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, qty: h.qty,
+    invoiceId: h.invoice_id, orderId: h.order_id, vendor: h.invoices?.vendor ?? null,
+  }));
   const orderMap = new Map<string, { id: string; title: string; status: string; placedOn: string | null; qty: number }>();
   for (const l of lines) {
     const cur = orderMap.get(l.order_id) ?? { id: l.order_id, title: l.orders?.title ?? l.order_id, status: l.orders?.status ?? "draft", placedOn: l.orders?.placed_on ?? null, qty: 0 };
@@ -342,42 +349,52 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {/* tech pack */}
       <TechPackCard familyId={id} packs={techPacks ?? []} />
 
-      {/* cost + order history */}
+      {/* cost provenance: product cost (from invoices) + landed cost (from closeout, later) */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <SectionTitle icon={History} tone="muted" title="Cost history" count={costHistory.length || undefined} />
+          <SectionTitle icon={History} tone="brand" title="Product cost history" sub="Actual unit price paid — sourced from your invoices." count={costHistory.length || undefined} />
           {costHistory.length === 0 ? (
-            <EmptyBlock>No cost history yet — it builds as you place orders for this product.</EmptyBlock>
+            <EmptyBlock>No cost history yet — it builds as you record invoices for this product&apos;s SKUs.</EmptyBlock>
           ) : (
-            <ul className="divide-y">
-              {costHistory.map((c, i) => (
-                <li key={i} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="w-24 text-[12px] text-muted-foreground">{c.date ?? "—"}</span>
-                  <span className="font-mono text-[12px] text-muted-foreground">{c.order}</span>
-                  <span className={cn("tabular ml-auto font-mono font-semibold", i === costHistory.length - 1 && "text-primary")}>{money(c.cost)}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="divide-y">
+                {costHistory.map((c, i) => (
+                  <li key={i} className="flex items-center gap-2.5 py-2 text-sm">
+                    <span className="w-[88px] shrink-0 text-[12px] text-muted-foreground">{c.date ?? "—"}</span>
+                    {c.invoiceId ? <Link href={`/invoices/${c.invoiceId}`} className="font-mono text-[12px] font-medium hover:text-primary" title={c.vendor ?? undefined}>{c.invoiceId}</Link> : <span className="text-[12px] text-muted-foreground">manual</span>}
+                    {c.orderId && <Link href={`/orders/${c.orderId}`} className="hidden truncate font-mono text-[11px] text-muted-foreground hover:text-primary md:inline">{c.orderId}</Link>}
+                    <span className={cn("tabular ml-auto shrink-0 font-mono font-semibold", i === costHistory.length - 1 && "text-primary")}>{money(c.cost)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] text-muted-foreground">Each price traces to the invoice it was billed on — the truthful source. Latest = the current last cost.</p>
+            </>
           )}
         </Card>
         <Card className="p-5">
-          <SectionTitle icon={ShoppingCart} tone="muted" title="Order history" count={orderHistory.length || undefined} />
-          {orderHistory.length === 0 ? (
-            <EmptyBlock>Not ordered yet — orders that include this product will appear here.</EmptyBlock>
-          ) : (
-            <ul className="divide-y">
-              {orderHistory.map((o) => (
-                <li key={o.id} className="flex items-center gap-3 py-2">
-                  <Link href={`/orders/${o.id}`} className="font-mono text-[12px] font-semibold hover:text-primary">{o.id}</Link>
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{o.title}</span>
-                  <span className="tabular font-mono text-[12px]">{num(o.qty)} u</span>
-                  <Badge tone={ORDER_STATUS_TONE[o.status] ?? "muted"}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
+          <SectionTitle icon={Layers} tone="muted" title="Landed cost history" sub="All-in cost per unit (goods + freight + duties), locked at closeout." />
+          <EmptyBlock>Lands here from the order&apos;s Landed cost section (coming soon) — the all-in cost per unit, not just the supplier price.</EmptyBlock>
         </Card>
       </div>
+
+      {/* order history */}
+      <Card className="p-5">
+        <SectionTitle icon={ShoppingCart} tone="muted" title="Order history" count={orderHistory.length || undefined} />
+        {orderHistory.length === 0 ? (
+          <EmptyBlock>Not ordered yet — orders that include this product will appear here.</EmptyBlock>
+        ) : (
+          <ul className="divide-y">
+            {orderHistory.map((o) => (
+              <li key={o.id} className="flex items-center gap-3 py-2">
+                <Link href={`/orders/${o.id}`} className="font-mono text-[12px] font-semibold hover:text-primary">{o.id}</Link>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{o.title}</span>
+                <span className="tabular font-mono text-[12px]">{num(o.qty)} u</span>
+                <Badge tone={ORDER_STATUS_TONE[o.status] ?? "muted"}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

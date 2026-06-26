@@ -1820,6 +1820,83 @@ export type Database = {
           },
         ]
       }
+      variant_cost_history: {
+        Row: {
+          billed: number | null
+          created_at: string
+          currency: string
+          family_id: string | null
+          id: string
+          invoice_id: string | null
+          kind: string
+          order_id: string | null
+          qty: number | null
+          recorded_at: string
+          sku: string | null
+          unit_cost: number
+          variant_id: string | null
+        }
+        Insert: {
+          billed?: number | null
+          created_at?: string
+          currency?: string
+          family_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          kind?: string
+          order_id?: string | null
+          qty?: number | null
+          recorded_at?: string
+          sku?: string | null
+          unit_cost: number
+          variant_id?: string | null
+        }
+        Update: {
+          billed?: number | null
+          created_at?: string
+          currency?: string
+          family_id?: string | null
+          id?: string
+          invoice_id?: string | null
+          kind?: string
+          order_id?: string | null
+          qty?: number | null
+          recorded_at?: string
+          sku?: string | null
+          unit_cost?: number
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "variant_cost_history_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "variant_cost_history_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "variant_cost_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "variant_cost_history_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_uid: string | null

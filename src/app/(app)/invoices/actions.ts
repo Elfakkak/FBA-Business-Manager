@@ -139,7 +139,7 @@ export type InvoiceLineInput = {
 // the total stays the source of truth; the UI surfaces any itemized-vs-total gap.
 export async function saveInvoiceLines(invoiceId: string, lines: InvoiceLineInput[]): Promise<Result> {
   const supabase = await createClient();
-  const { data: inv } = await supabase.from("invoices").select("order_id").eq("id", invoiceId).maybeSingle();
+  const { data: inv } = await supabase.from("invoices").select("order_id, issued").eq("id", invoiceId).maybeSingle();
   if (!inv) return { ok: false, error: "Invoice not found." };
 
   // Snapshot existing line ids so we can insert-first, then delete the old set.
@@ -172,13 +172,30 @@ export async function saveInvoiceLines(invoiceId: string, lines: InvoiceLineInpu
     if (del) return { ok: false, error: del.message };
   }
 
-  // Feedback loop: the invoice is the ACTUAL price paid, so update each goods
-  // SKU's catalog last cost (the USD billed unit price) — "latest billed wins".
-  // This is what seeds the next order's reference price.
-  for (const r of rows) {
-    if (r.kind !== "goods" || !r.sku || !r.qty || r.qty <= 0 || !(r.billed > 0)) continue;
-    const unit = Math.round((r.billed / r.qty) * 100) / 100;
-    await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", r.sku);
+  // Feedback loop + PROVENANCE: the invoice is the ACTUAL price paid. For each
+  // goods line we (a) update the catalog last cost (denormalized cache) and
+  // (b) append a cost-history row that traces back to THIS invoice/order — so the
+  // product page can show "cost $X · from PI-… on ORD-… · date" (a truthful source).
+  const goods = rows.filter((r) => r.kind === "goods" && r.sku && Number(r.qty) > 0 && r.billed > 0);
+  if (goods.length) {
+    const skus = [...new Set(goods.map((r) => r.sku as string))];
+    const { data: vs } = await supabase.from("product_variants").select("id, sku, family_id").in("sku", skus);
+    const vmap = new Map(((vs ?? []) as { id: string; sku: string; family_id: string | null }[]).map((v) => [v.sku, v]));
+    // idempotent: replace this invoice's product cost-history (re-saving doesn't duplicate)
+    await supabase.from("variant_cost_history").delete().eq("invoice_id", invoiceId).eq("kind", "product");
+    const hist: Database["public"]["Tables"]["variant_cost_history"]["Insert"][] = [];
+    for (const r of goods) {
+      const unit = Math.round((r.billed / Number(r.qty)) * 100) / 100;
+      await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", r.sku!);
+      const v = vmap.get(r.sku!);
+      hist.push({
+        variant_id: v?.id ?? null, sku: r.sku, family_id: v?.family_id ?? null,
+        kind: "product", unit_cost: unit, currency: "USD", qty: Number(r.qty), billed: r.billed,
+        invoice_id: invoiceId, order_id: inv.order_id ?? null,
+        recorded_at: inv.issued ?? new Date().toISOString(),
+      });
+    }
+    if (hist.length) await supabase.from("variant_cost_history").insert(hist);
   }
 
   revalidatePath("/invoices");
