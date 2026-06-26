@@ -192,6 +192,25 @@ export async function deleteOrderCost(id: string, orderId: string): Promise<Resu
   return { ok: true };
 }
 
+// ---- Production supporting files (one file per slot, replace-on-upload) -------
+export async function saveOrderFile(orderId: string, slot: string, url: string, name: string | null): Promise<Result> {
+  if (!url) return { ok: false, error: "Missing file." };
+  const supabase = await createClient();
+  await supabase.from("order_files").delete().eq("order_id", orderId).eq("slot", slot);
+  const { error } = await supabase.from("order_files").insert({ order_id: orderId, slot, url, name });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+export async function deleteOrderFile(orderId: string, slot: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_files").delete().eq("order_id", orderId).eq("slot", slot);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
 export async function setOrderStatus(id: string, status: string): Promise<Result> {
   if (!isValidStatus(status)) return { ok: false, error: "Invalid status." };
   const supabase = await createClient();

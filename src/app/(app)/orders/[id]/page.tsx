@@ -10,7 +10,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }, { data: brand }] = await Promise.all([
+  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }, { data: brand }, { data: orderFiles }, { data: allMoves }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
@@ -24,6 +24,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("partners").select("name, specialty").order("name"),
     supabase.from("brand").select("name").maybeSingle(),
+    supabase.from("order_files").select("slot, name, url").eq("order_id", id),
+    supabase.from("packaging_moves").select("item_id, qty, type"),
   ]);
   const invList = (invoices ?? []) as InvoiceRow[];
   const r = orderRollup(id, invList);
@@ -70,6 +72,15 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     fba_stock: v.fba_stock, reorder_point: v.reorder_point, status: v.status,
   }));
 
+  // packaging on-hand (global inventory the order draws from): net of all moves
+  const onHand = new Map<string, number>();
+  for (const m of (allMoves ?? []) as { item_id: string; qty: number; type: string }[]) {
+    onHand.set(m.item_id, (onHand.get(m.item_id) ?? 0) + (m.type === "consume" ? -1 : 1) * (m.qty ?? 0));
+  }
+  const packagingOnHand = ((pkgItems ?? []) as { id: string; name: string; kind: string; unit_cost: number }[])
+    .map((it) => ({ id: it.id, name: it.name, kind: it.kind, unitCost: it.unit_cost, onHand: onHand.get(it.id) ?? 0 }))
+    .filter((x) => x.onHand > 0);
+
   // packaging consumed by this order, joined to item names/costs
   const pkgById = new Map(((pkgItems ?? []) as { id: string; name: string; unit_cost: number }[]).map((p) => [p.id, p]));
   const packaging = ((pkgMoves ?? []) as { id: string; item_id: string; qty: number }[]).map((m) => {
@@ -86,6 +97,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       costs={(orderCosts ?? []) as OrderCostRow[]}
       chargeTypes={(chargeTypes ?? []) as { id: string; label: string; owner: string }[]}
       companyName={(brand as { name: string } | null)?.name ?? "Your Company"}
+      orderFiles={(orderFiles ?? []) as { slot: string; name: string | null; url: string }[]}
+      packagingOnHand={packagingOnHand}
       variants={catalogVariants}
       packagingItems={(pkgItems ?? []) as { id: string; name: string; kind: string; unit_cost: number }[]}
       packaging={packaging}
