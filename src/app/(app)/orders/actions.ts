@@ -76,6 +76,30 @@ export async function addOrderLine(orderId: string, form: FormData): Promise<Res
   return { ok: true };
 }
 
+// Batch-add several catalog variants as production lines (the Add SKUs browser).
+export async function addOrderLines(orderId: string, lines: { variant_id: string; qty: number; unit_cost: number | null; unit_cny_ref: number | null }[]): Promise<Result> {
+  const picked = (lines ?? []).filter((l) => l.variant_id);
+  if (!picked.length) return { ok: false, error: "Pick at least one SKU." };
+  const supabase = await createClient();
+  const { data: vs } = await supabase.from("product_variants").select("id, sku, family_id, name, last_cost_usd, last_cost_rmb").in("id", picked.map((l) => l.variant_id));
+  const vmap = new Map(((vs ?? []) as { id: string; sku: string; family_id: string | null; name: string; last_cost_usd: number | null; last_cost_rmb: number | null }[]).map((v) => [v.id, v]));
+  const rows = picked.map((l) => {
+    const v = vmap.get(l.variant_id);
+    return {
+      order_id: orderId, variant_id: l.variant_id, family_id: v?.family_id ?? null,
+      sku: v?.sku ?? null, product_name: v?.name ?? null,
+      qty: Math.max(0, Math.round(Number(l.qty) || 0)),
+      unit_cost: l.unit_cost ?? v?.last_cost_usd ?? null,
+      unit_cny_ref: l.unit_cny_ref ?? v?.last_cost_rmb ?? null,
+    };
+  }).filter((r) => r.variant_id);
+  const { error } = await supabase.from("order_lines").insert(rows);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  return { ok: true };
+}
+
 // Inline-edit a production line (qty / $ invoice cost / ¥ reference cost).
 export async function updateOrderLine(id: string, orderId: string, patch: { qty?: number; unit_cost?: number | null; unit_cny_ref?: number | null }): Promise<Result> {
   const supabase = await createClient();
@@ -137,6 +161,10 @@ export async function addOrderCost(orderId: string, form: FormData): Promise<Res
     charge_type_id: costTxt(form.get("charge_type_id")),
     qty: costNum(form.get("qty"), 1),
     amount: costNum(form.get("amount")),
+    currency: costTxt(form.get("currency")) ?? "USD",
+    treatment: costTxt(form.get("treatment")) ?? "inventoriable",
+    vendor: costTxt(form.get("vendor")),
+    notes: costTxt(form.get("notes")),
     coverage: costTxt(form.get("coverage")) ?? "Uncovered",
     basis: costTxt(form.get("basis")) ?? "value",
   });

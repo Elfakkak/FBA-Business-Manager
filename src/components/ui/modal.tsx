@@ -9,13 +9,16 @@ export function Modal({
   open,
   onClose,
   title,
+  size = "default",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  size?: "default" | "lg" | "xl";
   children: React.ReactNode;
 }) {
+  const maxW = size === "xl" ? "max-w-4xl" : size === "lg" ? "max-w-2xl" : "max-w-lg";
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -37,7 +40,7 @@ export function Modal({
       {/* Solid (non-translucent) panel, capped height with internal scroll so
           the header + footer buttons never clip off-screen. */}
       <div
-        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-xl border"
+        className={cn("relative flex w-full flex-col overflow-hidden rounded-xl border", maxW)}
         style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)", maxHeight: "90vh" }}
       >
         <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">

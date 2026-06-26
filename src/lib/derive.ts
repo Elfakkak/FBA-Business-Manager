@@ -297,24 +297,35 @@ export const PROD_LINE_TYPES = ["Agent fee", "Cartons", "Inland freight", "Inspe
 export const PROD_BASES = ["value", "units"] as const;
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id?: string | null; qty: number; unit_cost: number | null; unit_cny_ref?: number | null };
+type ProdCost = Pick<OrderCostRow, "amount" | "basis" | "currency" | "treatment">;
 
-// Per-SKU landed-cost estimate: spread the non-product cost pool over the goods
-// lines by each cost's basis (per-unit or by line value), then landed = (line +
-// allocated)/qty. Duties are out of scope here, so it's an estimate ("est").
-export function productionLanded(lines: ProdLine[], costs: Pick<OrderCostRow, "amount" | "basis">[]) {
+// Reference FX so a CNY-entered cost can be folded into a USD landed estimate.
+export const CNY_PER_USD = 7.2;
+export function costUsd(c: { amount: number | null; currency?: string | null }): number {
+  const a = Number(c.amount) || 0;
+  return c.currency === "CNY" ? a / CNY_PER_USD : a;
+}
+
+// Per-SKU landed-cost estimate: spread the INVENTORIABLE non-product cost pool
+// (period expenses stay out of COGS) over the goods lines by each cost's basis
+// (per-unit or by line value), then landed = (line + allocated)/qty. Costs are
+// normalized to USD. Duties are out of scope here, so it's an estimate ("est").
+export function productionLanded(lines: ProdLine[], costs: ProdCost[]) {
   const num = (v: number | null | undefined) => Number(v) || 0;
+  const inv = costs.filter((c) => c.treatment !== "period");
   const totalUnits = lines.reduce((s, l) => s + num(l.qty), 0);
   const totalGoods = lines.reduce((s, l) => s + num(l.qty) * num(l.unit_cost), 0);
-  const costPool = costs.reduce((s, c) => s + num(c.amount), 0);
+  const costPool = inv.reduce((s, c) => s + costUsd(c), 0);
   const withLanded = lines.map((l) => {
     const qty = num(l.qty);
     const line = qty * num(l.unit_cost);
     let alloc = 0;
-    for (const c of costs) {
+    for (const c of inv) {
+      const amt = costUsd(c);
       // value-basis falls back to per-unit when goods aren't priced yet, so the
       // cost still lands somewhere instead of silently vanishing.
-      if (c.basis === "units" || totalGoods <= 0) alloc += totalUnits ? (num(c.amount) * qty) / totalUnits : 0;
-      else alloc += (num(c.amount) * line) / totalGoods;
+      if (c.basis === "units" || totalGoods <= 0) alloc += totalUnits ? (amt * qty) / totalUnits : 0;
+      else alloc += (amt * line) / totalGoods;
     }
     return { ...l, line, landedUnit: qty ? (line + alloc) / qty : 0 };
   });
