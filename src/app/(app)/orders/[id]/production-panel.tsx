@@ -37,6 +37,11 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
   const landedById = useMemo(() => new Map(roll.withLanded.map((l) => [l.id, l])), [roll]);
   const skuCount = lines.length;
   const goodsMissing = lines.filter((l) => !l.unit_cost).length;
+  // readiness = unpriced lines + missing REQUIRED supporting files (WIP/sample photos)
+  const haveSlots = new Set(orderFiles.map((f) => f.slot));
+  const filesMissing = FILE_SLOTS.filter((s) => s.required && !haveSlots.has(s.slot)).length;
+  const readinessGaps = goodsMissing + filesMissing;
+  const readinessBits = [goodsMissing > 0 ? `${goodsMissing} unpriced` : null, filesMissing > 0 ? `${filesMissing} file${filesMissing === 1 ? "" : "s"} missing` : null].filter(Boolean).join(" · ");
   const statusLabel = ORDER_STATUS_LABEL[order.status] ?? order.status;
 
   // group production lines by product (family), preserving order
@@ -61,11 +66,14 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
           <Badge tone="muted">{skuCount} {skuCount === 1 ? "variant" : "variants"}</Badge>
           <Badge tone="muted">{num(roll.totalUnits)} pcs</Badge>
           {goodsMissing > 0 && <Badge tone="warning">{goodsMissing} unpriced</Badge>}
+          {filesMissing > 0 && <Badge tone="warning">{filesMissing} file{filesMissing === 1 ? "" : "s"} missing</Badge>}
         </>}
         nextAction={{
-          severity: goodsMissing > 0 ? "warning" : undefined,
-          headline: goodsMissing > 0 ? "Close readiness gaps" : "Generate the PO",
-          detail: goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} have no reference price yet — add a last-known price to quote the PO. The actual price is recorded on the invoice.` : "Scope is priced — ready to generate the purchase order.",
+          severity: readinessGaps > 0 ? "warning" : undefined,
+          headline: readinessGaps > 0 ? "Close readiness gaps" : "Generate the PO",
+          detail: readinessGaps > 0
+            ? `${readinessBits} — ${goodsMissing > 0 ? "add a last-known reference price (actual comes from the invoice)" : "upload the required files"}, then generate the PO.`
+            : "Scope is priced and files are in — ready to generate the purchase order.",
           cta: <button type="button" onClick={() => setShowPO(true)} disabled={lines.length === 0} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5 disabled:opacity-50"><FileText className="h-4 w-4" /> Generate PO</button>,
         }}
       />
@@ -73,7 +81,7 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
       {/* KPIs */}
       <KpiStrip cols={3}>
         <Kpi label="Production scope" value={`${skuCount} ${skuCount === 1 ? "SKU" : "SKUs"}`} sub={`${num(roll.totalUnits)} pcs · ${money(roll.totalGoods)} product cost`} icon={Package} />
-        <Kpi label="Readiness" value={goodsMissing > 0 ? `${goodsMissing} missing` : "Ready"} sub={goodsMissing > 0 ? "lines need a reference price" : "all lines priced"} icon={ClipboardCheck} tone={goodsMissing > 0 ? "warning" : "success"} />
+        <Kpi label="Readiness" value={readinessGaps > 0 ? `${readinessGaps} missing` : "Ready"} sub={readinessGaps > 0 ? readinessBits : "priced · files in"} icon={ClipboardCheck} tone={readinessGaps > 0 ? "warning" : "success"} />
         <Kpi label="Factory clock" value={statusLabel} sub={order.placed_on ? `Placed ${order.placed_on}` : "Not placed yet"} icon={Activity} />
       </KpiStrip>
 
