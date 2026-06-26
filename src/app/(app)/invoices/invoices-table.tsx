@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createInvoice, updateInvoice, deleteInvoice, recordPayment, deletePayment } from "./actions";
@@ -104,9 +105,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search invoice, vendor, order" className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <select value={vtype} onChange={(e) => setVtype(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="All">All</option>{VENDOR_TYPES.map((v) => <option key={v}>{v}</option>)}
-          </select>
+          <Select value={vtype} onChange={setVtype} className="w-44" options={[{ value: "All", label: "All types" }, ...VENDOR_TYPES.map((v) => ({ value: v, label: v }))]} />
         </div>
         <div className="mt-2.5 flex flex-wrap gap-1">{STATUS_CHIPS.map((c) => <button key={c} onClick={() => setStatus(c)} className={cn("vy-chip", status === c && "is-active")}>{c}</button>)}</div>
       </Card>
@@ -246,6 +245,7 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [invId, setInvId] = useState(invoice?.id ?? "");
+  const [payStatus, setPayStatus] = useState("Cleared");
   const open = invoices.filter((i) => invoiceBalance(i) > BALANCE_EPSILON);
   const target = invoices.find((i) => i.id === invId) ?? null;
 
@@ -261,16 +261,14 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
     <Modal open onClose={onClose} title="Record payment">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Invoice">
-          <select value={invId} onChange={(e) => setInvId(e.target.value)} className={inputCls}>
-            <option value="">Pick an invoice…</option>
-            {open.map((i) => <option key={i.id} value={i.id}>{i.id} — {i.vendor} · bal {money(invoiceBalance(i))}</option>)}
-          </select>
+          <Select value={invId} onChange={setInvId} placeholder="Pick an invoice…" searchable
+            options={open.map((i) => ({ value: i.id, label: `${i.id} — ${i.vendor}`, sub: `balance ${money(invoiceBalance(i))}` }))} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amount (USD)"><input name="amount" type="number" step="0.01" required autoFocus className={inputCls} defaultValue={target ? invoiceBalance(target).toFixed(2) : ""} /></Field>
           <Field label="Date"><input name="payment_date" type="date" className={inputCls} defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
           <Field label="Method"><input name="method" className={inputCls} placeholder="Mercury / Wire / …" /></Field>
-          <Field label="Status"><select name="status" className={inputCls} defaultValue="Cleared">{["Cleared", "Scheduled", "Pending"].map((s) => <option key={s}>{s}</option>)}</select></Field>
+          <Field label="Status"><Select name="status" value={payStatus} onChange={setPayStatus} options={["Cleared", "Scheduled", "Pending"].map((s) => ({ value: s, label: s }))} /></Field>
         </div>
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Record payment"}</PrimaryButton></div>
@@ -287,6 +285,8 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const i = invoice;
+  const [vType, setVType] = useState<string>(i?.vendor_type ?? "Supplier");
+  const [orderId, setOrderId] = useState<string>(i?.order_id ?? "");
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -298,8 +298,8 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Vendor"><input name="vendor" list="vendor-list" required defaultValue={i?.vendor ?? ""} className={inputCls} /><datalist id="vendor-list">{vendors.map((v) => <option key={v} value={v} />)}</datalist></Field>
-          <Field label="Type"><select name="vendor_type" defaultValue={i?.vendor_type ?? "Supplier"} className={inputCls}>{VENDOR_TYPES.map((v) => <option key={v}>{v}</option>)}</select></Field>
-          <Field label="Order"><select name="order_id" defaultValue={i?.order_id ?? ""} className={inputCls}><option value="">— none —</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.id} — {o.title}</option>)}</select></Field>
+          <Field label="Type"><Select name="vendor_type" value={vType} onChange={setVType} options={VENDOR_TYPES.map((v) => ({ value: v, label: v }))} /></Field>
+          <Field label="Order"><Select name="order_id" value={orderId} onChange={setOrderId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>
           <Field label="Total (USD)"><input name="total" type="number" step="0.01" required defaultValue={i?.total ?? ""} className={inputCls} /></Field>
           <Field label="Issued"><input name="issued" type="date" defaultValue={i?.issued ?? ""} className={inputCls} /></Field>
           <Field label="Due"><input name="due" type="date" defaultValue={i?.due ?? ""} className={inputCls} /></Field>

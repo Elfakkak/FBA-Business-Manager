@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { num, money, type ShipmentRow, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, SHIPMENT_MOVING, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived } from "./actions";
@@ -111,8 +112,8 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipment, order, supplier, forwarder, BOL" className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <select value={mode} onChange={(e) => setMode(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">{modes.map((m) => <option key={m}>{m}</option>)}</select>
-          <select value={forwarder} onChange={(e) => setForwarder(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">{fwds.map((f) => <option key={f}>{f}</option>)}</select>
+          <Select value={mode} onChange={setMode} className="w-36" options={modes.map((m) => ({ value: m, label: m }))} />
+          <Select value={forwarder} onChange={setForwarder} className="w-44" options={fwds.map((f) => ({ value: f, label: f }))} />
         </div>
         <div className="mt-2.5 flex flex-wrap gap-1">
           {STAGE_CHIPS.map((c) => <button key={c} onClick={() => setStage(c)} className={cn("vy-chip", stage === c && "is-active")}>{c}</button>)}
@@ -281,6 +282,14 @@ export function ShipmentModal({ title, shipment, orders, suppliers, forwarders, 
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const s = shipment;
+  const [orderId, setOrderId] = useState(s?.order_id ?? "");
+  const [orderTitle, setOrderTitle] = useState(s?.order_title ?? "");
+  const [supplier, setSupplier] = useState(s?.supplier ?? "");
+  const [mode, setMode] = useState<string>(s?.mode ?? "Sea LCL");
+  const [forwarder, setForwarder] = useState<string>(s?.forwarder ?? "");
+  const [incoterm, setIncoterm] = useState<string>(s?.incoterm ?? "");
+  const [stage, setStage] = useState<string>(s?.stage ?? "Draft");
+  const [customs, setCustoms] = useState<string>(s?.customs ?? "");
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -288,35 +297,36 @@ export function ShipmentModal({ title, shipment, orders, suppliers, forwarders, 
     setErr(null);
     start(async () => { const r = await onSubmit(fd); if (!r.ok) { setErr(r.error ?? "Failed."); return; } onClose(); router.refresh(); });
   }
-  function onPickOrder(e: React.ChangeEvent<HTMLSelectElement>) {
-    const o = orders.find((x) => x.id === e.target.value);
-    const form = e.target.form!;
-    (form.elements.namedItem("order_title") as HTMLInputElement).value = o?.title ?? "";
-    if (o?.supplier) (form.elements.namedItem("supplier") as HTMLSelectElement).value = o.supplier;
+  function onPickOrder(v: string) {
+    setOrderId(v);
+    const o = orders.find((x) => x.id === v);
+    setOrderTitle(o?.title ?? "");
+    if (o?.supplier) setSupplier(o.supplier);
   }
+  const NONE = { value: "", label: "— none —" };
 
   return (
     <Modal open onClose={onClose} title={title}>
       <form onSubmit={submit} className="space-y-4">
         <div className="vy-kicker">Order &amp; supplier</div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Order"><select name="order_id" defaultValue={s?.order_id ?? ""} onChange={onPickOrder} className={inputCls}><option value="">— none —</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.id} — {o.title}</option>)}</select></Field>
-          <Field label="Supplier"><select name="supplier" defaultValue={s?.supplier ?? ""} className={inputCls}><option value="">— none —</option>{suppliers.map((x) => <option key={x} value={x}>{x}</option>)}</select></Field>
+          <Field label="Order"><Select name="order_id" value={orderId} onChange={onPickOrder} placeholder="— none —" options={[NONE, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>
+          <Field label="Supplier"><Select name="supplier" value={supplier} onChange={setSupplier} placeholder="— none —" options={[NONE, ...suppliers.map((x) => ({ value: x, label: x }))]} /></Field>
         </div>
-        <input type="hidden" name="order_title" defaultValue={s?.order_title ?? ""} />
+        <input type="hidden" name="order_title" value={orderTitle} />
 
         <div className="vy-kicker pt-1">Freight</div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Mode"><select name="mode" defaultValue={s?.mode ?? "Sea LCL"} className={inputCls}>{MODES.map((m) => <option key={m}>{m}</option>)}</select></Field>
-          <Field label="Forwarder"><select name="forwarder" defaultValue={s?.forwarder ?? ""} className={inputCls}><option value="">— none —</option>{forwarders.map((f) => <option key={f} value={f}>{f}</option>)}</select></Field>
-          <Field label="Incoterm"><select name="incoterm" defaultValue={s?.incoterm ?? ""} className={inputCls}><option value="">—</option>{INCOTERMS.map((i) => <option key={i}>{i}</option>)}</select></Field>
+          <Field label="Mode"><Select name="mode" value={mode} onChange={setMode} options={MODES.map((m) => ({ value: m, label: m }))} /></Field>
+          <Field label="Forwarder"><Select name="forwarder" value={forwarder} onChange={setForwarder} placeholder="— none —" options={[NONE, ...forwarders.map((f) => ({ value: f, label: f }))]} /></Field>
+          <Field label="Incoterm"><Select name="incoterm" value={incoterm} onChange={setIncoterm} placeholder="—" options={[{ value: "", label: "—" }, ...INCOTERMS.map((i) => ({ value: i, label: i }))]} /></Field>
           <Field label="BOL / AWB"><input name="bol" defaultValue={s?.bol ?? ""} className={inputCls} /></Field>
           <Field label="Origin"><input name="origin" defaultValue={s?.origin ?? ""} className={inputCls} placeholder="Ningbo, CN" /></Field>
           <Field label="Destination"><input name="destination" defaultValue={s?.destination ?? ""} className={inputCls} placeholder="ONT8, US" /></Field>
           <Field label="ETD"><input name="etd" type="date" defaultValue={s?.etd ?? ""} className={inputCls} /></Field>
           <Field label="ETA"><input name="eta" type="date" defaultValue={s?.eta ?? ""} className={inputCls} /></Field>
-          <Field label="Stage"><select name="stage" defaultValue={s?.stage ?? "Draft"} className={inputCls}>{SHIPMENT_STAGES.map((x) => <option key={x}>{x}</option>)}</select></Field>
-          <Field label="Customs"><select name="customs" defaultValue={s?.customs ?? ""} className={inputCls}><option value="">—</option>{Object.keys(CUSTOMS_TONE).map((c) => <option key={c}>{c}</option>)}</select></Field>
+          <Field label="Stage"><Select name="stage" value={stage} onChange={setStage} options={SHIPMENT_STAGES.map((x) => ({ value: x, label: x }))} /></Field>
+          <Field label="Customs"><Select name="customs" value={customs} onChange={setCustoms} placeholder="—" options={[{ value: "", label: "—" }, ...Object.keys(CUSTOMS_TONE).map((c) => ({ value: c, label: c }))]} /></Field>
         </div>
 
         <div className="vy-kicker pt-1">Cargo</div>

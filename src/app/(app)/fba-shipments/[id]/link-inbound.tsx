@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/primitives";
-import { inputCls } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { linkInbound } from "../actions";
 import { Link2, Check } from "lucide-react";
 
@@ -38,16 +38,10 @@ export function LinkInboundCard({ inboundId, shipmentId, orderId, shipments, ord
       <div className="mb-3 flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><Link2 className="h-4 w-4" /></span><div><div className="font-semibold">Link this inbound</div><p className="text-[11px] text-muted-foreground">Attach to its freight shipment + order so it shows on those pages.</p></div></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block"><span className="vy-kicker mb-1 block">Freight shipment</span>
-          <select value={ship} onChange={(e) => onShip(e.target.value)} className={inputCls}>
-            <option value="">— none —</option>
-            {shipments.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
+          <Select value={ship} onChange={onShip} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...shipments.map((s) => ({ value: s.id, label: s.label }))]} />
         </label>
         <label className="block"><span className="vy-kicker mb-1 block">Order</span>
-          <select value={order} onChange={(e) => setOrder(e.target.value)} className={inputCls}>
-            <option value="">— none —</option>
-            {orders.map((o) => <option key={o.id} value={o.id}>{o.id} — {o.title}</option>)}
-          </select>
+          <Select value={order} onChange={setOrder} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} />
         </label>
       </div>
       <div className="mt-3 flex items-center gap-3">

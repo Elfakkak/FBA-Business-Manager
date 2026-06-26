@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { INV_HEALTH_TONE, INV_FCS, INV_SAFETY_DAYS, num, type InvHealth } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
 import { setReorderPoint, setFavorite } from "./actions";
@@ -183,12 +184,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, FNSKU, ASIN, product, supplier"
             className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All suppliers</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <Select value={category} onChange={setCategory} className="w-44" options={[{ value: "all", label: "All categories" }, ...categories.map((c) => ({ value: c, label: c }))]} />
+          <Select value={supplier} onChange={setSupplier} className="w-44" options={[{ value: "all", label: "All suppliers" }, ...suppliers.map((s) => ({ value: s, label: s }))]} />
           <div className="flex overflow-hidden rounded-md border text-sm">
             {(["family", "sku"] as const).map((v) => (
               <button key={v} onClick={() => setView(v)} className={cn("px-3 py-2", view === v ? "bg-primary text-primary-foreground" : "hover:bg-accent")}>

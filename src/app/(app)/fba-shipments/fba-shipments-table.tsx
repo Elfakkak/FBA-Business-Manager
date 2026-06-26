@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
+import { Select } from "@/components/ui/select";
 import { intgAgo } from "@/lib/integrations";
 import { syncFbaInbounds } from "../integrations/actions";
 import { num, FBA_EVENTS, fbaDoneIdx } from "@/lib/derive";
@@ -108,9 +109,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
         <div className="flex flex-wrap items-center gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipment, FC, SKU"
             className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <select value={fcFilter} onChange={(e) => setFcFilter(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All FCs</option>{fcs.map((fc) => <option key={fc} value={fc}>{fc}</option>)}
-          </select>
+          <Select value={fcFilter} onChange={setFcFilter} className="w-40" options={[{ value: "all", label: "All FCs" }, ...fcs.map((fc) => ({ value: fc, label: fc }))]} />
           <div className="flex flex-wrap gap-1">
             {STATUSES.map((s) => (
               <button key={s} onClick={() => setStatus(s)} className={cn("vy-chip", status === s && "is-active")}>{s === "all" ? "All" : s}</button>
