@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { type InvoiceRow, type InvoiceLineRow } from "@/lib/derive";
+import { type InvoiceRow, type InvoiceLineRow, partnerVendorType } from "@/lib/derive";
 import { InvoicesTable, type InvRow, type Payment } from "./invoices-table";
 
 export default async function InvoicesPage() {
@@ -10,7 +10,7 @@ export default async function InvoicesPage() {
     supabase.from("invoice_lines").select("*"),
     supabase.from("orders").select("id, title"),
     supabase.from("suppliers").select("name").order("name"),
-    supabase.from("partners").select("name").order("name"),
+    supabase.from("partners").select("name, specialty").order("name"),
   ]);
 
   const payByInvoice = new Map<string, Payment[]>();
@@ -32,10 +32,10 @@ export default async function InvoicesPage() {
     lines: linesByInvoice.get(i.id) ?? [],
   }));
 
-  const vendors = [
-    ...((suppliers ?? []) as { name: string }[]).map((s) => s.name),
-    ...((partners ?? []) as { name: string }[]).map((p) => p.name),
-  ];
+  const vendorMap = new Map<string, string>();
+  for (const s of (suppliers ?? []) as { name: string }[]) if (!vendorMap.has(s.name)) vendorMap.set(s.name, "Supplier");
+  for (const p of (partners ?? []) as { name: string; specialty: string | null }[]) if (!vendorMap.has(p.name)) vendorMap.set(p.name, partnerVendorType(p.specialty));
+  const vendors = [...vendorMap].map(([name, type]) => ({ name, type }));
 
-  return <InvoicesTable rows={rows} orders={(orders ?? []) as { id: string; title: string }[]} vendors={[...new Set(vendors)]} />;
+  return <InvoicesTable rows={rows} orders={(orders ?? []) as { id: string; title: string }[]} vendors={vendors} />;
 }

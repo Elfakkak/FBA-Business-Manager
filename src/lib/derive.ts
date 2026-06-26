@@ -245,6 +245,16 @@ export function invoiceAging(dueISO: string | null, balance: number, nowMs: numb
   return { days, label: "Upcoming", tone: "muted" };
 }
 
+// Vendor type derived from the vendor's own record: suppliers are always
+// "Supplier"; a partner's role is inferred from its free-text specialty.
+export type VendorType = "Supplier" | "Forwarder" | "Agent" | "Inspection";
+export function partnerVendorType(specialty: string | null | undefined): VendorType {
+  const s = (specialty || "").toLowerCase();
+  if (/agent|sourc/.test(s)) return "Agent";
+  if (/inspec|\baql\b|quality/.test(s)) return "Inspection";
+  return "Forwarder"; // freight / forwarding / express / logistics / sea / air
+}
+
 // ---------- Invoice lines / charges (V2 itemization) ----------
 export type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 export type InvoiceLineKind = "goods" | "service" | "discount";

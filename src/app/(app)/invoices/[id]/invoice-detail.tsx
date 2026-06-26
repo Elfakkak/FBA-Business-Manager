@@ -9,7 +9,7 @@ import { StatCard } from "@/components/ui/detail";
 import { createClient } from "@/lib/supabase/client";
 import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary, type PayTermCfg, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { RecordPaymentModal, InvoiceModal, type InvRow } from "../invoices-table";
+import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../invoices-table";
 import { updateInvoice, deletePayment, saveInvoiceDocument } from "../actions";
 import { PaymentTermsCard } from "./payment-terms-card";
 import { PaymentProofCell } from "./payment-proof";
@@ -24,7 +24,7 @@ function termCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTerm
 const fmtDate = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
 export function InvoiceDetailPage({ row: i, orders, vendors, orderLines, chargeTypes }: {
-  row: InvRow; orders: { id: string; title: string }[]; vendors: string[];
+  row: InvRow; orders: { id: string; title: string }[]; vendors: VendorOpt[];
   orderLines: OrderLineLite[]; chargeTypes: ChargeTypeLite[];
 }) {
   const router = useRouter();

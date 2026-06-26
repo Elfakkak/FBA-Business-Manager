@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { orderRollup, type InvoiceRow, type InvoiceLineRow } from "@/lib/derive";
+import { orderRollup, partnerVendorType, type InvoiceRow, type InvoiceLineRow } from "@/lib/derive";
 import { OrderShell, type OrderShipment, type OrderInbound } from "./order-shell";
 import type { InvRow, Payment } from "../../invoices/invoices-table";
 
@@ -19,7 +19,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("shipments").select("id, mode, stage, forwarder, origin, destination, eta, packed").eq("order_id", id).order("created_at"),
     supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id").eq("order_id", id),
     supabase.from("suppliers").select("name").order("name"),
-    supabase.from("partners").select("name").order("name"),
+    supabase.from("partners").select("name, specialty").order("name"),
   ]);
   const invList = (invoices ?? []) as InvoiceRow[];
   const r = orderRollup(id, invList);
@@ -48,10 +48,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     payments: (payByInv.get(i.id) ?? []).sort((a, b) => (b.payment_date ?? "").localeCompare(a.payment_date ?? "")),
     lines: lineByInv.get(i.id) ?? [],
   }));
-  const vendors = [...new Set([
-    ...((suppliers ?? []) as { name: string }[]).map((s) => s.name),
-    ...((partners ?? []) as { name: string }[]).map((p) => p.name),
-  ])];
+  const vendorMap = new Map<string, string>();
+  for (const s of (suppliers ?? []) as { name: string }[]) if (!vendorMap.has(s.name)) vendorMap.set(s.name, "Supplier");
+  for (const p of (partners ?? []) as { name: string; specialty: string | null }[]) if (!vendorMap.has(p.name)) vendorMap.set(p.name, partnerVendorType(p.specialty));
+  const vendors = [...vendorMap].map(([name, type]) => ({ name, type }));
   // packaging consumed by this order, joined to item names/costs
   const pkgById = new Map(((pkgItems ?? []) as { id: string; name: string; unit_cost: number }[]).map((p) => [p.id, p]));
   const packaging = ((pkgMoves ?? []) as { id: string; item_id: string; qty: number }[]).map((m) => {

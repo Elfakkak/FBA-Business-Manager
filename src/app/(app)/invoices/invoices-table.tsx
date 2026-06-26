@@ -15,12 +15,14 @@ import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, 
 
 export type Payment = { id: string; amount: number; payment_date: string | null; method: string | null; status: string; proof_kind: string | null; proof_url: string | null };
 export type InvRow = InvoiceRow & { orderTitle: string | null; payments: Payment[]; lines: InvoiceLineRow[] };
+// a selectable vendor + its type, derived from the supplier/partner record
+export type VendorOpt = { name: string; type: string };
 
 const VENDOR_TYPES = ["Supplier", "Forwarder", "Agent", "Inspection"];
 const STATUS_CHIPS = ["All", "Overdue", "Unpaid", "Partial", "Paid"];
 const fmtDue = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
-export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; orders: { id: string; title: string }[]; vendors: string[] }) {
+export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; orders: { id: string; title: string }[]; vendors: VendorOpt[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("All");
@@ -272,18 +274,20 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
 }
 
 export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmit }: {
-  title: string; invoice?: InvRow; orders: { id: string; title: string }[]; vendors: string[];
+  title: string; invoice?: InvRow; orders: { id: string; title: string }[]; vendors: VendorOpt[];
   onClose: () => void; onSubmit: (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const i = invoice;
+  const vendorType = useMemo(() => new Map(vendors.map((v) => [v.name, v.type])), [vendors]);
   const [vendor, setVendor] = useState<string>(i?.vendor ?? "");
-  const [vType, setVType] = useState<string>(i?.vendor_type ?? "Supplier");
+  // Type is DERIVED from the chosen vendor's record (supplier/partner), not picked.
+  const vType = vendorType.get(vendor) ?? i?.vendor_type ?? "Supplier";
   const [orderId, setOrderId] = useState<string>(i?.order_id ?? "");
   // include the invoice's current vendor even if it's not in the suppliers/partners list
-  const vendorOpts = [...new Set([...(i?.vendor ? [i.vendor] : []), ...vendors])].map((v) => ({ value: v, label: v }));
+  const vendorOpts = [...new Set([...(i?.vendor ? [i.vendor] : []), ...vendors.map((v) => v.name)])].map((v) => ({ value: v, label: v }));
   const [termType, setTermType] = useState<string>(i?.term_type ?? "TT");
   const [deposit, setDeposit] = useState<number>(i?.term_deposit_pct ?? 30);
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -297,7 +301,13 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Vendor"><Select name="vendor" value={vendor} onChange={setVendor} placeholder="Pick a vendor…" searchable options={vendorOpts} /></Field>
-          <Field label="Type"><Select name="vendor_type" value={vType} onChange={setVType} options={VENDOR_TYPES.map((v) => ({ value: v, label: v }))} /></Field>
+          <Field label="Type">
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium">{vType}</span>
+              <span className="text-[11px] text-muted-foreground">· from the vendor record</span>
+            </div>
+            <input type="hidden" name="vendor_type" value={vType} />
+          </Field>
           <Field label="Order"><Select name="order_id" value={orderId} onChange={setOrderId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>
           <Field label="Total (USD)"><input name="total" type="number" step="0.01" required defaultValue={i?.total ?? ""} className={inputCls} /></Field>
           <Field label="Issued"><input name="issued" type="date" defaultValue={i?.issued ?? ""} className={inputCls} /></Field>

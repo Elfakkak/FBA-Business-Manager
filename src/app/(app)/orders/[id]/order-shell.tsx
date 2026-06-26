@@ -10,7 +10,7 @@ import { useFormModal } from "@/lib/use-form-modal";
 import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
 import { createInvoice, updateInvoice, deleteInvoice } from "../../invoices/actions";
 import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
-import { RecordPaymentModal, InvoiceModal, type InvRow } from "../../invoices/invoices-table";
+import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
@@ -61,7 +61,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
 export function OrderShell({ order, invoices, vendors, lines, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
-  vendors: string[];
+  vendors: VendorOpt[];
   lines: OrderLine[];
   variants: VariantOpt[];
   packagingItems: PkgItemOpt[];
@@ -251,7 +251,7 @@ const fmtDue = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocal
 const VENDOR_KIND: Record<string, string> = { Supplier: "Goods", Agent: "Service", Forwarder: "Freight", Inspection: "Inspection" };
 function invTermCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTermCfg["type"]) ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days }; }
 
-function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices: InvRow[]; vendors: string[] }) {
+function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices: InvRow[]; vendors: VendorOpt[] }) {
   const router = useRouter();
   const [peek, setPeek] = useState<InvRow | null>(null);
   const [payFor, setPayFor] = useState<InvRow | null>(null);
