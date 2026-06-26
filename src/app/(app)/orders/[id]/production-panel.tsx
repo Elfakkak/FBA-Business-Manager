@@ -3,16 +3,17 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, KpiStrip, SectionHeader } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, KpiStrip, SectionHeader, EditCell, EditToolbar } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { useInlineEditor } from "@/lib/use-inline-editor";
 import {
   money, num, productionLanded, costUsd, PROD_SECTIONS, PROD_LINE_TYPES,
   ORDER_STATUS_LABEL, type OrderRow, type OrderCostRow,
 } from "@/lib/derive";
-import { addOrderLines, deleteOrderLine, addOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
+import { addOrderLines, updateOrderLine, deleteOrderLine, addOrderCost, updateOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
 import {
   Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check,
 } from "lucide-react";
@@ -82,7 +83,7 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
       <ProductionLines order={order} groups={groups} landedById={landedById} totalUnits={roll.totalUnits} totalGoods={roll.totalGoods} variants={variants} />
 
       {/* Non-product costs */}
-      <NonProductCosts order={order} costs={costs} chargeTypes={chargeTypes} vendors={vendors} />
+      <NonProductCosts order={order} costs={costs} chargeTypes={chargeTypes} vendors={vendors} goodsTotal={roll.totalGoods} />
 
       {/* Packaging on hand + Purchase order */}
       <PackagingOnHand items={packagingOnHand} />
@@ -300,13 +301,24 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
+  const allLines = groups.flatMap((g) => g.lines);
   const onDelete = (id: string) => start(async () => { await deleteOrderLine(id, order.id); router.refresh(); });
+
+  // Shared inline-edit controller (same primitive used across the app).
+  const ed = useInlineEditor(
+    allLines,
+    (l) => ({ qty: String(l.qty ?? 0), unit_cost: l.unit_cost == null ? "" : String(l.unit_cost), unit_cny_ref: l.unit_cny_ref == null ? "" : String(l.unit_cny_ref) }),
+    (id, f) => updateOrderLine(id, order.id, { qty: Math.max(0, Math.round(Number(f.qty) || 0)), unit_cost: f.unit_cost === "" ? null : Number(f.unit_cost), unit_cny_ref: f.unit_cny_ref === "" ? null : Number(f.unit_cny_ref) }),
+    () => router.refresh(),
+  );
+  const liveUnits = ed.on ? allLines.reduce((s, l) => s + (Number(ed.get(l.id, "qty")) || 0), 0) : totalUnits;
+  const liveGoods = ed.on ? allLines.reduce((s, l) => s + (Number(ed.get(l.id, "qty")) || 0) * (Number(ed.get(l.id, "unit_cost")) || 0), 0) : totalGoods;
 
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><Package className="h-4 w-4" /></span><div><div className="font-semibold">Production lines</div><p className="text-[11px] text-muted-foreground">Sellable SKUs and variants included in this factory commitment.</p></div></div>
-        <button onClick={() => setAdding(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Add SKU</button>
+        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><Package className="h-4 w-4" /></span><div><div className="font-semibold">Production lines</div><p className="text-[11px] text-muted-foreground">{ed.on ? "Editing — change quantities or unit cost; totals update live." : "Sellable SKUs and variants included in this factory commitment."}</p></div></div>
+        <EditToolbar editor={ed} editable={allLines.length > 0} addLabel="Add SKU" onAdd={() => setAdding(true)} />
       </div>
       {groups.length === 0 ? (
         <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No SKUs yet — add the products in this factory commitment.</div>
@@ -329,15 +341,16 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
                 <tr className="bg-primary/5"><td colSpan={7} className="px-5 py-2 text-[12px] font-semibold">{g.name} <span className="font-normal text-muted-foreground">· {g.lines.length} {g.lines.length === 1 ? "variant" : "variants"}</span></td></tr>
                 {g.lines.map((l) => {
                   const d = landedById.get(l.id);
+                  const line = ed.on ? (Number(ed.get(l.id, "qty")) || 0) * (Number(ed.get(l.id, "unit_cost")) || 0) : (d?.line ?? 0);
                   return (
                     <tr key={l.id}>
                       <td className="px-5 py-2.5 font-mono text-[12px] font-semibold">{l.sku}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono">{num(l.qty)}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{l.unit_cny_ref != null ? `¥${Number(l.unit_cny_ref).toFixed(2)}` : "—"}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono">{money(l.unit_cost)}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(d?.line ?? 0)}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono text-info">{d ? `${money(d.landedUnit)} est` : "—"}</td>
-                      <td className="px-3 py-2.5 text-right"><button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
+                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "qty")} onChange={(v) => ed.set(l.id, "qty", v)} mode="numeric" /></div> : <span className="tabular">{num(l.qty)}</span>}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cny_ref")} onChange={(v) => ed.set(l.id, "unit_cny_ref", v)} placeholder="¥" /></div> : <span className="tabular">{l.unit_cny_ref != null ? `¥${Number(l.unit_cny_ref).toFixed(2)}` : "—"}</span>}</td>
+                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cost")} onChange={(v) => ed.set(l.id, "unit_cost", v)} placeholder="$" /></div> : <span className="tabular">{money(l.unit_cost)}</span>}</td>
+                      <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(line)}</td>
+                      <td className="tabular px-3 py-2.5 text-right font-mono text-info">{!ed.on && d ? `${money(d.landedUnit)} est` : "—"}</td>
+                      <td className="px-3 py-2.5 text-right">{!ed.on && <button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>}</td>
                     </tr>
                   );
                 })}
@@ -346,9 +359,9 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
             <tfoot>
               <tr className="border-t bg-muted/30 font-semibold">
                 <td className="px-5 py-3">Product subtotal</td>
-                <td className="tabular px-3 py-3 text-right font-mono">{num(totalUnits)}</td>
+                <td className="tabular px-3 py-3 text-right font-mono">{num(liveUnits)}</td>
                 <td colSpan={2} />
-                <td className="tabular px-3 py-3 text-right font-mono">{money(totalGoods)}</td>
+                <td className="tabular px-3 py-3 text-right font-mono">{money(liveGoods)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -391,13 +404,13 @@ function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, onToggleOpen, onSelectA
   const lastOrdered = vs[0]?.familyLastOrdered;
   return (
     <div className="space-y-2">
-      <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3.5", selCount > 0 && "border-primary/60 bg-primary/5")}>
+      <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3.5", selCount > 0 && "border-l-[3px] border-l-primary")}>
         <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2"><span className="font-semibold leading-snug">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
-          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory —{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
+          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` — · last ordered ${lastOrdered}` : ""}</div>
           <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
         </button>
-        <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>
+        {isOpen && <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>}
         <button type="button" onClick={onToggleOpen} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
       </div>
       {isOpen && <div className="divide-y overflow-hidden rounded-xl border">{vs.map((v) => <SkuRow key={v.id} v={v} on={sel.has(v.id)} onToggle={() => onToggleVariant(v)} />)}</div>}
@@ -414,6 +427,7 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
   const [filter, setFilter] = useState("All");
   const [sel, setSel] = useState<Map<string, SkuPick>>(new Map());
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [showCny, setShowCny] = useState(false); // ¥ reference is optional — hidden unless toggled
 
   const byId = useMemo(() => new Map(variants.map((v) => [v.id, v])), [variants]);
   const matchesFilter = (v: CatalogVariant) => {
@@ -470,7 +484,10 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
 
           {/* selected lines — review qty + pricing */}
           <div className="rounded-xl border bg-accent/30 p-3">
-            <div className="mb-1.5"><div className="font-semibold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>
+            <div className="mb-1.5 flex items-start justify-between gap-2">
+              <div><div className="font-semibold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>
+              {selected.length > 0 && <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" checked={showCny} onChange={(e) => setShowCny(e.target.checked)} className="h-3.5 w-3.5 accent-primary" /> ¥ ref</label>}
+            </div>
             {needsReview && <div className="mb-2 rounded-md border px-2.5 py-1.5 text-[11px] text-warning" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>Needs review: missing images, titles, or costs</div>}
             {selected.length === 0 ? (
               <p className="py-10 text-center text-[12px] text-muted-foreground">No SKUs selected. Tick variants on the left — only selected rows become order lines.</p>
@@ -491,7 +508,7 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
                       <label className="block"><span className="vy-kicker">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(Number(e.target.value)) || 0) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
                       <label className="block"><span className="vy-kicker">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
                     </div>
-                    <label className="mt-2 block"><span className="vy-kicker">Supplier ¥</span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                    {showCny && <label className="mt-2 block"><span className="vy-kicker">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: e.target.value === "" ? null : Number(e.target.value) })} placeholder="note only" className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
                     <div className="mt-2 flex items-center justify-between border-t pt-1.5 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
                   </div>
                 ))}
@@ -513,18 +530,27 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
   );
 }
 
-function NonProductCosts({ order, costs, chargeTypes, vendors }: { order: OrderRow; costs: OrderCostRow[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[] }) {
+function NonProductCosts({ order, costs, chargeTypes, vendors, goodsTotal }: { order: OrderRow; costs: OrderCostRow[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[]; goodsTotal: number }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
-  const total = costs.reduce((s, c) => s + costUsd(c), 0); // normalized to USD
   const onDelete = (id: string) => start(async () => { await deleteOrderCost(id, order.id); router.refresh(); });
+
+  // Shared inline-edit controller (same primitive as Production lines).
+  const ed = useInlineEditor(
+    costs,
+    (c) => ({ qty: String(c.qty ?? 1), amount: String(c.amount ?? 0) }),
+    (id, f) => updateOrderCost(id, order.id, { qty: Number(f.qty) || 0, amount: Number(f.amount) || 0 }),
+    () => router.refresh(),
+  );
+  const costsTotal = ed.on ? costs.reduce((s, c) => s + (Number(ed.get(c.id, "amount")) || 0), 0) : costs.reduce((s, c) => s + costUsd(c), 0);
+  const productionTotal = goodsTotal + costsTotal;
 
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-warning/12 text-warning"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Non-product costs</div><p className="text-[11px] text-muted-foreground">Service fees, packaging, freight, and other charges bundled into production or the agent CI.</p></div></div>
-        <button onClick={() => setAdding(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Add cost</button>
+        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-warning/12 text-warning"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Non-product costs</div><p className="text-[11px] text-muted-foreground">{ed.on ? "Editing — adjust qty or amount; totals update live." : "Service fees, packaging, freight, and other charges bundled into production or the agent CI."}</p></div></div>
+        <EditToolbar editor={ed} editable={costs.length > 0} addLabel="Add cost" onAdd={() => setAdding(true)} />
       </div>
       {costs.length === 0 ? (
         <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No non-product costs yet — add agent fees, packaging, freight or inspection.</div>
@@ -555,15 +581,17 @@ function NonProductCosts({ order, costs, chargeTypes, vendors }: { order: OrderR
                   </td>
                   <td className="px-3 py-2.5"><Badge tone={(SECTION_TONE[c.section] ?? "muted") as "brand" | "info" | "success" | "muted"}>{c.section}</Badge></td>
                   <td className="px-3 py-2.5 text-muted-foreground">{c.line_type ?? "—"}</td>
-                  <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{num(c.qty)}</td>
-                  <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(c.amount)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{ed.on ? <div className="ml-auto w-16"><EditCell value={ed.get(c.id, "qty")} onChange={(v) => ed.set(c.id, "qty", v)} mode="numeric" /></div> : <span className="tabular">{num(c.qty)}</span>}</td>
+                  <td className="px-3 py-2.5 text-right font-mono font-semibold">{ed.on ? <div className="ml-auto w-24"><EditCell value={ed.get(c.id, "amount")} onChange={(v) => ed.set(c.id, "amount", v)} /></div> : <span className="tabular">{money(c.amount)}</span>}</td>
                   <td className="px-3 py-2.5">{c.coverage === "Uncovered" ? <span className="text-[12px] text-muted-foreground">Uncovered</span> : <span className="font-mono text-[11px] text-success">{c.coverage}</span>}</td>
-                  <td className="px-3 py-2.5 text-right"><button onClick={() => onDelete(c.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
+                  <td className="px-3 py-2.5 text-right">{!ed.on && <button onClick={() => onDelete(c.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr className="border-t bg-muted/30 font-semibold"><td className="px-5 py-3" colSpan={4}>Total non-product costs</td><td className="tabular px-3 py-3 text-right font-mono">{money(total)}</td><td colSpan={2} /></tr>
+            <tfoot className="border-t">
+              <tr className="bg-muted/20"><td className="px-5 py-2 text-muted-foreground" colSpan={4}>Product subtotal</td><td className="tabular px-3 py-2 text-right font-mono">{money(goodsTotal)}</td><td colSpan={2} /></tr>
+              <tr className="bg-muted/20"><td className="px-5 py-2 text-muted-foreground" colSpan={4}>Non-product costs</td><td className="tabular px-3 py-2 text-right font-mono">{money(costsTotal)}</td><td colSpan={2} /></tr>
+              <tr className="bg-muted/40 font-bold"><td className="px-5 py-3" colSpan={4}>Production total</td><td className="tabular px-3 py-3 text-right font-mono">{money(productionTotal)}</td><td colSpan={2} /></tr>
             </tfoot>
           </table>
         </div>
