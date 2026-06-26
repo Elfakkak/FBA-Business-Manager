@@ -4,17 +4,17 @@ import { useMemo, useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
-import { Drawer } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary, PAYTERM_TYPES, type Tone } from "@/lib/derive";
+import { num, money, type InvoiceRow, type InvoiceLineRow, INVOICE_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, PAYTERM_TYPES } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { createInvoice, updateInvoice, deleteInvoice, recordPayment, deletePayment } from "./actions";
-import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, Trash2, Package, Paperclip, ShieldCheck } from "lucide-react";
+import { InvoiceQuickDrawer } from "./invoice-quick-drawer";
+import { createInvoice, updateInvoice, deleteInvoice, recordPayment } from "./actions";
+import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, ShieldCheck, Link2, Upload } from "lucide-react";
 
 export type Payment = { id: string; amount: number; payment_date: string | null; method: string | null; status: string; proof_kind: string | null; proof_url: string | null };
-export type InvRow = InvoiceRow & { orderTitle: string | null; payments: Payment[] };
+export type InvRow = InvoiceRow & { orderTitle: string | null; payments: Payment[]; lines: InvoiceLineRow[] };
 
 const VENDOR_TYPES = ["Supplier", "Forwarder", "Agent", "Inspection"];
 const STATUS_CHIPS = ["All", "Overdue", "Unpaid", "Partial", "Paid"];
@@ -28,7 +28,8 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [peek, setPeek] = useState<InvRow | null>(null);
-  const [payFor, setPayFor] = useState<InvRow | null>(null);
+  const [payFor, setPayFor] = useState<InvRow | null>(null); // locked to a specific invoice
+  const [payPicker, setPayPicker] = useState(false);          // list-level: pick which invoice
   const [newOpen, setNewOpen] = useState(false);
   const [editing, setEditing] = useState<InvRow | null>(null);
 
@@ -83,7 +84,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
           <>
             <button className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5"><ArrowUpRight className="h-4 w-4" /> Export</button>
             <button onClick={() => setNewOpen(true)} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New invoice</button>
-            <button onClick={() => setPayFor(rows.find((i) => invoiceBalance(i) > 0) ?? null)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>
+            <button onClick={() => setPayPicker(true)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>
           </>
         } />
 
@@ -178,83 +179,38 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
         </div>
       </Card>
 
-      {/* Drawer */}
-      <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id}>
-        {peek && <InvoiceDetail i={peek} onRecord={() => setPayFor(peek)} onEdit={() => { setEditing(peek); setPeek(null); }} onDelete={async () => { if (!confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }} />}
-      </Drawer>
+      {/* Shared quick-view drawer (same component as the order-shell Invoices section) */}
+      <InvoiceQuickDrawer
+        open={!!peek}
+        invoice={peek}
+        onClose={() => setPeek(null)}
+        onRecord={() => peek && setPayFor(peek)}
+        onEdit={() => { if (peek) { setEditing(peek); setPeek(null); } }}
+        onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }}
+      />
 
       {payFor && <RecordPaymentModal invoice={payFor} invoices={rows} onClose={() => setPayFor(null)} />}
+      {payPicker && <RecordPaymentModal invoice={null} invoices={rows} onClose={() => setPayPicker(false)} />}
       {newOpen && <InvoiceModal title="New invoice" orders={orders} vendors={vendors} onClose={() => setNewOpen(false)} onSubmit={(fd) => createInvoice(fd)} />}
       {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orders} vendors={vendors} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
     </div>
   );
 }
 
-function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord: () => void; onEdit: () => void; onDelete: () => void }) {
-  const bal = invoiceBalance(i); const st = invoiceStatus(i); const a = invoiceAging(i.due, bal, Date.now());
-  return (
-    <div className="space-y-5">
-      <div>
-        <div className="text-[12px] text-muted-foreground">{i.vendor} · {i.vendor_type} · {payTermSummary({ type: (i.term_type as "TT") ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days })}</div>
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <Badge tone={INVOICE_STATUS_TONE[st]}>{st}</Badge>
-          {a.label !== "Settled" && i.due && <Badge tone={a.tone}>{a.label === "Overdue" ? `${Math.abs(a.days)}d overdue` : a.label === "Due soon" ? `due in ${a.days}d` : `due ${fmtDue(i.due)}`}</Badge>}
-          <div className="ml-auto flex gap-1.5"><button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm">Edit</button><button onClick={onDelete} className="vy-btn vy-btn--ghost vy-btn--sm text-danger"><Trash2 className="h-3.5 w-3.5" /></button></div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 rounded-lg border bg-background/50 p-3">
-        <div><div className="vy-kicker">Total</div><div className="mt-0.5 font-mono text-base font-bold">{money(i.total)}</div></div>
-        <div><div className="vy-kicker">Paid</div><div className="mt-0.5 font-mono text-base font-bold text-success">{money(i.paid)}</div></div>
-        <div><div className="vy-kicker">Balance</div><div className="mt-0.5 font-mono text-base font-bold text-warning">{bal > BALANCE_EPSILON ? money(bal) : money(0)}</div></div>
-      </div>
-
-      <div><div className="vy-kicker mb-1.5">Details</div><div className="grid grid-cols-2 gap-3"><div><div className="vy-kicker mb-0.5">Issued</div><div className="font-mono text-[13px] font-semibold">{fmtDue(i.issued)}</div></div><div><div className="vy-kicker mb-0.5">Due</div><div className="font-mono text-[13px] font-semibold">{fmtDue(i.due)}</div></div></div></div>
-
-      <div>
-        <div className="vy-kicker mb-2">Payments ({i.payments.length})</div>
-        {i.payments.length === 0 ? <p className="text-[12px] text-muted-foreground">No payments recorded yet.</p> : (
-          <ul className="space-y-1.5">
-            {i.payments.map((p) => (
-              <li key={p.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]">
-                <span className="font-mono text-muted-foreground">{fmtDue(p.payment_date)}</span>
-                <span className="font-mono font-semibold">{money(p.amount)}</span>
-                {p.method && <span className="text-muted-foreground">{p.method}</span>}
-                <span className="ml-auto flex items-center gap-1.5">
-                  {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noopener noreferrer"><Badge tone="success">Receipt</Badge></a> : p.status === "Cleared" ? <Badge tone="warning">No proof</Badge> : null}
-                  <Badge tone={PAY_STATUS_TONE[p.status] ?? "muted"}>{p.status}</Badge>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {i.order_id && (
-        <div><div className="vy-kicker mb-2">Order</div>
-          <Link href={`/orders/${i.order_id}`} className="flex items-center gap-3 rounded-lg border bg-background/40 px-3 py-2.5 hover:border-primary/40">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary"><Package className="h-4 w-4" /></span>
-            <div className="min-w-0 flex-1"><div className="font-mono text-[11px] text-muted-foreground">{i.order_id}</div><div className="truncate text-[13px] font-semibold">{i.orderTitle}</div></div>
-            <ArrowUpRight className="h-4 w-4 shrink-0 opacity-50" />
-          </Link>
-        </div>
-      )}
-
-      <Link href={`/invoices/${i.id}`} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5"><Receipt className="h-4 w-4" /> Open full invoice <ArrowUpRight className="h-4 w-4" /></Link>
-      {bal > BALANCE_EPSILON && <button onClick={onRecord} className="vy-btn vy-btn--outline flex w-full items-center justify-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>}
-    </div>
-  );
-}
+const PAY_METHODS = ["Mercury", "Wise", "Wire", "PayPal", "Cash", "Other"];
 
 export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: InvRow | null; invoices: InvRow[]; onClose: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  // Fixed-invoice mode when launched from a specific invoice; picker mode from the list.
+  const fixed = !!invoice;
   const [invId, setInvId] = useState(invoice?.id ?? "");
-  const [payStatus, setPayStatus] = useState("Cleared");
+  const [method, setMethod] = useState("Mercury");
   const [proof, setProof] = useState<File | null>(null);
   const open = invoices.filter((i) => invoiceBalance(i) > BALANCE_EPSILON);
-  const target = invoices.find((i) => i.id === invId) ?? null;
+  const target = invoices.find((i) => i.id === invId) ?? invoice ?? null;
+  const balance = target ? invoiceBalance(target) : 0;
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -276,24 +232,40 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
   return (
     <Modal open onClose={onClose} title="Record payment">
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Invoice">
-          <Select value={invId} onChange={setInvId} placeholder="Pick an invoice…" searchable
-            options={open.map((i) => ({ value: i.id, label: `${i.id} — ${i.vendor}`, sub: `balance ${money(invoiceBalance(i))}` }))} />
-        </Field>
+        {/* invoice context — subtitle when fixed, picker when launched from the list */}
+        {fixed
+          ? <p className="-mt-1 text-[12px] text-muted-foreground"><span className="font-mono">{target?.id}</span> · {money(balance)} balance</p>
+          : <Field label="Invoice">
+              <Select value={invId} onChange={setInvId} placeholder="Pick an invoice…" searchable
+                options={open.map((i) => ({ value: i.id, label: `${i.id} — ${i.vendor}`, sub: `balance ${money(invoiceBalance(i))}` }))} />
+            </Field>}
+
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Amount (USD)"><input name="amount" type="number" step="0.01" required autoFocus className={inputCls} defaultValue={target ? invoiceBalance(target).toFixed(2) : ""} /></Field>
-          <Field label="Date"><input name="payment_date" type="date" className={inputCls} defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
-          <Field label="Method"><input name="method" className={inputCls} placeholder="Mercury / Wire / …" /></Field>
-          <Field label="Status"><Select name="status" value={payStatus} onChange={setPayStatus} options={["Cleared", "Scheduled", "Pending"].map((s) => ({ value: s, label: s }))} /></Field>
+          <Field label="Amount (USD)"><input name="amount" type="number" step="0.01" required autoFocus className={inputCls} defaultValue={balance > BALANCE_EPSILON ? balance.toFixed(2) : ""} /></Field>
+          <Field label="Method"><Select name="method" value={method} onChange={setMethod} options={PAY_METHODS.map((m) => ({ value: m, label: m }))} /></Field>
         </div>
-        <Field label="Proof of payment (optional)">
-          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-[12px] text-muted-foreground hover:border-primary/40">
-            <Paperclip className="h-3.5 w-3.5" /> {proof ? proof.name : "Attach receipt / bank confirmation (image or PDF)"}
-            <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => setProof(e.target.files?.[0] ?? null)} />
-          </label>
-        </Field>
+
+        <Field label="Reference (optional)"><input name="reference" className={inputCls} placeholder="e.g. MERC-0531" /></Field>
+
+        <div>
+          <div className="vy-kicker mb-1.5">Proof of payment</div>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Mercury link — Phase-2 integration, not yet connected */}
+            <button type="button" disabled title="Mercury integration coming soon"
+              className="relative flex cursor-not-allowed items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-[13px] font-medium text-muted-foreground opacity-70">
+              <Link2 className="h-4 w-4" /> Link Mercury transaction
+              <span className="absolute -right-1.5 -top-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Soon</span>
+            </button>
+            <label className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-3 py-2.5 text-[13px] font-medium hover:border-primary/40", proof ? "border-primary/50 text-foreground" : "text-muted-foreground")}>
+              <Upload className="h-4 w-4" /> {proof ? "Receipt attached" : "Attach receipt"}
+              <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => setProof(e.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{proof ? proof.name : "A linked Mercury transaction is verified proof. Use a receipt for payments made outside Mercury."}</p>
+        </div>
+
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
-        <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Record payment"}</PrimaryButton></div>
+        <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending} className="inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> {pending ? "Saving…" : "Save payment"}</PrimaryButton></div>
       </form>
     </Modal>
   );
@@ -307,8 +279,11 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const i = invoice;
+  const [vendor, setVendor] = useState<string>(i?.vendor ?? "");
   const [vType, setVType] = useState<string>(i?.vendor_type ?? "Supplier");
   const [orderId, setOrderId] = useState<string>(i?.order_id ?? "");
+  // include the invoice's current vendor even if it's not in the suppliers/partners list
+  const vendorOpts = [...new Set([...(i?.vendor ? [i.vendor] : []), ...vendors])].map((v) => ({ value: v, label: v }));
   const [termType, setTermType] = useState<string>(i?.term_type ?? "TT");
   const [deposit, setDeposit] = useState<number>(i?.term_deposit_pct ?? 30);
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -321,7 +296,7 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
     <Modal open onClose={onClose} title={title}>
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Vendor"><input name="vendor" list="vendor-list" required defaultValue={i?.vendor ?? ""} className={inputCls} /><datalist id="vendor-list">{vendors.map((v) => <option key={v} value={v} />)}</datalist></Field>
+          <Field label="Vendor"><Select name="vendor" value={vendor} onChange={setVendor} placeholder="Pick a vendor…" searchable options={vendorOpts} /></Field>
           <Field label="Type"><Select name="vendor_type" value={vType} onChange={setVType} options={VENDOR_TYPES.map((v) => ({ value: v, label: v }))} /></Field>
           <Field label="Order"><Select name="order_id" value={orderId} onChange={setOrderId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>
           <Field label="Total (USD)"><input name="total" type="number" step="0.01" required defaultValue={i?.total ?? ""} className={inputCls} /></Field>

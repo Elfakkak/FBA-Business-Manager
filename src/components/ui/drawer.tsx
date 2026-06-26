@@ -5,7 +5,13 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 // Right slide-in panel (matches the prototype's quick-view drawers).
-export function Drawer({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
+// `width` widens the panel (the richer invoice quick-view needs more room);
+// `subtitle` renders under the title; `footer` pins an action bar at the bottom.
+export function Drawer({ open, onClose, title, subtitle, footer, width = 420, children }: {
+  open: boolean; onClose: () => void;
+  title?: React.ReactNode; subtitle?: React.ReactNode; footer?: React.ReactNode;
+  width?: number; children: React.ReactNode;
+}) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -23,14 +29,18 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
     <div className="fixed inset-0 z-100" role="dialog" aria-modal>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
-        className="absolute right-0 top-0 flex h-full w-[420px] max-w-[90vw] flex-col border-l shadow-xl"
-        style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)" }}
+        className="absolute right-0 top-0 flex h-full max-w-[96vw] flex-col border-l shadow-xl"
+        style={{ width, background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)" }}
       >
-        <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-          <h2 className="font-medium">{title}</h2>
-          <button onClick={onClose} className="vy-icon-btn" aria-label="Close"><X className="h-4 w-4" /></button>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate font-medium">{title}</h2>
+            {subtitle && <div className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</div>}
+          </div>
+          <button onClick={onClose} className="vy-icon-btn shrink-0" aria-label="Close"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        {footer && <div className="shrink-0 border-t bg-card/95 px-5 py-3">{footer}</div>}
       </div>
     </div>,
     document.body
