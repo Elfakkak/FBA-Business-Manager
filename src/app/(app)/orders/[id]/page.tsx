@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { orderRollup, type InvoiceRow } from "@/lib/derive";
 import { OrderShell, type OrderShipment, type OrderInbound } from "./order-shell";
 
-export default async function OrderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
@@ -36,6 +37,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       shipments={(shipments ?? []) as OrderShipment[]}
       inbounds={(inbounds ?? []) as OrderInbound[]}
       rollup={r}
+      initialTab={tab ?? "overview"}
     />
   );
 }

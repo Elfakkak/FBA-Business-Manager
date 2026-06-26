@@ -3,19 +3,38 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, Chip, SectionTitle } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, Chip, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
 import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
 import {
-  money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE,
+  money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   type OrderRow, type InvoiceRow,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import {
   Factory, Route, Pencil, Check, Hammer, ClipboardCheck, Truck, Receipt,
-  PackageCheck, LayoutDashboard, ChevronRight, AlertCircle, Plus, Trash2, Boxes,
+  PackageCheck, LayoutDashboard, ChevronRight, ChevronLeft, AlertCircle, Plus, Trash2, Boxes,
+  Home, Activity, ArrowRight, Calendar,
 } from "lucide-react";
+
+// Top tab bar (matches the prototype: Home · Production · Shipping · Invoices · Landed cost)
+const TABS = [
+  { key: "overview", label: "Home", icon: Home },
+  { key: "production", label: "Production", icon: Hammer },
+  { key: "shipping", label: "Shipping", icon: Truck },
+  { key: "invoices", label: "Invoices", icon: Receipt },
+  { key: "landed", label: "Landed cost", icon: PackageCheck },
+];
+// Owning-section lifecycle nodes for the Order Journey strip.
+const JOURNEY = [
+  { key: "production", label: "Production", icon: Hammer },
+  { key: "inspection", label: "Inspection", icon: ClipboardCheck },
+  { key: "shipping", label: "Shipping", icon: Truck },
+  { key: "invoices", label: "Invoices", icon: Receipt },
+  { key: "landed", label: "Landed cost", icon: PackageCheck },
+];
+const STATUS_IDX: Record<string, number> = { draft: 0, production: 1, inspection: 2, transit: 3, fba: 4, closed: 5 };
 
 type OrderLine = { id: string; sku: string | null; product_name: string | null; qty: number; unit_cost: number | null };
 type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
@@ -34,13 +53,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-function addDays(iso: string, n: number) {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, shipments, inbounds, rollup }: {
+export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvoiceRow[];
   lines: OrderLine[];
@@ -50,9 +63,10 @@ export function OrderShell({ order, invoices, lines, variants, packagingItems, p
   shipments: OrderShipment[];
   inbounds: OrderInbound[];
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
+  initialTab?: string;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(initialTab);
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
@@ -60,96 +74,33 @@ export function OrderShell({ order, invoices, lines, variants, packagingItems, p
   const cogs = lines.reduce((s, l) => s + (l.qty ?? 0) * (l.unit_cost ?? 0), 0);
   const advance = (key: string) => start(async () => { await setOrderStatus(order.id, key); router.refresh(); });
 
-  // D1/D14/D25/D30 milestones derived from placed_on; tone from pipeline position.
-  const placed = order.placed_on;
-  const milestones = placed ? [
-    { label: "D1 · Materials", date: placed, doneAt: 1, flightAt: 1 },
-    { label: "D14 · Production", date: addDays(placed, 13), doneAt: 2, flightAt: 1 },
-    { label: "D25 · Inspection", date: addDays(placed, 24), doneAt: 3, flightAt: 2 },
-    { label: "D30 · Ready to ship", date: addDays(placed, 29), doneAt: 3, flightAt: 2 },
-  ] : [];
-
   return (
-    <div className="space-y-6">
-      <div className="text-[12px] text-muted-foreground">
-        <Link href="/orders" className="hover:text-foreground">Orders</Link> › {order.id}
-      </div>
+    <div className="space-y-5">
+      {/* breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        <Link href="/orders" className="hover:text-foreground">Orders</Link>
+        <ChevronRight className="h-3 w-3 opacity-50" />
+        <span className="font-mono">{order.id}</span>
+        <ChevronRight className="h-3 w-3 opacity-50" />
+        <span className="font-medium text-foreground">{TABS.find((t) => t.key === tab)?.label ?? "Home"}</span>
+      </nav>
 
-      <PageHead
-        kicker={`Order · ${order.id}`}
-        title={order.title}
-        actions={
-          <>
-            <Badge tone={ORDER_STATUS_TONE[order.status] ?? "muted"}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
-            <GhostButton onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</GhostButton>
-          </>
-        }
-      />
-      <div className="flex flex-wrap gap-2">
-        {order.supplier && <Chip icon={Factory}>{order.supplier}</Chip>}
-        <Chip icon={Route}>{order.route ?? "Direct supplier"}</Chip>
-        {units > 0 && <Chip icon={Boxes}>{num(units)} units · {lines.length} SKU{lines.length === 1 ? "" : "s"}</Chip>}
-        {order.placed_on && <Chip>Placed {order.placed_on}</Chip>}
-      </div>
-
-      {/* milestone strip */}
-      {milestones.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {milestones.map((m) => {
-            const done = curIdx >= m.doneAt, flight = !done && curIdx >= m.flightAt;
-            return (
-              <div key={m.label} className={cn("rounded-lg border px-3 py-2.5",
-                done ? "border-success/30 bg-success/10" : flight ? "border-warning/40 bg-warning/10" : "bg-card")}>
-                <div className={cn("text-[10px] font-bold uppercase tracking-wide", done ? "text-success" : flight ? "text-warning" : "text-muted-foreground")}>{m.label}</div>
-                <div className="mt-0.5 text-[11px]">{done ? `✓ ${m.date}` : flight ? `In flight · ${m.date}` : `est ${m.date}`}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* status pipeline stepper */}
-      <Card className="p-4">
-        <div className="vy-kicker mb-3">Lifecycle</div>
-        <div className="flex flex-wrap gap-2">
-          {ORDER_PIPELINE.map((p, i) => {
-            const done = i < curIdx, current = i === curIdx;
-            return (
-              <button key={p.key} onClick={() => advance(p.key)} disabled={pending || current}
-                className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                  current ? "border-primary bg-primary text-primary-foreground"
-                    : done ? "border-success/30 bg-success/10 text-success"
-                    : "text-muted-foreground hover:bg-accent")}>
-                {done && <Check className="h-3 w-3" />}{p.label}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Order total" value={rollup.total > 0 ? money(rollup.total) : "—"} sub="from invoices" />
-        <Kpi label="Paid" value={money(rollup.paid)} sub={`${rollup.paidPct}% paid`} tone="success" progress={rollup.paidPct} />
-        <Kpi label="Balance" value={money(rollup.balance)} sub="outstanding" tone={rollup.balance > 0 ? "warning" : "success"} />
-        <Kpi label="FBA arrival" value={order.fba_eta ?? "—"} sub="ETA" source="amazon" />
-      </div>
-
-      {/* section switcher */}
-      <div className="flex flex-wrap gap-1 rounded-lg border bg-card p-1">
-        {SECTIONS.map((s) => {
-          const Icon = s.icon;
+      {/* tab bar */}
+      <div className="flex flex-wrap gap-1.5">
+        {TABS.map((t) => {
+          const I = t.icon; const active = tab === t.key;
           return (
-            <button key={s.key} onClick={() => setTab(s.key)}
-              className={cn("flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition",
-                tab === s.key ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>
-              <Icon className="h-3.5 w-3.5" /> {s.label}
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={cn("inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition",
+                active ? "bg-primary text-primary-foreground shadow-sm" : "border text-muted-foreground hover:bg-accent")}>
+              <I className="h-4 w-4" /> {t.label}
             </button>
           );
         })}
       </div>
 
       {tab === "overview" ? (
-        <Overview order={order} rollup={rollup} curIdx={curIdx} onJump={setTab} />
+        <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} />
       ) : tab === "invoices" ? (
         <InvoicesPanel invoices={invoices} />
       ) : tab === "shipping" ? (
@@ -168,60 +119,124 @@ export function OrderShell({ order, invoices, lines, variants, packagingItems, p
   );
 }
 
-function Overview({ order, rollup, curIdx, onJump }: {
-  order: OrderRow; rollup: { balance: number; invoiceCount: number }; curIdx: number; onJump: (k: string) => void;
+function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, onEdit, pending }: {
+  order: OrderRow; rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
+  units: number; skuCount: number; curIdx: number; onJump: (k: string) => void; onAdvance: (k: string) => void; onEdit: () => void; pending: boolean;
 }) {
-  // needs-attention derived from status + balance
-  const needs: { tone: Tone; text: string }[] = [];
-  if (rollup.balance > 0) needs.push({ tone: "warning", text: `${money(rollup.balance)} unpaid across ${rollup.invoiceCount} invoice(s)` });
-  if (order.status === "draft") needs.push({ tone: "muted", text: "Draft — send deposit to start production" });
-  if (order.status === "inspection") needs.push({ tone: "warning", text: "Inspection pending — book QC / review report" });
-  if (order.status === "transit") needs.push({ tone: "info", text: "In transit — track shipment to FBA" });
-  if (order.status === "fba") needs.push({ tone: "success", text: "At FBA — reconcile receiving & compute landed cost" });
+  const needs = orderNeeds({ status: order.status, balance: rollup.balance, paidPct: rollup.paidPct, units, supplier: order.supplier });
+  const top = needs[0];
+  const sIdx = STATUS_IDX[order.status] ?? 0;
+  const next = ORDER_PIPELINE[curIdx + 1];
+  const liveTone = ORDER_STATUS_TONE[order.status] ?? "muted";
 
-  const cards = SECTIONS.filter((s) => s.key !== "overview").map((s) => {
-    const idx = { production: 1, inspection: 2, shipping: 3, invoices: -1, landed: 4 }[s.key] ?? -1;
-    const state = s.key === "invoices" ? (rollup.balance > 0 ? "Open" : "Settled")
-      : idx < 0 ? "—" : curIdx > idx ? "Done" : curIdx === idx ? "Current" : "Upcoming";
-    const tone: Tone = state === "Done" || state === "Settled" ? "success" : state === "Current" || state === "Open" ? "warning" : "muted";
-    return { ...s, state, tone };
-  });
+  function nodeState(key: string): "done" | "current" | "upcoming" | "skipped" | "open" {
+    if (key === "inspection" && !order.inspection_required) return "skipped";
+    if (key === "invoices") return rollup.balance <= 0.5 && rollup.total > 0 ? "done" : "open";
+    const at: Record<string, number> = { production: 1, inspection: 2, shipping: 3, landed: 4 };
+    const cur = key === "shipping" ? 3 : key === "landed" ? (sIdx >= 5 ? 99 : 4) : at[key];
+    if (key === "landed") return sIdx >= 5 ? "done" : sIdx === 4 ? "current" : "upcoming";
+    if (sIdx > cur) return "done";
+    if (sIdx === cur) return "current";
+    return "upcoming";
+  }
+  const stTone: Record<string, Tone> = { done: "success", current: "brand", open: "warning", upcoming: "muted", skipped: "muted" };
+  const stPill: Record<string, string> = { done: "Done", current: "Current", open: "Balance due", upcoming: "Open", skipped: "Skipped" };
 
   return (
-    <div className="space-y-4">
-      {needs.length > 0 && (
-        <Card className="p-5">
-          <SectionTitle icon={AlertCircle} tone="warning" title="Needs attention" count={needs.length} />
-          <ul className="space-y-2">
-            {needs.map((n, i) => (
-              <li key={i} className="flex items-center gap-2 text-sm">
-                <span className={cn("h-2 w-2 rounded-full",
-                  n.tone === "warning" ? "bg-warning" : n.tone === "info" ? "bg-info" : n.tone === "success" ? "bg-success" : "bg-muted-foreground")} />
-                {n.text}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {cards.map((c) => {
-          const Icon = c.icon;
-          return (
-            <button key={c.key} onClick={() => onJump(c.key)} className="vy-card vy-card-hover flex items-center gap-3 p-4 text-left">
-              <span className={cn("inline-grid h-10 w-10 place-items-center rounded-lg",
-                c.tone === "success" ? "bg-success/12 text-success" : c.tone === "warning" ? "bg-warning/12 text-warning" : "bg-muted text-muted-foreground")}>
-                <Icon className="h-5 w-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="font-medium">{c.label}</div>
-                <div className="text-[12px] text-muted-foreground">{c.state}</div>
+    <div className="space-y-5">
+      {/* Header card — identity + next action */}
+      <Card className="overflow-hidden p-0">
+        <div className="grid lg:grid-cols-[1.6fr_1fr]">
+          <div className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Badge tone="muted">{order.id}</Badge>
+                <Badge tone={liveTone} >{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </button>
-          );
-        })}
+              <div className="flex shrink-0 gap-1.5">
+                <button className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Activity</button>
+                <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+              </div>
+            </div>
+            <h1 className="mt-3 text-2xl font-bold">{order.title}</h1>
+            <p className="mt-1.5 max-w-[60ch] text-[13px] text-muted-foreground">Hub for this purchase order. Track every stage at a glance — the work happens inside each owning section.</p>
+            <div className="mt-3.5 flex flex-wrap gap-1.5">
+              <Chip icon={Route}>Agent · {order.agent ?? "Direct"}</Chip>
+              {order.supplier && <Chip icon={Factory}>Factory · {order.supplier}</Chip>}
+              {units > 0 && <Chip icon={Boxes}>{num(units)} units</Chip>}
+              {order.placed_on && <Chip icon={Calendar}>Placed {order.placed_on}</Chip>}
+            </div>
+          </div>
+          {top && (
+            <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
+              <div className="vy-kicker mb-1.5 flex items-center gap-1.5"><span className={cn("h-1.5 w-1.5 rounded-full", top.severity === "warning" ? "bg-warning" : top.severity === "danger" ? "bg-danger" : "bg-info")} /> Next action</div>
+              <div className="text-base font-bold">{top.headline}</div>
+              <p className="mb-3.5 mt-1 text-[12px] text-muted-foreground">{top.detail}</p>
+              <button onClick={() => onJump(top.section)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5">Open {top.sectionLabel} <ArrowRight className="h-4 w-4" /></button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi label="Order total" value={rollup.total > 0 ? money(rollup.total) : "—"} sub={`${num(units)} units · ${skuCount} SKU${skuCount === 1 ? "" : "s"}`} icon={Receipt} />
+        <Kpi label="Paid" value={money(rollup.paid)} sub={`${rollup.paidPct}% of total`} icon={Check} tone="success" progress={rollup.paidPct} />
+        <Kpi label="Balance due" value={money(rollup.balance)} sub="Due before shipment" icon={AlertCircle} tone={rollup.balance > 0.5 ? "warning" : "success"} />
+        <Kpi label="Units" value={num(units)} sub="Ordered scope" icon={Boxes} />
+        <Kpi label="FBA ETA" value={order.fba_eta ?? "—"} sub="Estimated arrival" icon={Truck} source="amazon" />
       </div>
+
+      {/* Order journey */}
+      <Card className="p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div><div className="vy-kicker">Order journey</div><p className="mt-0.5 text-[11.5px] text-muted-foreground">Where this order sits across its lifecycle. Click a stage to open it.</p></div>
+          <div className="flex items-center gap-2">
+            <Badge tone={liveTone}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
+            <button disabled={curIdx <= 0 || pending} onClick={() => onAdvance(ORDER_PIPELINE[curIdx - 1].key)} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40" aria-label="Step back"><ChevronLeft className="h-3.5 w-3.5" /></button>
+            {next ? <button disabled={pending} onClick={() => onAdvance(next.key)} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5">Advance to {next.label} <ArrowRight className="h-3.5 w-3.5" /></button>
+              : <Badge tone="success">Complete</Badge>}
+          </div>
+        </div>
+        <div className="flex items-start">
+          {JOURNEY.map((n, i) => {
+            const st = nodeState(n.key); const Icon = n.icon;
+            const tone = stTone[st];
+            return (
+              <div key={n.key} className="contents">
+                <button onClick={() => st !== "skipped" && onJump(n.key)} disabled={st === "skipped"} className={cn("flex flex-1 flex-col items-center gap-1.5 px-1", st === "skipped" ? "cursor-default opacity-55" : "cursor-pointer")}>
+                  <span className={cn("relative grid h-9 w-9 place-items-center rounded-xl", st === "current" && "ring-[3px] ring-primary/20")} style={{ background: `hsl(var(--${tone === "brand" ? "primary" : tone}) / 0.12)`, color: `hsl(var(--${tone === "brand" ? "primary" : tone}))`, border: st === "skipped" ? "1px dashed hsl(var(--muted-foreground) / 0.5)" : "none" }}>
+                    <Icon className="h-[17px] w-[17px]" />
+                    {st === "done" && <span className="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full border-2 border-card bg-success text-white"><Check className="h-2 w-2" strokeWidth={4} /></span>}
+                  </span>
+                  <span className={cn("whitespace-nowrap text-[12.5px] font-semibold", st === "skipped" && "line-through")}>{n.label}</span>
+                  <Badge tone={tone}>{stPill[st]}</Badge>
+                </button>
+                {i < JOURNEY.length - 1 && <div className="mt-[18px] h-0.5 flex-1 rounded" style={{ background: st === "done" ? "hsl(var(--success))" : "hsl(var(--border))" }} />}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Needs attention */}
+      <Card className="p-5">
+        <SectionTitle icon={AlertCircle} tone="warning" title="Needs attention" count={needs.length} />
+        <p className="-mt-2 mb-3 text-[11.5px] text-muted-foreground">Derived from the owning sections. Read-only — fix it where it lives.</p>
+        {needs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nothing needs attention — this order is on track.</p>
+        ) : (
+          <div className="space-y-2">
+            {needs.map((n) => (
+              <button key={n.key} onClick={() => onJump(n.section)} className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left hover:bg-accent/40">
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", n.severity === "warning" ? "bg-warning" : n.severity === "danger" ? "bg-danger" : "bg-info")} />
+                <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="text-[13px] font-semibold">{n.headline}</span><span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{n.sectionLabel}</span></div><div className="text-[12px] text-muted-foreground">{n.detail}</div></div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

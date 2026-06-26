@@ -245,6 +245,19 @@ export function invoiceAging(dueISO: string | null, balance: number, nowMs: numb
   return { days, label: "Upcoming", tone: "muted" };
 }
 
+// Derived "needs attention" / next-actions for an order — shared by the order Home
+// page and the orders-list peek drawer so both surface the same guidance.
+export type OrderNeed = { key: string; headline: string; detail: string; section: string; sectionLabel: string; severity: Tone };
+export function orderNeeds(o: { status: string; balance: number; paidPct: number; units: number; supplier?: string | null }): OrderNeed[] {
+  const needs: OrderNeed[] = [];
+  if (o.status === "production") needs.push({ key: "prod", headline: "Confirm supplier receipt", detail: `In production · ${o.supplier ?? "supplier"} · ${o.units.toLocaleString()} units`, section: "production", sectionLabel: "Production", severity: "info" });
+  if (o.status === "inspection") needs.push({ key: "insp", headline: "Schedule pre-shipment inspection", detail: "AQL check before the order ships", section: "inspection", sectionLabel: "Inspection", severity: "warning" });
+  if (o.status === "transit") needs.push({ key: "ship", headline: "Track inbound shipment", detail: "Monitor the freight leg to the FC", section: "shipping", sectionLabel: "Shipping", severity: "info" });
+  if (o.balance > 0.5) needs.push({ key: "bal", headline: "Balance due before shipment release", detail: `${money(o.balance)} outstanding · ${o.paidPct}% paid`, section: "invoices", sectionLabel: "Invoices", severity: "warning" });
+  if (o.status === "fba") needs.push({ key: "land", headline: "Reconcile landed cost", detail: "Close out duties, freight and fees", section: "landed", sectionLabel: "Landed cost", severity: "info" });
+  return needs;
+}
+
 // Order money rollup — total/paid/balance derived from its invoices.
 export function orderRollup(orderId: string, invoices: InvoiceRow[]) {
   const mine = invoices.filter((i) => i.order_id === orderId);
