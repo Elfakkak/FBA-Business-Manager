@@ -59,12 +59,12 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
           <Badge tone="info">{statusLabel}</Badge>
           <Badge tone="muted">{skuCount} {skuCount === 1 ? "variant" : "variants"}</Badge>
           <Badge tone="muted">{num(roll.totalUnits)} pcs</Badge>
-          {goodsMissing > 0 && <Badge tone="warning">{goodsMissing} missing cost</Badge>}
+          {goodsMissing > 0 && <Badge tone="warning">{goodsMissing} unpriced</Badge>}
         </>}
         nextAction={{
           severity: goodsMissing > 0 ? "warning" : undefined,
           headline: goodsMissing > 0 ? "Close readiness gaps" : "Generate the PO",
-          detail: goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} need a unit cost — build the scope, then generate the PO.` : "Scope is priced — ready to generate the purchase order.",
+          detail: goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} have no reference price yet — add a last-known price to quote the PO. The actual price is recorded on the invoice.` : "Scope is priced — ready to generate the purchase order.",
           cta: <button type="button" onClick={() => setShowPO(true)} disabled={lines.length === 0} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5 disabled:opacity-50"><FileText className="h-4 w-4" /> Generate PO</button>,
         }}
       />
@@ -72,7 +72,7 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
       {/* KPIs */}
       <KpiStrip cols={3}>
         <Kpi label="Production scope" value={`${skuCount} ${skuCount === 1 ? "SKU" : "SKUs"}`} sub={`${num(roll.totalUnits)} pcs · ${money(roll.totalGoods)} product cost`} icon={Package} />
-        <Kpi label="Readiness" value={goodsMissing > 0 ? `${goodsMissing} missing` : "Ready"} sub={goodsMissing > 0 ? "lines need a cost" : "all lines priced"} icon={ClipboardCheck} tone={goodsMissing > 0 ? "warning" : "success"} />
+        <Kpi label="Readiness" value={goodsMissing > 0 ? `${goodsMissing} missing` : "Ready"} sub={goodsMissing > 0 ? "lines need a reference price" : "all lines priced"} icon={ClipboardCheck} tone={goodsMissing > 0 ? "warning" : "success"} />
         <Kpi label="Factory clock" value={statusLabel} sub={order.placed_on ? `Placed ${order.placed_on}` : "Not placed yet"} icon={Activity} />
       </KpiStrip>
 
@@ -355,7 +355,7 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
           </table>
         </div>
       )}
-      <p className="px-5 py-3 text-[11px] text-muted-foreground">Line $ = qty × unit $ invoice. Est landed/u spreads non‑product costs over units (duties excluded — estimate).</p>
+      <p className="px-5 py-3 text-[11px] text-muted-foreground">Prices are last‑known references seeded from the catalog (editable) — the <span className="font-medium">actual</span> price is recorded on the invoice. Line $ = qty × unit $ invoice. Est landed/u spreads non‑product costs over units (duties excluded — estimate).</p>
       {adding && <AddSkuModal orderId={order.id} variants={variants} onClose={() => setAdding(false)} />}
     </Card>
   );
@@ -369,10 +369,10 @@ const rmb = (v: number | null) => (v == null ? "—" : `¥${Number(v).toFixed(2)
 // One catalog variant row inside an expanded family card.
 function SkuRow({ v, on, onToggle }: { v: CatalogVariant; on: boolean; onToggle: () => void }) {
   return (
-    <label className={cn("flex cursor-pointer items-center gap-3 px-4 py-2.5", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
+    <label className={cn("flex cursor-pointer items-center gap-3 px-4 py-3", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
       <input type="checkbox" checked={on} onChange={onToggle} className="h-4 w-4 shrink-0 accent-primary" />
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Package className="h-4 w-4" /></span>
-      <span className={cn("w-40 shrink-0 font-mono text-[12px] font-semibold", on && "text-primary")}>{v.sku}</span>
+      <span className={cn("w-44 shrink-0 wrap-break-word font-mono text-[12px] font-semibold leading-tight", on && "text-primary")}>{v.sku}</span>
       <span className="min-w-0 flex-1 truncate text-[13px]">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
       {v.fba_stock != null && <span className="hidden shrink-0 text-[12px] text-muted-foreground md:block">{num(v.fba_stock)} FBA</span>}
       <span className="shrink-0 font-mono text-[13px] font-semibold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
@@ -394,7 +394,7 @@ function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, onToggleOpen, onSelectA
       <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3.5", selCount > 0 && "border-primary/60 bg-primary/5")}>
         <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2"><span className="font-semibold leading-snug">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
-          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
+          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory —{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
           <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
         </button>
         <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>

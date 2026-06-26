@@ -171,9 +171,20 @@ export async function saveInvoiceLines(invoiceId: string, lines: InvoiceLineInpu
     const { error: del } = await supabase.from("invoice_lines").delete().in("id", oldIds);
     if (del) return { ok: false, error: del.message };
   }
+
+  // Feedback loop: the invoice is the ACTUAL price paid, so update each goods
+  // SKU's catalog last cost (the USD billed unit price) — "latest billed wins".
+  // This is what seeds the next order's reference price.
+  for (const r of rows) {
+    if (r.kind !== "goods" || !r.sku || !r.qty || r.qty <= 0 || !(r.billed > 0)) continue;
+    const unit = Math.round((r.billed / r.qty) * 100) / 100;
+    await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", r.sku);
+  }
+
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${invoiceId}`);
   if (inv.order_id) revalidatePath(`/orders/${inv.order_id}`);
+  revalidatePath("/catalog");
   return { ok: true, id: invoiceId };
 }
 
