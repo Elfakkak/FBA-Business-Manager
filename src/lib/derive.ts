@@ -141,6 +141,19 @@ export function skuProfit(v: Variant, amazonFee: number | null) {
 // ---------- supplier / partner rollups (derived, not stored) ----------
 export type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 export type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+export type ShipmentRow = Database["public"]["Tables"]["shipments"]["Row"];
+
+// Freight shipment stage pipeline (factory → FC) — Amazon takes over at "At FBA".
+export const SHIPMENT_STAGES = ["Draft", "Booked", "Picked up", "In transit", "Customs", "Delivered", "At FBA"] as const;
+export const SHIPMENT_STAGE_TONE: Record<string, Tone> = {
+  Draft: "muted", Booked: "info", "Picked up": "info", "In transit": "info",
+  Customs: "warning", Delivered: "success", "At FBA": "success",
+};
+export const CUSTOMS_TONE: Record<string, Tone> = {
+  Cleared: "success", "In clearance": "info", Pending: "warning", "Docs missing": "danger",
+};
+// shipments whose cargo is moving (left origin) — for "shipped/on-water" rollups
+export const SHIPMENT_MOVING = ["Picked up", "In transit", "Customs", "Delivered", "At FBA"];
 
 const isClosed = (status: string) => /closed|fba/i.test(status);
 const unpaid = (inv: InvoiceRow) => Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
