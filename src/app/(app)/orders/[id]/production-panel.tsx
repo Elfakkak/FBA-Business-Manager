@@ -23,9 +23,10 @@ type VendorOpt = { name: string; type: string };
 const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "info", Inspection: "warning" };
 const fmtAmt = (amount: number | null, currency: string) => `${currency === "CNY" ? "¥" : "$"}${(Number(amount) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors }: {
-  order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: CatalogVariant[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[];
+export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName }: {
+  order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: CatalogVariant[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[]; companyName: string;
 }) {
+  const [showPO, setShowPO] = useState(false);
   const roll = useMemo(() => productionLanded(lines, costs), [lines, costs]);
   const landedById = useMemo(() => new Map(roll.withLanded.map((l) => [l.id, l])), [roll]);
   const skuCount = lines.length;
@@ -62,8 +63,8 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
             <div className="vy-kicker mb-1.5">Next action</div>
             <div className="text-base font-bold">{goodsMissing > 0 ? "Close readiness gaps" : "Generate the PO"}</div>
             <p className="mb-3 mt-1 text-[12px] text-muted-foreground">{goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} need a unit cost — build the scope, then generate the PO.` : "Scope is priced — ready to generate the purchase order."}</p>
-            <button type="button" disabled title="PO sheet — coming soon" className="vy-btn vy-btn--primary inline-flex cursor-not-allowed items-center gap-1.5 opacity-70">
-              <FileText className="h-4 w-4" /> Generate PO <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">Soon</span>
+            <button type="button" onClick={() => setShowPO(true)} disabled={lines.length === 0} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5 disabled:opacity-50">
+              <FileText className="h-4 w-4" /> Generate PO
             </button>
           </div>
         </div>
@@ -83,7 +84,101 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
 
       {/* Non-product costs */}
       <NonProductCosts order={order} costs={costs} chargeTypes={chargeTypes} vendors={vendors} />
+
+      {showPO && <GeneratePOModal order={order} lines={lines} costs={costs} companyName={companyName} onClose={() => setShowPO(false)} />}
     </div>
+  );
+}
+
+// Generate PO — pick which lines + costs to include, then open a print-ready PO.
+function GeneratePOModal({ order, lines, costs, companyName, onClose }: {
+  order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; companyName: string; onClose: () => void;
+}) {
+  const [selL, setSelL] = useState<Set<string>>(() => new Set(lines.map((l) => l.id)));
+  const [selC, setSelC] = useState<Set<string>>(() => new Set(costs.map((c) => c.id)));
+  const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => set((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const prodLines = lines.filter((l) => selL.has(l.id)).map((l) => ({ ...l, line: (Number(l.qty) || 0) * (Number(l.unit_cost) || 0) }));
+  const prodSub = prodLines.reduce((s, l) => s + l.line, 0);
+  const costLines = costs.filter((c) => selC.has(c.id));
+  const costSub = costLines.reduce((s, c) => s + costUsd(c), 0);
+  const total = prodSub + costSub;
+
+  function generate() {
+    const rows = prodLines.map((l) => `<tr><td style="font-family:monospace">${l.sku ?? ""}</td><td>${l.product_name ?? ""}</td><td style="text-align:right">${num(l.qty)}</td><td style="text-align:right">${money(l.unit_cost)}</td><td style="text-align:right">${money(l.line)}</td></tr>`).join("");
+    const crows = costLines.map((c) => `<tr><td colspan="4">${c.description}${c.line_type ? ` · ${c.line_type}` : ""}</td><td style="text-align:right">${money(costUsd(c))}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>PO ${order.id}</title>
+      <style>body{font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;max-width:760px;margin:32px auto;padding:0 24px}h1{font-size:22px;margin:0}h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin:24px 0 8px}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#888}tfoot td{font-weight:700;border-top:2px solid #333;border-bottom:none}.muted{color:#888}.total{font-size:18px;font-weight:700;color:#d2691e}@media print{body{margin:0}}</style></head>
+      <body>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div><h1>Purchase Order</h1><div class="muted">${order.id}${order.placed_on ? " · " + order.placed_on : ""}</div></div>
+          <div style="text-align:right"><div style="font-weight:700">${companyName}</div></div>
+        </div>
+        <h2>Addressed to</h2><div>${order.supplier ?? order.agent ?? "Supplier"} · factory</div>
+        <h2>Products</h2>
+        <table><thead><tr><th>SKU</th><th>Variant</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th style="text-align:right">Line total</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="5" class="muted">No products selected</td></tr>`}</tbody>
+        <tfoot><tr><td colspan="4">Products subtotal</td><td style="text-align:right">${money(prodSub)}</td></tr></tfoot></table>
+        ${costLines.length ? `<h2>Non-product costs</h2><table><tbody>${crows}</tbody><tfoot><tr><td colspan="4">Costs subtotal</td><td style="text-align:right">${money(costSub)}</td></tr></tfoot></table>` : ""}
+        <h2>Total</h2><div class="total">${money(total)}</div>
+        <p class="muted" style="margin-top:32px;font-size:11px">Generated by ${companyName} · ${order.title}</p>
+        <script>window.onload=function(){window.print()}</script>
+      </body></html>`;
+    const w = window.open("", "_blank", "width=820,height=900");
+    if (!w) return;
+    w.document.write(html); w.document.close();
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Generate PO" size="lg">
+      <div className="space-y-4">
+        <p className="-mt-1 text-[12px] text-muted-foreground">Pick what to include. We&apos;ll build the printable PO with your company info.</p>
+        <div className="rounded-lg border bg-accent/40 px-3 py-2 text-[13px]"><span className="font-semibold">Addressed to:</span> {order.supplier ?? order.agent ?? "Supplier"} · factory</div>
+
+        <div>
+          <div className="vy-kicker mb-1.5">Products</div>
+          <div className="overflow-hidden rounded-lg border">
+            {lines.length === 0 ? <p className="px-3 py-4 text-center text-[12px] text-muted-foreground">No product lines.</p> : lines.map((l) => {
+              const line = (Number(l.qty) || 0) * (Number(l.unit_cost) || 0);
+              return (
+                <label key={l.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+                  <input type="checkbox" checked={selL.has(l.id)} onChange={() => toggle(setSelL, l.id)} className="h-4 w-4 accent-primary" />
+                  <span className="w-32 shrink-0 font-mono text-[12px] font-semibold">{l.sku}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{l.product_name}</span>
+                  <span className="w-12 text-right font-mono text-[12px]">{num(l.qty)}</span>
+                  <span className="w-20 text-right font-mono text-[12px] font-semibold">{money(line)}</span>
+                </label>
+              );
+            })}
+            <div className="flex items-center justify-between bg-muted/40 px-3 py-2 text-[12px] font-semibold"><span>Subtotal</span><span className="font-mono">{money(prodSub)}</span></div>
+          </div>
+        </div>
+
+        {costs.length > 0 && (
+          <div>
+            <div className="vy-kicker mb-1.5">Non-product costs</div>
+            <div className="overflow-hidden rounded-lg border">
+              {costs.map((c) => (
+                <label key={c.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+                  <input type="checkbox" checked={selC.has(c.id)} onChange={() => toggle(setSelC, c.id)} className="h-4 w-4 accent-primary" />
+                  <span className="min-w-0 flex-1 truncate text-[13px]">{c.description}</span>
+                  <span className="font-mono text-[12px] font-semibold">{money(costUsd(c))}</span>
+                </label>
+              ))}
+              <div className="flex items-center justify-between bg-muted/40 px-3 py-2 text-[12px] font-semibold"><span>Subtotal</span><span className="font-mono">{money(costSub)}</span></div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+          <div className="text-[13px]"><span className="text-muted-foreground">Total:</span> <span className="font-mono text-base font-bold text-primary">{money(total)}</span></div>
+          <div className="ml-auto flex gap-2">
+            <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
+            <PrimaryButton type="button" onClick={generate} className="inline-flex items-center gap-1.5"><FileText className="h-4 w-4" /> Generate PDF</PrimaryButton>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
