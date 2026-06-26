@@ -72,7 +72,13 @@ export function EditProductButton({ product, suppliers, categories }: { product:
                 {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Route"><input name="supplier_route" defaultValue={product.supplier_route ?? ""} className={inputCls} placeholder="Direct supplier / via Agent" /></Field>
+            <Field label="Route">
+              <select name="supplier_route" defaultValue={product.supplier_route ?? ""} className={inputCls}>
+                <option value="">— none —</option>
+                <option value="Direct supplier">Direct supplier</option>
+                <option value="via Agent">via Agent</option>
+              </select>
+            </Field>
             <Field label="Last ordered"><input name="last_ordered" defaultValue={product.last_ordered ?? ""} className={inputCls} placeholder="May 2026" /></Field>
             <Field label="Lead time (days)"><input name="lead_time_days" type="number" defaultValue={product.lead_time_days ?? ""} className={inputCls} /></Field>
             <Field label="MOQ (units)"><input name="moq" type="number" defaultValue={product.moq ?? ""} className={inputCls} /></Field>
