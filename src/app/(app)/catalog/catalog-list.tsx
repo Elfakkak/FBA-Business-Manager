@@ -31,7 +31,7 @@ export type FamilySummary = {
   avgMargin: number | null;
   status: string;
   favorite: boolean;
-  skus: { sku: string; stock: number; status: string }[];
+  skus: { sku: string; asin: string | null; stock: number; status: string }[];
 };
 
 const CHIPS: { key: "all" | FamilyHealth; label: string }[] = [
@@ -214,6 +214,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                     <tr key={sk.sku} className="bg-muted/20 text-[12px]">
                       <td className="py-1.5 pl-14 pr-3">
                         <Link href={`/inventory?q=${encodeURIComponent(sk.sku)}`} className="font-mono hover:text-primary">{sk.sku}</Link>
+                        {sk.asin && <span className="ml-2 font-mono text-[10px] text-muted-foreground">ASIN {sk.asin}</span>}
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">variant</td>
                       <td />

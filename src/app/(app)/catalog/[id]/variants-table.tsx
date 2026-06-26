@@ -44,7 +44,10 @@ export function VariantsTable({ familyId, weightLb, variants, products }: { fami
               const e = variantEco(v as never, weightLb);
               return (
                 <tr key={v.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(v)}>
-                  <td className="px-4 py-2.5 font-mono text-[12px] font-semibold whitespace-nowrap">{v.sku}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <div className="font-mono text-[12px] font-semibold">{v.sku}</div>
+                    {v.asin && <div className="font-mono text-[10px] text-muted-foreground">ASIN {v.asin}</div>}
+                  </td>
                   <td className="px-4 py-2.5"><div className="max-w-[260px] truncate" title={`${v.name} · ${v.pack}`}>{v.name}<span className="text-muted-foreground"> · {v.pack}</span></div></td>
                   <td className="px-4 py-2.5 font-mono text-[12px]">{v.fnsku ? v.fnsku : <Badge tone="warning">Not linked</Badge>}</td>
                   <td className="px-4 py-2.5 text-right" onClick={(ev) => ev.stopPropagation()}>
