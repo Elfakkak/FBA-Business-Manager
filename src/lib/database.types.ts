@@ -860,6 +860,7 @@ export type Database = {
       order_costs: {
         Row: {
           amount: number
+          amount_cny_ref: number | null
           basis: string
           charge_type_id: string | null
           coverage: string
@@ -879,6 +880,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          amount_cny_ref?: number | null
           basis?: string
           charge_type_id?: string | null
           coverage?: string
@@ -898,6 +900,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_cny_ref?: number | null
           basis?: string
           charge_type_id?: string | null
           coverage?: string

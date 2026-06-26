@@ -297,13 +297,11 @@ export const PROD_LINE_TYPES = ["Agent fee", "Cartons", "Inland freight", "Inspe
 export const PROD_BASES = ["value", "units"] as const;
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id?: string | null; qty: number; unit_cost: number | null; unit_cny_ref?: number | null };
-type ProdCost = Pick<OrderCostRow, "amount" | "basis" | "currency" | "treatment">;
+type ProdCost = Pick<OrderCostRow, "amount" | "basis" | "treatment">;
 
-// Reference FX so a CNY-entered cost can be folded into a USD landed estimate.
-export const CNY_PER_USD = 7.2;
-export function costUsd(c: { amount: number | null; currency?: string | null }): number {
-  const a = Number(c.amount) || 0;
-  return c.currency === "CNY" ? a / CNY_PER_USD : a;
+// All calculation amounts are USD. RMB (¥) is reference-only and never feeds math.
+export function costUsd(c: { amount: number | null }): number {
+  return Number(c.amount) || 0;
 }
 
 // Per-SKU landed-cost estimate: spread the INVENTORIABLE non-product cost pool

@@ -16,12 +16,11 @@ import {
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
-export type CatalogVariant = { id: string; sku: string; name: string; pack: string | null; familyName: string; last_cost_usd: number | null; last_cost_rmb: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
+export type CatalogVariant = { id: string; sku: string; name: string; pack: string | null; familyName: string; familyLastOrdered: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
 type ChargeTypeOpt = { id: string; label: string; owner: string };
 type VendorOpt = { name: string; type: string };
 
 const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "info", Inspection: "warning" };
-const fmtAmt = (amount: number | null, currency: string) => `${currency === "CNY" ? "¥" : "$"}${(Number(amount) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName }: {
   order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: CatalogVariant[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[]; companyName: string;
@@ -249,6 +248,45 @@ type SkuPick = { qty: number; unit_cost: number | null; unit_cny: number | null 
 const skuStatusTone = (s: string | null): "success" | "warning" | "muted" => (!s ? "muted" : /ready/i.test(s) ? "success" : "warning");
 const rmb = (v: number | null) => (v == null ? "—" : `¥${Number(v).toFixed(2)}`);
 
+// One catalog variant row inside an expanded family card.
+function SkuRow({ v, on, onToggle }: { v: CatalogVariant; on: boolean; onToggle: () => void }) {
+  return (
+    <label className={cn("flex cursor-pointer items-center gap-3 px-4 py-2.5", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
+      <input type="checkbox" checked={on} onChange={onToggle} className="h-4 w-4 shrink-0 accent-primary" />
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Package className="h-4 w-4" /></span>
+      <span className={cn("w-40 shrink-0 font-mono text-[12px] font-semibold", on && "text-primary")}>{v.sku}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px]">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
+      {v.fba_stock != null && <span className="hidden shrink-0 text-[12px] text-muted-foreground md:block">{num(v.fba_stock)} FBA</span>}
+      <span className="shrink-0 font-mono text-[13px] font-semibold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
+      <span className="hidden shrink-0 font-mono text-[12px] text-muted-foreground md:block">{rmb(v.last_cost_rmb)}</span>
+      <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>
+    </label>
+  );
+}
+
+// A collapsible product-family card with its variant rows (catalog browser).
+function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, onToggleOpen, onSelectAll, onToggleVariant }: {
+  fam: string; vs: CatalogVariant[]; isOpen: boolean; selCount: number; sel: Map<string, SkuPick>;
+  onToggleOpen: () => void; onSelectAll: () => void; onToggleVariant: (v: CatalogVariant) => void;
+}) {
+  const allSel = selCount === vs.length && vs.length > 0;
+  const lastOrdered = vs[0]?.familyLastOrdered;
+  return (
+    <div className="space-y-2">
+      <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3.5", selCount > 0 && "border-primary/60 bg-primary/5")}>
+        <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
+          <div className="flex flex-wrap items-center gap-2"><span className="font-semibold leading-snug">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
+          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
+          <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
+        </button>
+        <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>
+        <button type="button" onClick={onToggleOpen} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
+      </div>
+      {isOpen && <div className="divide-y overflow-hidden rounded-xl border">{vs.map((v) => <SkuRow key={v.id} v={v} on={sel.has(v.id)} onToggle={() => onToggleVariant(v)} />)}</div>}
+    </div>
+  );
+}
+
 // Multi-select catalog browser — collapsible family cards, per-line qty/price review.
 function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants: CatalogVariant[]; onClose: () => void }) {
   const router = useRouter();
@@ -301,42 +339,12 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
 
         <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
           {/* catalog list — collapsible family cards */}
-          <div className="max-h-[52vh] space-y-2.5 overflow-y-auto pr-1">
+          <div className="max-h-[54vh] space-y-2.5 overflow-y-auto pr-1">
             {groups.map(([fam, vs]) => {
-              const isOpen = !!n || open.has(fam);
               const selCount = vs.filter((v) => sel.has(v.id)).length;
               return (
-                <div key={fam} className={cn("overflow-hidden rounded-xl border", selCount > 0 ? "border-primary/50" : "")}>
-                  <div className={cn("flex items-center gap-2 px-3.5 py-3", selCount > 0 ? "bg-primary/5" : "")}>
-                    <button type="button" onClick={() => toggleOpen(fam)} className="flex min-w-0 flex-1 items-start gap-2 text-left">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
-                        <div className="text-[11px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"}</div>
-                      </div>
-                    </button>
-                    <button type="button" onClick={() => setFamily(vs, selCount !== vs.length)} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{selCount === vs.length ? "Deselect all" : "Select all"}</button>
-                    <button type="button" onClick={() => toggleOpen(fam)} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
-                  </div>
-                  {isOpen && (
-                    <div className="divide-y border-t">
-                      {vs.map((v) => {
-                        const on = sel.has(v.id);
-                        return (
-                          <label key={v.id} className={cn("flex cursor-pointer items-center gap-3 px-3.5 py-2.5", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
-                            <input type="checkbox" checked={on} onChange={() => toggle(v)} className="h-4 w-4 shrink-0 accent-primary" />
-                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>
-                            <span className={cn("w-36 shrink-0 font-mono text-[12px] font-semibold", on && "text-primary")}>{v.sku}</span>
-                            <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
-                            {v.fba_stock != null && <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">{num(v.fba_stock)} FBA</span>}
-                            <span className="shrink-0 font-mono text-[12px] font-semibold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
-                            <span className="hidden shrink-0 font-mono text-[11px] text-muted-foreground sm:block">{rmb(v.last_cost_rmb)}</span>
-                            <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <SkuFamilyCard key={fam} fam={fam} vs={vs} isOpen={!!n || open.has(fam)} selCount={selCount} sel={sel}
+                  onToggleOpen={() => toggleOpen(fam)} onSelectAll={() => setFamily(vs, selCount !== vs.length)} onToggleVariant={toggle} />
               );
             })}
             {filtered.length === 0 && <div className="rounded-lg border px-3 py-8 text-center text-[12px] text-muted-foreground">No variants match. Add new ones in Products.</div>}
@@ -423,13 +431,14 @@ function NonProductCosts({ order, costs, chargeTypes, vendors }: { order: OrderR
                     <div className="font-medium">{c.description}</div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                       {c.vendor && <span>{c.vendor}</span>}
+                      {c.amount_cny_ref != null && <span className="font-mono">ref {rmb(c.amount_cny_ref)}</span>}
                       {c.treatment === "period" && <span className="rounded bg-muted px-1.5 py-0.5 font-medium">Period expense</span>}
                     </div>
                   </td>
                   <td className="px-3 py-2.5"><Badge tone={(SECTION_TONE[c.section] ?? "muted") as "brand" | "info" | "success" | "muted"}>{c.section}</Badge></td>
                   <td className="px-3 py-2.5 text-muted-foreground">{c.line_type ?? "—"}</td>
                   <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{num(c.qty)}</td>
-                  <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{fmtAmt(c.amount, c.currency)}</td>
+                  <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(c.amount)}</td>
                   <td className="px-3 py-2.5">{c.coverage === "Uncovered" ? <span className="text-[12px] text-muted-foreground">Uncovered</span> : <span className="font-mono text-[11px] text-success">{c.coverage}</span>}</td>
                   <td className="px-3 py-2.5 text-right"><button onClick={() => onDelete(c.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
                 </tr>
@@ -450,9 +459,7 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [currency, setCurrency] = useState<string>("CNY");
   const [vendor, setVendor] = useState<string>("");
-  const [coverage, setCoverage] = useState<string>("Uncovered");
   const [treatment, setTreatment] = useState<string>("inventoriable");
   const [basis, setBasis] = useState<string>("units");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -473,14 +480,14 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
 
         <Field label="Description"><input name="description" required autoFocus className={inputCls} placeholder={`e.g. "Tooling for 18\\" mold revision"`} /></Field>
 
-        <div className="grid grid-cols-[1fr_7rem] gap-3">
-          <Field label="Amount"><input name="amount" type="number" step="0.01" required className={inputCls} placeholder="0.00" /></Field>
-          <Field label="Currency"><Select name="currency" value={currency} onChange={setCurrency} options={[{ value: "CNY", label: "CNY" }, { value: "USD", label: "USD" }]} /></Field>
+        {/* Amount is always USD (the calc currency). ¥ is a reference note only. */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount (USD)"><input name="amount" type="number" step="0.01" required className={inputCls} placeholder="0.00" /></Field>
+          <Field label="¥ reference (optional)"><input name="amount_cny_ref" type="number" step="0.01" className={inputCls} placeholder="note only" /></Field>
         </div>
+        <p className="-mt-2 text-[11px] leading-relaxed text-muted-foreground">You pay in <span className="font-medium">USD</span> — that&apos;s what the app calculates. The <span className="font-medium">¥</span> is just to remember the RMB price; it never affects any total.</p>
 
         <Field label="Vendor / payee"><Select name="vendor" value={vendor} onChange={setVendor} placeholder="Select vendor…" searchable options={vendors.map((v) => ({ value: v.name, label: v.name, sub: v.type }))} /></Field>
-
-        <Field label="Invoice coverage"><Select name="coverage" value={coverage} onChange={setCoverage} options={[{ value: "Uncovered", label: "Uncovered for now" }]} /></Field>
 
         <div>
           <div className="vy-kicker mb-2">Cost treatment</div>
@@ -492,13 +499,16 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">Inventoriable rolls into landed cost. Period expense stays out of COGS.</p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground"><span className="font-medium">Inventoriable</span> = adds to the product&apos;s landed cost (most costs: tooling, packaging, freight). <span className="font-medium">Period expense</span> = a general business cost, kept out of product cost. <span className="text-muted-foreground/80">If unsure, keep Inventoriable.</span></p>
           <input type="hidden" name="treatment" value={treatment} />
         </div>
 
-        <Field label="Allocation"><Select name="basis" value={basis} onChange={setBasis} options={[{ value: "units", label: "By qty" }, { value: "value", label: "By value" }]} /></Field>
+        <div>
+          <Field label="Allocation"><Select name="basis" value={basis} onChange={setBasis} options={[{ value: "units", label: "By qty" }, { value: "value", label: "By value" }]} /></Field>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">How this cost spreads across SKUs for landed cost — <span className="font-medium">By qty</span> (evenly per unit) or <span className="font-medium">By value</span> (weighted by each SKU&apos;s price).</p>
+        </div>
 
-        {/* Add details (collapsible) */}
+        {/* Add details (collapsible) — coverage defaults to "Uncovered" */}
         <div className="rounded-lg border">
           <button type="button" onClick={() => setDetailsOpen((v) => !v)} className="flex w-full items-center justify-between px-3 py-2.5 text-left">
             <span className="text-[13px] font-medium">Add details</span>
