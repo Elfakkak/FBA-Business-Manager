@@ -935,6 +935,41 @@ export type Database = {
           },
         ]
       }
+      order_files: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          order_id: string
+          slot: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          order_id: string
+          slot: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          order_id?: string
+          slot?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_files_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_lines: {
         Row: {
           created_at: string

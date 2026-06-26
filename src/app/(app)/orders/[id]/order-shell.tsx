@@ -59,7 +59,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
@@ -67,6 +67,8 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   costs: OrderCostRow[];
   chargeTypes: ChargeTypeOpt[];
   companyName: string;
+  orderFiles: { slot: string; name: string | null; url: string }[];
+  packagingOnHand: { id: string; name: string; kind: string; unitCost: number; onHand: number }[];
   variants: CatalogVariant[];
   packagingItems: PkgItemOpt[];
   packaging: PkgUsed[];
@@ -116,7 +118,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
-          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} />
+          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : (

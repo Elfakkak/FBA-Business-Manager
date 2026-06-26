@@ -1,18 +1,20 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, KpiStrip, SectionHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import {
   money, num, productionLanded, costUsd, PROD_SECTIONS, PROD_LINE_TYPES,
   ORDER_STATUS_LABEL, type OrderRow, type OrderCostRow,
 } from "@/lib/derive";
-import { addOrderLines, deleteOrderLine, addOrderCost, deleteOrderCost } from "../actions";
+import { addOrderLines, deleteOrderLine, addOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
 import {
-  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight,
+  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check,
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
@@ -22,8 +24,12 @@ type VendorOpt = { name: string; type: string };
 
 const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "info", Inspection: "warning" };
 
-export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName }: {
+type PkgOnHand = { id: string; name: string; kind: string; unitCost: number; onHand: number };
+type OrderFile = { slot: string; name: string | null; url: string };
+
+export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName, orderFiles, packagingOnHand }: {
   order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: CatalogVariant[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[]; companyName: string;
+  orderFiles: OrderFile[]; packagingOnHand: PkgOnHand[];
 }) {
   const [showPO, setShowPO] = useState(false);
   const roll = useMemo(() => productionLanded(lines, costs), [lines, costs]);
@@ -78,8 +84,120 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
       {/* Non-product costs */}
       <NonProductCosts order={order} costs={costs} chargeTypes={chargeTypes} vendors={vendors} />
 
+      {/* Packaging on hand + Purchase order */}
+      <PackagingOnHand items={packagingOnHand} />
+      <PurchaseOrderCard skuCount={skuCount} totalUnits={roll.totalUnits} totalGoods={roll.totalGoods} onGenerate={() => setShowPO(true)} />
+
+      {/* Supporting files */}
+      <div className="vy-kicker text-[11px]">Supporting files</div>
+      <ProductionFiles orderId={order.id} files={orderFiles} />
+
       {showPO && <GeneratePOModal order={order} lines={lines} costs={costs} companyName={companyName} onClose={() => setShowPO(false)} />}
     </div>
+  );
+}
+
+function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
+  const total = items.reduce((s, i) => s + i.onHand * (i.unitCost ?? 0), 0);
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Package className="h-4 w-4" /></span><div><div className="font-semibold">Packaging on hand</div><p className="text-[11px] text-muted-foreground">Live from your Packaging inventory — orders draw from here.</p></div></div>
+        <Link href="/packaging" className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link>
+      </div>
+      {items.length === 0 ? (
+        <div className="border-t px-5 py-8 text-center text-sm text-muted-foreground">No packaging on hand. Add stock on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page.</div>
+      ) : (
+        <div className="border-t">
+          <ul className="divide-y">
+            {items.map((i) => (
+              <li key={i.id} className="flex items-center gap-3 px-5 py-2.5">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{i.name}{i.kind ? <span className="font-normal text-muted-foreground"> · {i.kind}</span> : null}</span>
+                <span className="shrink-0 font-mono text-[12px] text-muted-foreground">{num(i.onHand)} on hand</span>
+                <span className="shrink-0 font-mono text-[13px] font-semibold">{money(i.onHand * (i.unitCost ?? 0))}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-5 py-2.5 text-[13px]"><span className="text-muted-foreground">Total value</span><span className="font-mono font-bold">{money(total)}</span></div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function PurchaseOrderCard({ skuCount, totalUnits, totalGoods, onGenerate }: { skuCount: number; totalUnits: number; totalGoods: number; onGenerate: () => void }) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center gap-2.5 px-5 py-4"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><FileText className="h-4 w-4" /></span><div><div className="font-semibold">Purchase order</div><p className="text-[11px] text-muted-foreground">Outgoing purchase order sent to supplier. Incoming PIs &amp; invoices are tracked in the Invoices section.</p></div></div>
+      <div className="flex flex-wrap items-center gap-3 border-t bg-accent/30 px-5 py-4">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"><FileText className="h-4 w-4" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold">Not generated yet</div>
+          <p className="text-[11px] text-muted-foreground">Builds from your scope above — {skuCount} {skuCount === 1 ? "SKU" : "SKUs"} · {num(totalUnits)} pcs · {money(totalGoods)} goods</p>
+        </div>
+        <button type="button" onClick={onGenerate} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><FileText className="h-4 w-4" /> Generate PO</button>
+      </div>
+    </Card>
+  );
+}
+
+const FILE_SLOTS = [
+  { slot: "wip_photos", title: "WIP photos", desc: "Work-in-progress photos from the factory floor", required: true },
+  { slot: "sample_photos", title: "Sample photos", desc: "Final sample imagery before mass production", required: true },
+  { slot: "carton_spec", title: "Carton spec sheet", desc: "Packaging specifications and dimensions" },
+  { slot: "packing_list", title: "Packing list template", desc: "Template for shipment packing lists" },
+  { slot: "factory_packing_list", title: "Factory master packing list", desc: "Factory's full-order packing doc (whole run, before shipment splits)" },
+  { slot: "product_spec", title: "Product spec sheet", desc: "Detailed product specifications" },
+  { slot: "factory_audit", title: "Factory audit", desc: "Factory compliance and audit documentation" },
+];
+
+function ProductionFiles({ orderId, files }: { orderId: string; files: OrderFile[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const bySlot = new Map(files.map((f) => [f.slot, f]));
+
+  async function upload(slot: string, file: File) {
+    setBusy(slot);
+    const supabase = createClient();
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `orders/${orderId}/files/${slot}/${Date.now()}-${safe}`;
+    const { error } = await supabase.storage.from("product-media").upload(path, file, { upsert: true });
+    if (!error) {
+      const url = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
+      await saveOrderFile(orderId, slot, url, file.name);
+    }
+    setBusy(null);
+    router.refresh();
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-3 flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><ClipboardCheck className="h-4 w-4" /></span><div><div className="font-semibold">Production files</div><p className="text-[11px] text-muted-foreground">WIP photos, specs, and documentation. Separate from PI/PO attachments.</p></div></div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {FILE_SLOTS.map((s) => {
+          const f = bySlot.get(s.slot);
+          const uploading = busy === s.slot;
+          return (
+            <div key={s.slot} className={cn("flex items-start gap-3 rounded-xl border p-3.5", f ? "border-success/40 bg-success/5" : s.required ? "border-warning/40 bg-warning/5" : "")}>
+              <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-md", f ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>{f ? <Check className="h-4 w-4" /> : <ClipboardCheck className="h-4 w-4" />}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5"><span className="text-[13px] font-semibold">{s.title}</span>{s.required && !f && <Badge tone="warning">Required</Badge>}</div>
+                <p className="text-[11px] text-muted-foreground">{s.desc}</p>
+                {f ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-success hover:underline"><Check className="h-3 w-3" /> {f.name ?? "file"}</a> : null}
+              </div>
+              {f ? (
+                <a href={f.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[12px] font-medium text-primary hover:underline">View</a>
+              ) : (
+                <label className="shrink-0 cursor-pointer">
+                  <span className="vy-icon-btn">{uploading ? <span className="text-[11px]">…</span> : <Plus className="h-4 w-4" />}</span>
+                  <input type="file" hidden disabled={uploading} onChange={(e) => { const file = e.target.files?.[0]; if (file) upload(s.slot, file); }} />
+                </label>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
