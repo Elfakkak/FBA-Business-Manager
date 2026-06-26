@@ -218,6 +218,8 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
                 pageSkus.map((r) => <Row key={r.id} r={r} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(r)} router={router} />)
               ) : (
                 pageGroups.map(([fid, members]) => {
+                  // standalone product (one SKU) → a single flat row, no folder/tree
+                  if (members.length === 1) return <Row key={fid} r={members[0]} editing={editing} onSave={saveReorder} onFav={toggleFav} dup={isDup(members[0])} router={router} />;
                   const open = collapsed[fid] !== true;
                   const needs = members.filter((m) => m.health === "Reorder").length;
                   const gOn = members.reduce((s, m) => s + m.onHand, 0);
@@ -344,6 +346,7 @@ function Row({ r, editing, onSave, onFav, dup, indent, router }: {
           <Link href={`/inventory?q=${encodeURIComponent(r.sku)}`} className="font-mono text-[13px] font-bold hover:text-primary">{r.sku}</Link>
           {dup && <span title={`ASIN ${r.asin} is sold under more than one SKU — stock is split across duplicate listings`}><Badge tone="danger">Dup</Badge></span>}
         </div>
+        {r.asin && <div className="font-mono text-[10px] text-muted-foreground">ASIN {r.asin}</div>}
       </td>
       <td className="px-3 py-2.5">
         {sticker
