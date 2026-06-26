@@ -59,7 +59,7 @@ if (MODE === "fetch" || MODE === "all") {
   const iQty = find("quantity-purchased", "quantity", "quantity-shipped", "shipped-quantity");
   const iStatus = find("order-status", "item-status");
   const iPrice = find("item-price"); // line revenue (price × qty for that line)
-  const unitsBySku = {}, revBySku = {};
+  const unitsBySku = {}, revBySku = {}, pricedUnitsBySku = {};
   for (const line of lines) {
     const c = line.split("\t");
     const status = (c[iStatus] || "").toLowerCase();
@@ -68,12 +68,12 @@ if (MODE === "fetch" || MODE === "all") {
     if (!sku || !qty) continue;
     unitsBySku[sku] = (unitsBySku[sku] ?? 0) + qty;
     const price = iPrice >= 0 ? parseFloat(c[iPrice]) : NaN;
-    if (!Number.isNaN(price)) revBySku[sku] = (revBySku[sku] ?? 0) + price; // sum line revenue
+    if (!Number.isNaN(price) && price > 0) { revBySku[sku] = (revBySku[sku] ?? 0) + price; pricedUnitsBySku[sku] = (pricedUnitsBySku[sku] ?? 0) + qty; } // ignore $0 promo lines
   }
   const velocityBySku = {}, priceBySku = {};
   for (const [sku, units] of Object.entries(unitsBySku)) {
     velocityBySku[sku] = +(units / WINDOW_DAYS).toFixed(3);
-    if (revBySku[sku] != null && units > 0) priceBySku[sku] = +(revBySku[sku] / units).toFixed(2); // realized avg unit price
+    if (revBySku[sku] != null && pricedUnitsBySku[sku] > 0) priceBySku[sku] = +(revBySku[sku] / pricedUnitsBySku[sku]).toFixed(2); // realized avg unit price
   }
   writeFileSync(CACHE, JSON.stringify({ velocityBySku, priceBySku, window: WINDOW_DAYS }));
   console.log(`Parsed ${Object.keys(velocityBySku).length} SKUs with sales (last ${WINDOW_DAYS}d) · ${Object.keys(priceBySku).length} with realized prices → cached.`);

@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { INTG_DEFS } from "@/lib/integrations";
-import { fetchFbaInventory, spCredsFromEnv, type AmazonCreds } from "@/lib/amazon/sp-api";
-import { fetchFbaInbounds } from "@/lib/amazon/fba-inbound";
+import { spCredsFromEnv, type AmazonCreds } from "@/lib/amazon/sp-api";
+import { runInventorySync, runInboundSync } from "@/lib/amazon/run-syncs";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -93,21 +93,12 @@ async function resolveAmazonCreds(supabase: Awaited<ReturnType<typeof createClie
 export async function syncAmazonInventory(): Promise<Result> {
   const supabase = await createClient();
   const creds = await resolveAmazonCreds(supabase);
-
   try {
-    const inventory = await fetchFbaInventory(creds);
-    let matched = 0;
-    for (const r of inventory) {
-      if (!r.sellerSku) continue;
-      const { data: upd } = await supabase
-        .from("product_variants")
-        .update({ fba_stock: r.total, inbound: r.inbound, unfulfillable: r.unfulfillable, reserved: r.reserved })
-        .eq("sku", r.sellerSku)
-        .select("id");
-      if (upd?.length) matched += upd.length;
-    }
-    const note = `Synced ${inventory.length} FBA SKUs from Amazon · ${matched} matched in catalog.`;
-    await supabase.from("integrations").update({ status: "connected", last_sync: new Date().toISOString(), note }).eq("id", "amazon");
+    const { skus, matched } = await runInventorySync(supabase, creds); // single source of truth
+    await supabase.from("integrations").update({
+      status: "connected", last_sync: new Date().toISOString(),
+      note: `Synced ${skus} FBA SKUs from Amazon · ${matched} matched in catalog.`,
+    }).eq("id", "amazon");
     await syncFbaInbounds().catch(() => {}); // also refresh inbound shipments; don't fail inventory if this errors
     revalidateIntegration("amazon");
     return { ok: true };
@@ -119,26 +110,12 @@ export async function syncAmazonInventory(): Promise<Result> {
   }
 }
 
-// Pulls inbound FBA shipments + their items into fba_inbounds / fba_inbound_items.
-// Amazon owns received/status/fc/sku_count; user-owned link/eta/mode are preserved.
+// Inbound FBA shipments + items — delegates to the shared engine.
 export async function syncFbaInbounds(): Promise<Result> {
   const supabase = await createClient();
   const creds = await resolveAmazonCreds(supabase);
   try {
-    const shipments = await fetchFbaInbounds(creds);
-    for (const s of shipments) {
-      await supabase.from("fba_inbounds").upsert({
-        id: s.shipmentId, fc: s.fc, sku_count: s.skuCount, expected: s.expected,
-        received: s.received, amazon_status: s.amazonStatus, synced: new Date().toISOString(),
-      }, { onConflict: "id" });
-      // replace this shipment's item rows
-      await supabase.from("fba_inbound_items").delete().eq("inbound_id", s.shipmentId);
-      if (s.items.length) {
-        await supabase.from("fba_inbound_items").insert(
-          s.items.map((i) => ({ inbound_id: s.shipmentId, sku: i.sellerSku, fnsku: i.fnSku, expected: i.quantityShipped, received: i.quantityReceived })),
-        );
-      }
-    }
+    await runInboundSync(supabase, creds);
     revalidatePath("/fba-shipments");
     revalidatePath("/inventory");
     return { ok: true };

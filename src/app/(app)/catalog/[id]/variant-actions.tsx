@@ -63,11 +63,13 @@ export function EditVariantButton({
   const { open, setOpen, error, pending, onSubmit } = useFormModal(async (form) => {
     const target = String(form.get("family") ?? familyId);
     const newName = String(form.get("new_product") ?? "").trim();
+    let effectiveFamily = familyId;
     if (newName || (target && target !== familyId)) {
       const mv = await moveVariant(variantId, newName ? "" : target, newName || undefined);
       if (!mv.ok) return mv;
+      effectiveFamily = mv.familyId ?? familyId; // revalidate the destination, not the old family
     }
-    return updateVariant(variantId, familyId, form);
+    return updateVariant(variantId, effectiveFamily, form);
   });
 
   return (

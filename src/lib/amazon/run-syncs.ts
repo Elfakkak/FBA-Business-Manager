@@ -2,11 +2,12 @@
 // nightly cron. Each fn takes a Supabase client (session OR service-role) + creds and
 // writes results, so the same logic runs interactively and headless.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 import { gunzipSync } from "node:zlib";
 import { fetchFbaInventory, getAccessToken, hostFor, type AmazonCreds } from "./sp-api";
 import { fetchFbaInbounds } from "./fba-inbound";
 
-type DB = SupabaseClient;
+type DB = SupabaseClient<Database>; // keep update payloads type-checked
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -44,7 +45,7 @@ export async function runInboundSync(db: DB, creds: AmazonCreds) {
 
 // ---------- Sales velocity + realized price (ALL_ORDERS report) ----------
 const WINDOW = 30;
-export async function runSalesSync(db: DB, creds: AmazonCreds, maxWaitMs = 180_000) {
+export async function runSalesSync(db: DB, creds: AmazonCreds, maxWaitMs = 120_000) {
   const token = await getAccessToken(creds);
   const host = hostFor(creds.region);
   const H = { "x-amz-access-token": token, "Content-Type": "application/json" };
@@ -75,7 +76,7 @@ export async function runSalesSync(db: DB, creds: AmazonCreds, maxWaitMs = 180_0
   const header = (lines.shift() ?? "").split("\t");
   const find = (...n: string[]) => n.map((x) => header.indexOf(x)).find((i) => i >= 0) ?? -1;
   const iSku = find("sku", "seller-sku"), iQty = find("quantity-purchased", "quantity", "shipped-quantity"), iStatus = find("order-status", "item-status"), iPrice = find("item-price");
-  const units: Record<string, number> = {}, rev: Record<string, number> = {};
+  const units: Record<string, number> = {}, rev: Record<string, number> = {}, pricedUnits: Record<string, number> = {};
   for (const line of lines) {
     const c = line.split("\t");
     if ((c[iStatus] || "").toLowerCase().includes("cancel")) continue;
@@ -83,12 +84,12 @@ export async function runSalesSync(db: DB, creds: AmazonCreds, maxWaitMs = 180_0
     if (!sku || !qty) continue;
     units[sku] = (units[sku] ?? 0) + qty;
     const price = iPrice >= 0 ? parseFloat(c[iPrice]) : NaN;
-    if (!Number.isNaN(price)) rev[sku] = (rev[sku] ?? 0) + price;
+    if (!Number.isNaN(price) && price > 0) { rev[sku] = (rev[sku] ?? 0) + price; pricedUnits[sku] = (pricedUnits[sku] ?? 0) + qty; } // ignore $0 promo lines
   }
   let updated = 0;
   for (const [sku, u] of Object.entries(units)) {
-    const patch: Record<string, number> = { velocity: +(u / WINDOW).toFixed(3) };
-    if (rev[sku] != null && u > 0) patch.sale_price = +(rev[sku] / u).toFixed(2);
+    const patch: { velocity: number; sale_price?: number } = { velocity: +(u / WINDOW).toFixed(3) };
+    if (rev[sku] != null && pricedUnits[sku] > 0) patch.sale_price = +(rev[sku] / pricedUnits[sku]).toFixed(2);
     const { data } = await db.from("product_variants").update(patch).eq("sku", sku).select("id");
     updated += data?.length ?? 0;
   }
@@ -104,7 +105,7 @@ async function adsToken(c: AdsCreds) {
   const j = await res.json(); if (!j.access_token) throw new Error(j.error_description || "Ads LWA failed"); return j.access_token as string;
 }
 
-export async function runAdsSync(db: DB, c: AdsCreds, maxWaitMs = 180_000) {
+export async function runAdsSync(db: DB, c: AdsCreds, maxWaitMs = 120_000) {
   if (!c.refresh_token) return { skipped: true, skus: 0 };
   const host = ADS_HOST[(c.region || "na").toLowerCase()] || ADS_HOST.na;
   const profileId = c.profile_id || "2713745068193310";
