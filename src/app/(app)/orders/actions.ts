@@ -83,6 +83,32 @@ export async function deleteOrderLine(id: string, orderId: string): Promise<Resu
   return { ok: true };
 }
 
+// Record packaging consumed by an order → a 'consume' move that deducts packaging stock.
+export async function addOrderPackaging(orderId: string, form: FormData): Promise<Result> {
+  const itemId = String(form.get("item_id") ?? "").trim();
+  const qty = parseInt(String(form.get("qty") ?? ""));
+  if (!itemId) return { ok: false, error: "Pick a packaging item." };
+  if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "Quantity must be a positive number." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("packaging_moves").insert({
+    id: crypto.randomUUID(), item_id: itemId, type: "consume", qty, order_id: orderId,
+    move_date: new Date().toISOString().slice(0, 10), note: "Used on order",
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
+export async function removeOrderPackaging(moveId: string, orderId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("packaging_moves").delete().eq("id", moveId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
 export async function setOrderStatus(id: string, status: string): Promise<Result> {
   if (!isValidStatus(status)) return { ok: false, error: "Invalid status." };
   const supabase = await createClient();

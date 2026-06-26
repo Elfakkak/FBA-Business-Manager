@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Chip, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
-import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine } from "../actions";
+import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE,
   type OrderRow, type InvoiceRow,
@@ -19,6 +19,8 @@ import {
 
 type OrderLine = { id: string; sku: string | null; product_name: string | null; qty: number; unit_cost: number | null };
 type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
+type PkgItemOpt = { id: string; name: string; kind: string; unit_cost: number };
+type PkgUsed = { moveId: string; itemId: string; name: string; qty: number; unitCost: number };
 
 type Tone = "brand" | "success" | "info" | "warning" | "muted";
 const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Tone }[] = [
@@ -36,11 +38,13 @@ function addDays(iso: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export function OrderShell({ order, invoices, lines, variants, rollup }: {
+export function OrderShell({ order, invoices, lines, variants, packagingItems, packaging, rollup }: {
   order: OrderRow;
   invoices: InvoiceRow[];
   lines: OrderLine[];
   variants: VariantOpt[];
+  packagingItems: PkgItemOpt[];
+  packaging: PkgUsed[];
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
 }) {
   const router = useRouter();
@@ -145,7 +149,10 @@ export function OrderShell({ order, invoices, lines, variants, rollup }: {
       ) : tab === "invoices" ? (
         <InvoicesPanel invoices={invoices} />
       ) : tab === "production" ? (
-        <ProductionPanel orderId={order.id} lines={lines} variants={variants} units={units} cogs={cogs} />
+        <div className="space-y-6">
+          <ProductionPanel orderId={order.id} lines={lines} variants={variants} units={units} cogs={cogs} />
+          <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
+        </div>
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}
@@ -328,6 +335,96 @@ function ProductionPanel({ orderId, lines, variants, units, cogs }: {
           <div className="flex justify-end gap-2">
             <GhostButton type="button" onClick={() => setAdding(false)}>Cancel</GhostButton>
             <PrimaryButton type="submit" disabled={pending}>{pending ? "Adding…" : "Add line"}</PrimaryButton>
+          </div>
+        </form>
+      </Modal>
+    </Card>
+  );
+}
+
+function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgItemOpt[]; used: PkgUsed[] }) {
+  const router = useRouter();
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const totalCost = used.reduce((s, u) => s + u.qty * u.unitCost, 0);
+
+  function onAdd(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    setError(null);
+    start(async () => {
+      const res = await addOrderPackaging(orderId, form);
+      if (!res.ok) { setError(res.error); return; }
+      setAdding(false);
+      router.refresh();
+    });
+  }
+  function onRemove(moveId: string) {
+    start(async () => { await removeOrderPackaging(moveId, orderId); router.refresh(); });
+  }
+
+  return (
+    <Card className="p-5">
+      <SectionTitle icon={Boxes} tone="info" title="Packaging used" count={used.length}
+        action={items.length > 0 ? <GhostButton onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add packaging</GhostButton> : undefined} />
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">
+          No packaging items yet. Add some on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page first.
+        </div>
+      ) : used.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">
+          Optional — add packaging this order consumes and it&apos;s deducted from packaging stock.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Packaging</th>
+                <th className="px-3 py-2 text-right font-medium">Qty used</th>
+                <th className="px-3 py-2 text-right font-medium">Unit cost</th>
+                <th className="px-3 py-2 text-right font-medium">Cost</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {used.map((u) => (
+                <tr key={u.moveId}>
+                  <td className="px-3 py-2 font-medium">{u.name}</td>
+                  <td className="tabular px-3 py-2 text-right font-mono">{num(u.qty)}</td>
+                  <td className="tabular px-3 py-2 text-right font-mono text-muted-foreground">{money(u.unitCost)}</td>
+                  <td className="tabular px-3 py-2 text-right font-mono font-semibold">{money(u.qty * u.unitCost)}</td>
+                  <td className="px-3 py-2 text-right"><button onClick={() => onRemove(u.moveId)} disabled={pending} className="vy-icon-btn" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t font-medium">
+                <td className="px-3 py-2" colSpan={3}>Total packaging cost</td>
+                <td className="tabular px-3 py-2 text-right font-mono">{money(totalCost)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-muted-foreground">Adding packaging here records a consume move that deducts it from packaging on-hand. Remove a line to restore the stock.</p>
+
+      <Modal open={adding} onClose={() => setAdding(false)} title="Add packaging used">
+        <form onSubmit={onAdd} className="space-y-4">
+          <Field label="Packaging">
+            <select name="item_id" required className={inputCls} defaultValue="">
+              <option value="" disabled>Pick a packaging item…</option>
+              {items.map((i) => <option key={i.id} value={i.id}>{i.name} — {i.kind}</option>)}
+            </select>
+          </Field>
+          <Field label="Quantity used"><input name="qty" type="number" required autoFocus className={inputCls} placeholder="500" /></Field>
+          {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <GhostButton type="button" onClick={() => setAdding(false)}>Cancel</GhostButton>
+            <PrimaryButton type="submit" disabled={pending}>{pending ? "Adding…" : "Add packaging"}</PrimaryButton>
           </div>
         </form>
       </Modal>
