@@ -12,6 +12,7 @@ import { createInvoice, updateInvoice, deleteInvoice } from "../../invoices/acti
 import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
 import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
 import { ProductionSection, type CatalogVariant } from "./production-panel";
+import { LandedPanel } from "./landed-panel";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
@@ -121,6 +122,8 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
           <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
+      ) : tab === "landed" ? (
+        <LandedPanel order={order} lines={lines} costs={costs} />
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}
