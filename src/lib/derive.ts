@@ -191,6 +191,23 @@ export function partnerRollup(name: string, type: string, orders: OrderRow[], in
   };
 }
 
+// ---------- Invoices / accounts payable ----------
+export const INVOICE_STATUS_TONE: Record<string, Tone> = { Paid: "success", Partial: "warning", Unpaid: "danger" };
+export function invoiceBalance(i: Pick<InvoiceRow, "total" | "paid">) { return Math.max(0, (i.total ?? 0) - (i.paid ?? 0)); }
+export function invoiceStatus(i: Pick<InvoiceRow, "total" | "paid">): "Paid" | "Partial" | "Unpaid" {
+  if (invoiceBalance(i) <= 0.005) return "Paid";
+  if ((i.paid ?? 0) > 0) return "Partial";
+  return "Unpaid";
+}
+export function invoiceAging(dueISO: string | null, balance: number, nowMs: number): { days: number; label: "Settled" | "Overdue" | "Due soon" | "Upcoming"; tone: Tone } {
+  if (balance <= 0.005) return { days: 0, label: "Settled", tone: "success" };
+  if (!dueISO) return { days: 0, label: "Upcoming", tone: "muted" };
+  const days = Math.round((new Date(dueISO + "T00:00:00").getTime() - nowMs) / 86_400_000);
+  if (days < 0) return { days, label: "Overdue", tone: "danger" };
+  if (days <= 7) return { days, label: "Due soon", tone: "warning" };
+  return { days, label: "Upcoming", tone: "muted" };
+}
+
 // Order money rollup — total/paid/balance derived from its invoices.
 export function orderRollup(orderId: string, invoices: InvoiceRow[]) {
   const mine = invoices.filter((i) => i.order_id === orderId);
