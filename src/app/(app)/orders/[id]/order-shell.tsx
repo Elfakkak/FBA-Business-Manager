@@ -11,7 +11,7 @@ import { updateOrder, setOrderStatus, addOrderPackaging, removeOrderPackaging } 
 import { createInvoice, updateInvoice, deleteInvoice } from "../../invoices/actions";
 import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
 import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
-import { ProductionSection } from "./production-panel";
+import { ProductionSection, type CatalogVariant } from "./production-panel";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
@@ -44,7 +44,6 @@ const STATUS_IDX: Record<string, number> = { draft: 0, production: 1, inspection
 
 type OrderLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
 type ChargeTypeOpt = { id: string; label: string; owner: string };
-type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
 type PkgItemOpt = { id: string; name: string; kind: string; unit_cost: number };
 type PkgUsed = { moveId: string; itemId: string; name: string; qty: number; unitCost: number };
 export type OrderShipment = { id: string; mode: string; stage: string; forwarder: string | null; origin: string | null; destination: string | null; eta: string | null; packed: number };
@@ -67,7 +66,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   lines: OrderLine[];
   costs: OrderCostRow[];
   chargeTypes: ChargeTypeOpt[];
-  variants: VariantOpt[];
+  variants: CatalogVariant[];
   packagingItems: PkgItemOpt[];
   packaging: PkgUsed[];
   shipments: OrderShipment[];
@@ -116,7 +115,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
-          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} />
+          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : (

@@ -864,14 +864,18 @@ export type Database = {
           charge_type_id: string | null
           coverage: string
           created_at: string
+          currency: string
           description: string
           id: string
           line_type: string | null
+          notes: string | null
           order_id: string
           position: number
           qty: number
           section: string
+          treatment: string
           updated_at: string
+          vendor: string | null
         }
         Insert: {
           amount?: number
@@ -879,14 +883,18 @@ export type Database = {
           charge_type_id?: string | null
           coverage?: string
           created_at?: string
+          currency?: string
           description?: string
           id?: string
           line_type?: string | null
+          notes?: string | null
           order_id: string
           position?: number
           qty?: number
           section?: string
+          treatment?: string
           updated_at?: string
+          vendor?: string | null
         }
         Update: {
           amount?: number
@@ -894,14 +902,18 @@ export type Database = {
           charge_type_id?: string | null
           coverage?: string
           created_at?: string
+          currency?: string
           description?: string
           id?: string
           line_type?: string | null
+          notes?: string | null
           order_id?: string
           position?: number
           qty?: number
           section?: string
+          treatment?: string
           updated_at?: string
+          vendor?: string | null
         }
         Relationships: [
           {

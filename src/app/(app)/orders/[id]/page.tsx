@@ -10,12 +10,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
+  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
     supabase.from("charge_types").select("id, label, owner").eq("archived", false).order("owner").order("label"),
-    supabase.from("product_variants").select("id, sku, name, last_cost_usd").order("sku"),
+    supabase.from("product_variants").select("id, family_id, sku, name, pack, last_cost_usd, last_cost_rmb, has_image, fba_stock, reorder_point, status").order("sku"),
+    supabase.from("products").select("id, parent"),
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
     supabase.from("packaging_moves").select("id, item_id, qty").eq("order_id", id).eq("type", "consume"),
     supabase.from("shipments").select("id, mode, stage, forwarder, origin, destination, eta, packed").eq("order_id", id).order("created_at"),
@@ -54,6 +55,17 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   for (const s of (suppliers ?? []) as { name: string }[]) if (!vendorMap.has(s.name)) vendorMap.set(s.name, "Supplier");
   for (const p of (partners ?? []) as { name: string; specialty: string | null }[]) if (!vendorMap.has(p.name)) vendorMap.set(p.name, partnerVendorType(p.specialty));
   const vendors = [...vendorMap].map(([name, type]) => ({ name, type }));
+
+  // catalog variants for the Add SKUs browser — enriched with their product/family name
+  const familyName = new Map(((products ?? []) as { id: string; parent: string | null }[]).map((p) => [p.id, p.parent ?? ""]));
+  type V = { id: string; family_id: string | null; sku: string; name: string; pack: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; has_image: boolean | null; fba_stock: number | null; reorder_point: number | null; status: string | null };
+  const catalogVariants = ((variants ?? []) as V[]).map((v) => ({
+    id: v.id, sku: v.sku, name: v.name, pack: v.pack,
+    familyName: (v.family_id && familyName.get(v.family_id)) || v.name,
+    last_cost_usd: v.last_cost_usd, last_cost_rmb: v.last_cost_rmb, has_image: !!v.has_image,
+    fba_stock: v.fba_stock, reorder_point: v.reorder_point, status: v.status,
+  }));
+
   // packaging consumed by this order, joined to item names/costs
   const pkgById = new Map(((pkgItems ?? []) as { id: string; name: string; unit_cost: number }[]).map((p) => [p.id, p]));
   const packaging = ((pkgMoves ?? []) as { id: string; item_id: string; qty: number }[]).map((m) => {
@@ -69,7 +81,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       lines={lines ?? []}
       costs={(orderCosts ?? []) as OrderCostRow[]}
       chargeTypes={(chargeTypes ?? []) as { id: string; label: string; owner: string }[]}
-      variants={(variants ?? []) as { id: string; sku: string; name: string; last_cost_usd: number | null }[]}
+      variants={catalogVariants}
       packagingItems={(pkgItems ?? []) as { id: string; name: string; kind: string; unit_cost: number }[]}
       packaging={packaging}
       shipments={(shipments ?? []) as OrderShipment[]}
