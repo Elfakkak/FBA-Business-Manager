@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { cn, initials } from "@/lib/utils";
-import type { Tone } from "@/lib/derive";
+import { money, type Tone } from "@/lib/derive";
 import type { InlineEditor } from "@/lib/use-inline-editor";
 import { Pencil, Plus } from "lucide-react";
 
@@ -23,18 +24,39 @@ export function Avatar({ name, tone = "brand", size = 32 }: { name: string; tone
   );
 }
 
-export function SectionTitle({ icon: Icon, tone = "muted", title, count, sub, action }: { icon: React.ElementType; tone?: Tone; title: string; count?: number; sub?: string; action?: React.ReactNode }) {
+export function SectionTitle({ icon: Icon, tone = "muted", title, count, sub, action, strong, className }: { icon: React.ElementType; tone?: Tone; title: React.ReactNode; count?: number; sub?: React.ReactNode; action?: React.ReactNode; strong?: boolean; className?: string }) {
   return (
-    <div className="mb-3 flex items-start justify-between gap-2">
+    <div className={cn("mb-3 flex items-start justify-between gap-2", className)}>
       <div className="flex items-center gap-2.5">
         <span className={cn("inline-grid h-7 w-7 shrink-0 place-items-center rounded-md", TONE_FG[tone])}><Icon className="h-4 w-4" /></span>
-        <div>
-          <div className="font-medium">{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</div>
-          {sub && <div className="text-[12px] text-muted-foreground">{sub}</div>}
+        <div className="min-w-0">
+          <div className={strong ? "font-semibold" : "font-medium"}>{title}{count != null && <span className="text-muted-foreground"> ({count})</span>}</div>
+          {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
         </div>
       </div>
       {action}
     </div>
+  );
+}
+
+// Shared date · source-link · amount history list (Product cost + Landed cost
+// histories on the product page). `code2`/`href2` render an optional secondary
+// muted link (e.g. the order behind an invoice). Latest row is tinted.
+export function CostHistoryList({ items, highlight = "primary" }: {
+  items: { date: string | null; href?: string | null; code?: string | null; subtitle?: string | null; href2?: string | null; code2?: string | null; amount: number }[];
+  highlight?: "primary" | "info";
+}) {
+  return (
+    <ul className="divide-y">
+      {items.map((it, i) => (
+        <li key={i} className="flex items-center gap-2.5 py-2 text-sm">
+          <span className="w-[88px] shrink-0 text-[12px] text-muted-foreground">{it.date ?? "—"}</span>
+          {it.href ? <Link href={it.href} className="font-mono text-[12px] font-medium hover:text-primary" title={it.subtitle ?? undefined}>{it.code}</Link> : <span className="text-[12px] text-muted-foreground">{it.code ?? "—"}</span>}
+          {it.code2 && (it.href2 ? <Link href={it.href2} className="hidden truncate font-mono text-[11px] text-muted-foreground hover:text-primary md:inline">{it.code2}</Link> : <span className="hidden text-[11px] text-muted-foreground md:inline">{it.code2}</span>)}
+          <span className={cn("tabular ml-auto shrink-0 font-mono font-semibold", i === items.length - 1 && (highlight === "info" ? "text-info" : "text-primary"))}>{money(it.amount)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
