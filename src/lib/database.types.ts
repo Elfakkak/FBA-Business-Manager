@@ -901,6 +901,7 @@ export type Database = {
           size: string | null
           unit_cost: number
           updated_at: string
+          variant_ids: string[]
         }
         Insert: {
           created_at?: string
@@ -913,6 +914,7 @@ export type Database = {
           size?: string | null
           unit_cost?: number
           updated_at?: string
+          variant_ids?: string[]
         }
         Update: {
           created_at?: string
@@ -925,6 +927,7 @@ export type Database = {
           size?: string | null
           unit_cost?: number
           updated_at?: string
+          variant_ids?: string[]
         }
         Relationships: [
           {

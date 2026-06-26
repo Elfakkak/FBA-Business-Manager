@@ -6,10 +6,11 @@ import { PackagingTable } from "./packaging-table";
 
 export default async function PackagingPage() {
   const supabase = await createClient();
-  const [{ data: items }, { data: moves }, { data: products }] = await Promise.all([
+  const [{ data: items }, { data: moves }, { data: products }, { data: variants }] = await Promise.all([
     supabase.from("packaging_items").select("*").order("name"),
     supabase.from("packaging_moves").select("*"),
     supabase.from("products").select("id, parent"),
+    supabase.from("product_variants").select("id, sku, name").order("sku"),
   ]);
 
   const allMoves = (moves ?? []) as PackagingMove[];
@@ -40,7 +41,7 @@ export default async function PackagingPage() {
         <Kpi label="Low / reorder" value={num(lowCount)} sub="at or below reorder point" tone={lowCount ? "warning" : "success"} />
       </div>
 
-      <PackagingTable rows={rows} moves={allMoves} products={(products ?? []) as { id: string; parent: string }[]} />
+      <PackagingTable rows={rows} moves={allMoves} products={(products ?? []) as { id: string; parent: string }[]} variants={(variants ?? []) as { id: string; sku: string; name: string }[]} />
     </div>
   );
 }

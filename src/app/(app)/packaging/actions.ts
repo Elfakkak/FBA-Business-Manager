@@ -67,6 +67,15 @@ export async function updatePackaging(id: string, form: FormData): Promise<Resul
   return { ok: true };
 }
 
+// Assign which SKUs a packaging is used for — organizational only, no stock effect.
+export async function setPackagingSkus(id: string, variantIds: string[]): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("packaging_items").update({ variant_ids: variantIds }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
 export async function savePackagingDesign(id: string, url: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("packaging_items").update({ design_url: url || null }).eq("id", id);

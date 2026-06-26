@@ -8,16 +8,17 @@ import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Field, inputCls, PrimaryButton } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import { money, num, type PackagingItem, type PackagingMove } from "@/lib/derive";
-import { updatePackaging, savePackagingDesign } from "./actions";
+import { updatePackaging, savePackagingDesign, setPackagingSkus } from "./actions";
 import { ReceiveButton } from "./packaging-actions";
 import { cn } from "@/lib/utils";
-import { Boxes, ImagePlus, ExternalLink, Loader2 } from "lucide-react";
+import { Boxes, ImagePlus, ExternalLink, Loader2, X } from "lucide-react";
 
 const KINDS = ["Mailer", "Master carton", "Insert", "Polybag", "Label", "Box", "Other"];
 
+type VariantOpt = { id: string; sku: string; name: string };
 export type PkgRow = { item: PackagingItem; onHand: number; unit: number; value: number; low: boolean; product: string | null };
 
-export function PackagingTable({ rows, moves, products }: { rows: PkgRow[]; moves: PackagingMove[]; products: { id: string; parent: string }[] }) {
+export function PackagingTable({ rows, moves, products, variants }: { rows: PkgRow[]; moves: PackagingMove[]; products: { id: string; parent: string }[]; variants: VariantOpt[] }) {
   const [peek, setPeek] = useState<PkgRow | null>(null);
   return (
     <Card className="overflow-hidden">
@@ -62,13 +63,13 @@ export function PackagingTable({ rows, moves, products }: { rows: PkgRow[]; move
       </div>
 
       <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.item.name}>
-        {peek && <PackagingDetail key={peek.item.id} row={peek} moves={moves.filter((m) => m.item_id === peek.item.id)} products={products} onDone={() => setPeek(null)} />}
+        {peek && <PackagingDetail key={peek.item.id} row={peek} moves={moves.filter((m) => m.item_id === peek.item.id)} products={products} variants={variants} onDone={() => setPeek(null)} />}
       </Drawer>
     </Card>
   );
 }
 
-function PackagingDetail({ row, moves, products, onDone }: { row: PkgRow; moves: PackagingMove[]; products: { id: string; parent: string }[]; onDone: () => void }) {
+function PackagingDetail({ row, moves, products, variants, onDone }: { row: PkgRow; moves: PackagingMove[]; products: { id: string; parent: string }[]; variants: VariantOpt[]; onDone: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -111,6 +112,8 @@ function PackagingDetail({ row, moves, products, onDone }: { row: PkgRow; moves:
         <div className="flex justify-end"><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</PrimaryButton></div>
       </form>
 
+      <UsedForSkus itemId={it.id} assigned={it.variant_ids ?? []} variants={variants} />
+
       <div>
         <div className="vy-kicker mb-2">Move history ({history.length})</div>
         {history.length === 0 ? <p className="text-[12px] text-muted-foreground">No moves yet.</p> : (
@@ -126,6 +129,39 @@ function PackagingDetail({ row, moves, products, onDone }: { row: PkgRow; moves:
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function UsedForSkus({ itemId, assigned, variants }: { itemId: string; assigned: string[]; variants: VariantOpt[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const byId = new Map(variants.map((v) => [v.id, v]));
+  const chosen = assigned.filter((id) => byId.has(id));
+  const available = variants.filter((v) => !assigned.includes(v.id));
+
+  const save = (ids: string[]) => start(async () => { await setPackagingSkus(itemId, ids); router.refresh(); });
+
+  return (
+    <div>
+      <div className="vy-kicker mb-2">Used for SKUs <span className="font-normal normal-case text-muted-foreground">— organizing only, doesn&apos;t affect stock</span></div>
+      {chosen.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {chosen.map((id) => {
+            const v = byId.get(id)!;
+            return (
+              <span key={id} className="inline-flex items-center gap-1 rounded-md border bg-muted/40 py-0.5 pl-2 pr-1 font-mono text-[11px]">
+                {v.sku}
+                <button onClick={() => save(assigned.filter((x) => x !== id))} disabled={pending} className="rounded p-0.5 hover:bg-danger/10 hover:text-danger" aria-label="Remove"><X className="h-3 w-3" /></button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <select value="" disabled={pending || available.length === 0} onChange={(e) => e.target.value && save([...assigned, e.target.value])} className={inputCls}>
+        <option value="">{available.length === 0 ? "All SKUs assigned" : "＋ Assign a SKU…"}</option>
+        {available.map((v) => <option key={v.id} value={v.id}>{v.sku} — {v.name}</option>)}
+      </select>
     </div>
   );
 }
