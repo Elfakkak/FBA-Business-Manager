@@ -336,6 +336,33 @@ export type Database = {
         }
         Relationships: []
       }
+      charge_types: {
+        Row: {
+          archived: boolean
+          created_at: string
+          id: string
+          label: string
+          owner: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          id: string
+          label: string
+          owner?: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          owner?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           company: string

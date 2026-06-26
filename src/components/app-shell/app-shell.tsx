@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Boxes, Factory, Receipt, Truck, Ship, Package, Warehouse,
-  TrendingUp, PackageOpen, Calculator, Wallet, DollarSign, Users, Shield,
+  TrendingUp, PackageOpen, Calculator, Wallet, DollarSign, Users, Shield, Tags,
   FileText, Settings, Plus, Search, Bell, Sun, Moon, Menu, X,
   ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
@@ -30,6 +30,7 @@ const NAV: Group[] = [
       { label: "Inventory", href: "/inventory", section: "catalog", icon: Warehouse, ready: true },
       { label: "Performance", href: "/performance", section: "performance", icon: TrendingUp },
       { label: "Packaging", href: "/packaging", section: "packaging", icon: Boxes, ready: true },
+      { label: "Charge types", href: "/charge-types", section: "catalog", icon: Tags, ready: true },
       { label: "FBA calculator", href: "/fba-calculator", section: "catalog", icon: Calculator },
     ],
   },
