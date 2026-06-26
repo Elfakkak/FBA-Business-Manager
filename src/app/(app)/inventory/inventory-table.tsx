@@ -11,7 +11,7 @@ import { setReorderPoint, setFavorite } from "./actions";
 import { cn } from "@/lib/utils";
 import {
   Boxes, Package, Truck, AlertCircle, Info, ChevronDown, ChevronRight,
-  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star, Copy,
+  RefreshCw, ArrowUpRight, Pencil, Check, Plus, Star, Copy, Layers,
 } from "lucide-react";
 
 export type InvRow = {
@@ -41,6 +41,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const [editing, setEditing] = useState(false);
   const [favOnly, setFavOnly] = useState(false);
   const [dupOnly, setDupOnly] = useState(false);
+  const [singleOnly, setSingleOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
@@ -66,6 +67,13 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
     return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([a]) => a));
   }, [rows]);
   const isDup = (r: InvRow) => !!r.asin && dupAsins.has(r.asin);
+  // standalone products: SKUs whose family has only one variant
+  const familyCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.familyId, (m.get(r.familyId) ?? 0) + 1);
+    return m;
+  }, [rows]);
+  const singleCount = [...familyCounts.values()].filter((c) => c === 1).length;
 
   const categories = useMemo(() => [...new Set(rows.map((r) => r.category))].sort(), [rows]);
   const suppliers = useMemo(() => [...new Set(rows.map((r) => r.supplier).filter((s): s is string => !!s))].sort(), [rows]);
@@ -78,10 +86,11 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
       if (health !== "all" && r.health !== health) return false;
       if (favOnly && !r.favorite) return false;
       if (dupOnly && !(r.asin && dupAsins.has(r.asin))) return false;
+      if (singleOnly && (familyCounts.get(r.familyId) ?? 0) > 1) return false;
       if (n && !`${r.family} ${r.color ?? ""} ${r.sku} ${r.fnsku ?? ""} ${r.asin ?? ""} ${r.supplier ?? ""} ${r.category}`.toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [rows, q, category, supplier, health, favOnly, dupOnly, dupAsins]);
+  }, [rows, q, category, supplier, health, favOnly, dupOnly, singleOnly, dupAsins, familyCounts]);
 
   const favCount = rows.filter((r) => r.favorite).length;
   const dupCount = rows.filter((r) => r.asin && dupAsins.has(r.asin)).length;
@@ -113,7 +122,7 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
   const pageSkus = sortedSkus.slice(from, from + pageSize);
   const pageGroups = groups.slice(from, from + pageSize);
   // reset to page 1 whenever the result set or view changes
-  useEffect(() => { setPage(1); }, [q, category, supplier, health, favOnly, dupOnly, view, pageSize]);
+  useEffect(() => { setPage(1); }, [q, category, supplier, health, favOnly, dupOnly, singleOnly, view, pageSize]);
 
   const saveReorder = (id: string, v: string) => start(async () => { await setReorderPoint(id, v === "" ? null : Number(v)); router.refresh(); });
   const toggleFav = (id: string, v: boolean) => start(async () => { await setFavorite(id, v); router.refresh(); });
@@ -187,6 +196,9 @@ export function InventoryTable({ rows, amazonConnected, lastSync, initialQ }: { 
           </button>
           <button onClick={() => setDupOnly((d) => !d)} className={cn("vy-chip inline-flex items-center gap-1", dupOnly && "is-active", dupCount > 0 && !dupOnly && "text-danger")} title="ASINs sold under more than one SKU — your stock is split across duplicate listings">
             <Copy className="h-3 w-3" /> Duplicate ASINs{dupCount ? ` (${dupCount})` : ""}
+          </button>
+          <button onClick={() => setSingleOnly((v) => !v)} className={cn("vy-chip inline-flex items-center gap-1", singleOnly && "is-active")} title="Standalone products — only one SKU in their family">
+            <Layers className="h-3 w-3" /> Single-SKU{singleCount ? ` (${singleCount})` : ""}
           </button>
         </div>
       </Card>

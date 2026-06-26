@@ -112,6 +112,18 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
   return { ok: true };
 }
 
+// Delete a product — only when it has no SKUs, so linked variants must be moved/unlinked
+// first (prevents destroying Amazon-linked SKUs by deleting their parent).
+export async function deleteProduct(id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { count } = await supabase.from("product_variants").select("id", { count: "exact", head: true }).eq("family_id", id);
+  if (count && count > 0) return { ok: false, error: `This product still has ${count} SKU${count > 1 ? "s" : ""} linked. Move or unlink them to another product first, then delete.` };
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/catalog");
+  return { ok: true };
+}
+
 export async function setProductFavorite(id: string, favorite: boolean): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("products").update({ favorite }).eq("id", id);

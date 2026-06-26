@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
-import { updateProduct } from "../actions";
-import { Pencil } from "lucide-react";
+import { updateProduct, deleteProduct } from "../actions";
+import { Pencil, Trash2 } from "lucide-react";
 
 export type ProductEdit = {
   id: string;
@@ -23,9 +25,22 @@ export type ProductEdit = {
 };
 
 export function EditProductButton({ product, suppliers, categories }: { product: ProductEdit; suppliers: string[]; categories: string[] }) {
+  const router = useRouter();
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateProduct(product.id, form));
+  const [delErr, setDelErr] = useState<string | null>(null);
+  const [delPending, startDel] = useTransition();
   const d = product.dim_cm ?? {};
   const c = product.carton_cm ?? {};
+
+  function onDelete() {
+    if (!confirm(`Delete "${product.parent}"? This can't be undone.`)) return;
+    setDelErr(null);
+    startDel(async () => {
+      const r = await deleteProduct(product.id);
+      if (!r.ok) { setDelErr(r.error ?? "Failed."); return; }
+      router.push("/catalog");
+    });
+  }
 
   return (
     <>
@@ -84,9 +99,15 @@ export function EditProductButton({ product, suppliers, categories }: { product:
           </Field>
 
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>
-            <PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save details"}</PrimaryButton>
+          {delErr && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{delErr}</p>}
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={onDelete} disabled={delPending} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5 text-danger">
+              <Trash2 className="h-3.5 w-3.5" /> {delPending ? "Deleting…" : "Delete product"}
+            </button>
+            <div className="flex gap-2">
+              <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>
+              <PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save details"}</PrimaryButton>
+            </div>
           </div>
         </form>
       </Modal>

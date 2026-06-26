@@ -185,9 +185,11 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                   <tr onClick={() => setPeek(f)} className={cn("cursor-pointer hover:bg-accent/40", f.status === "archived" && "opacity-60")}>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); setExpanded((s) => ({ ...s, [f.id]: !open })); }} className="shrink-0 text-muted-foreground hover:text-foreground" title={open ? "Collapse" : "Show variants"} aria-label="Toggle variants">
-                          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
+                        {f.skuCount > 1 ? (
+                          <button onClick={(e) => { e.stopPropagation(); setExpanded((s) => ({ ...s, [f.id]: !open })); }} className="shrink-0 text-muted-foreground hover:text-foreground" title={open ? "Collapse" : "Show variants"} aria-label="Toggle variants">
+                            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        ) : <span className="h-4 w-4 shrink-0" />}
                         <button onClick={(e) => { e.stopPropagation(); toggleFav(f.id, !f.favorite); }} className="shrink-0 text-muted-foreground hover:text-warning" title={f.favorite ? "Unfavorite" : "Favorite"} aria-label="Toggle favorite">
                           <Star className={cn("h-4 w-4", f.favorite && "fill-warning text-warning")} />
                         </button>
