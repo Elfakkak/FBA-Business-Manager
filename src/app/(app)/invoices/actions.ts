@@ -15,6 +15,16 @@ const asPayStatus = (v: string): PaymentStatus => (PAY_STATUSES as string[]).inc
 
 const txt = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim(); return s === "" ? null : s; };
 const numOr0 = (v: FormDataEntryValue | null) => { const n = Number(String(v ?? "").trim()); return Number.isFinite(n) ? n : 0; };
+const intOrNull = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = parseInt(s); return Number.isFinite(n) ? n : null; };
+
+// structured payment-term fields, shared by create/update
+function termFields(form: FormData) {
+  return {
+    term_type: txt(form.get("term_type")),
+    term_deposit_pct: intOrNull(form.get("term_deposit_pct")),
+    term_net_days: intOrNull(form.get("term_net_days")),
+  };
+}
 
 export async function createInvoice(form: FormData): Promise<Result> {
   const supabase = await createClient();
@@ -28,7 +38,7 @@ export async function createInvoice(form: FormData): Promise<Result> {
   const { error } = await supabase.from("invoices").insert({
     id, order_id: txt(form.get("order_id")), vendor, vendor_type: asVendorType(String(form.get("vendor_type") ?? "Supplier")),
     issued: txt(form.get("issued")), due: txt(form.get("due")), total, paid: numOr0(form.get("paid")),
-    currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")),
+    currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")), ...termFields(form),
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/invoices");
@@ -41,12 +51,34 @@ export async function updateInvoice(id: string, form: FormData): Promise<Result>
     order_id: txt(form.get("order_id")), vendor: String(form.get("vendor") ?? "").trim(),
     vendor_type: asVendorType(String(form.get("vendor_type") ?? "Supplier")),
     issued: txt(form.get("issued")), due: txt(form.get("due")),
-    total: numOr0(form.get("total")), currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")),
+    total: numOr0(form.get("total")), currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")), ...termFields(form),
   }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
   return { ok: true, id };
+}
+
+// Inline-save the structured payment term (from the Payment-terms card).
+export async function saveInvoiceTerms(id: string, cfg: { type: string; depositPct?: number | null; netDays?: number | null }): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("invoices").update({
+    term_type: cfg.type, term_deposit_pct: cfg.depositPct ?? null, term_net_days: cfg.netDays ?? null,
+  }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/invoices");
+  revalidatePath(`/invoices/${id}`);
+  return { ok: true, id };
+}
+
+// Attach (or replace) a payment's proof — a receipt file URL.
+export async function attachPaymentProof(paymentId: string, invoiceId: string, url: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("invoice_payments").update({ proof_kind: url ? "receipt" : null, proof_url: url || null }).eq("id", paymentId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/invoices");
+  return { ok: true };
 }
 
 export async function saveInvoiceDocument(id: string, url: string): Promise<Result> {
@@ -72,10 +104,12 @@ export async function recordPayment(invoiceId: string, form: FormData): Promise<
   if (amount <= 0) return { ok: false, error: "Amount must be greater than 0." };
   const { data: inv } = await supabase.from("invoices").select("paid").eq("id", invoiceId).maybeSingle();
   if (!inv) return { ok: false, error: "Invoice not found." };
+  const proofUrl = txt(form.get("proof_url"));
   const { error: pe } = await supabase.from("invoice_payments").insert({
     id: randomUUID(), invoice_id: invoiceId, amount,
     payment_date: txt(form.get("payment_date")) ?? new Date().toISOString().slice(0, 10),
     method: txt(form.get("method")), status: asPayStatus(String(form.get("status") ?? "Cleared")),
+    proof_kind: proofUrl ? "receipt" : null, proof_url: proofUrl,
   });
   if (pe) return { ok: false, error: pe.message };
   const { error: ie } = await supabase.from("invoices").update({ paid: (inv.paid ?? 0) + amount }).eq("id", invoiceId);

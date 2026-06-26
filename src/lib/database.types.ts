@@ -631,6 +631,8 @@ export type Database = {
           invoice_id: string
           method: string | null
           payment_date: string | null
+          proof_kind: string | null
+          proof_url: string | null
           status: Database["public"]["Enums"]["payment_status"]
         }
         Insert: {
@@ -642,6 +644,8 @@ export type Database = {
           invoice_id: string
           method?: string | null
           payment_date?: string | null
+          proof_kind?: string | null
+          proof_url?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Update: {
@@ -653,6 +657,8 @@ export type Database = {
           invoice_id?: string
           method?: string | null
           payment_date?: string | null
+          proof_kind?: string | null
+          proof_url?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Relationships: [
@@ -676,6 +682,9 @@ export type Database = {
           issued: string | null
           order_id: string | null
           paid: number
+          term_deposit_pct: number | null
+          term_net_days: number | null
+          term_type: string | null
           terms: string | null
           total: number
           updated_at: string
@@ -692,6 +701,9 @@ export type Database = {
           issued?: string | null
           order_id?: string | null
           paid?: number
+          term_deposit_pct?: number | null
+          term_net_days?: number | null
+          term_type?: string | null
           terms?: string | null
           total?: number
           updated_at?: string
@@ -708,6 +720,9 @@ export type Database = {
           issued?: string | null
           order_id?: string | null
           paid?: number
+          term_deposit_pct?: number | null
+          term_net_days?: number | null
+          term_type?: string | null
           terms?: string | null
           total?: number
           updated_at?: string

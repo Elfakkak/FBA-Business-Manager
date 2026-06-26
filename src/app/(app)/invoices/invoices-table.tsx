@@ -7,12 +7,13 @@ import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitiv
 import { Drawer } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary, PAYTERM_TYPES, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { createInvoice, updateInvoice, deleteInvoice, recordPayment, deletePayment } from "./actions";
-import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, Trash2, Package } from "lucide-react";
+import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, Trash2, Package, Paperclip, ShieldCheck } from "lucide-react";
 
-export type Payment = { id: string; amount: number; payment_date: string | null; method: string | null; status: string };
+export type Payment = { id: string; amount: number; payment_date: string | null; method: string | null; status: string; proof_kind: string | null; proof_url: string | null };
 export type InvRow = InvoiceRow & { orderTitle: string | null; payments: Payment[] };
 
 const VENDOR_TYPES = ["Supplier", "Forwarder", "Agent", "Inspection"];
@@ -64,6 +65,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
   const totalInvoiced = rows.reduce((n, i) => n + (i.total ?? 0), 0);
   const paidPct = totalInvoiced ? Math.round((totalPaid / totalInvoiced) * 100) : 0;
   const vendorCount = new Set(rows.map((i) => i.vendor)).size;
+  const proofMissing = rows.reduce((n, i) => n + i.payments.filter((p) => p.status === "Cleared" && !p.proof_url).length, 0);
   // aging buckets
   const buckets = [
     { label: "Overdue", color: "bg-danger", amt: overdueAmt },
@@ -85,11 +87,12 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
           </>
         } />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <Kpi label="Outstanding" value={money(outstanding)} sub={`${openCount} open invoices`} icon={DollarSign} tone={outstanding > 0 ? "warning" : "success"} />
         <Kpi label="Overdue" value={money(overdueAmt)} sub={`${overdue.length} ${overdue.length === 1 ? "invoice" : "invoices"}`} icon={AlertCircle} tone={overdue.length ? "danger" : undefined} />
         <Kpi label="Due ≤ 7 days" value={money(dueSoonAmt)} sub={`${dueSoon.length} ${dueSoon.length === 1 ? "invoice" : "invoices"}`} icon={Calendar} tone={dueSoon.length ? "warning" : undefined} />
         <Kpi label="Paid" value={money(totalPaid)} sub={`${paidPct}% of ${money(totalInvoiced)}`} icon={Check} tone="success" />
+        <Kpi label="Proof missing" value={num(proofMissing)} sub="cleared, no receipt" icon={ShieldCheck} tone={proofMissing ? "warning" : "success"} />
         <Kpi label="Vendors" value={num(vendorCount)} sub={`${rows.length} invoices`} icon={Receipt} />
       </div>
 
@@ -192,7 +195,7 @@ function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord:
   return (
     <div className="space-y-5">
       <div>
-        <div className="text-[12px] text-muted-foreground">{i.vendor} · {i.vendor_type}</div>
+        <div className="text-[12px] text-muted-foreground">{i.vendor} · {i.vendor_type} · {payTermSummary({ type: (i.term_type as "TT") ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days })}</div>
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <Badge tone={INVOICE_STATUS_TONE[st]}>{st}</Badge>
           {a.label !== "Settled" && i.due && <Badge tone={a.tone}>{a.label === "Overdue" ? `${Math.abs(a.days)}d overdue` : a.label === "Due soon" ? `due in ${a.days}d` : `due ${fmtDue(i.due)}`}</Badge>}
@@ -217,7 +220,10 @@ function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord:
                 <span className="font-mono text-muted-foreground">{fmtDue(p.payment_date)}</span>
                 <span className="font-mono font-semibold">{money(p.amount)}</span>
                 {p.method && <span className="text-muted-foreground">{p.method}</span>}
-                <Badge tone={PAY_STATUS_TONE[p.status] ?? "muted"}>{p.status}</Badge>
+                <span className="ml-auto flex items-center gap-1.5">
+                  {p.proof_url ? <a href={p.proof_url} target="_blank" rel="noopener noreferrer"><Badge tone="success">Receipt</Badge></a> : p.status === "Cleared" ? <Badge tone="warning">No proof</Badge> : null}
+                  <Badge tone={PAY_STATUS_TONE[p.status] ?? "muted"}>{p.status}</Badge>
+                </span>
               </li>
             ))}
           </ul>
@@ -246,6 +252,7 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
   const [err, setErr] = useState<string | null>(null);
   const [invId, setInvId] = useState(invoice?.id ?? "");
   const [payStatus, setPayStatus] = useState("Cleared");
+  const [proof, setProof] = useState<File | null>(null);
   const open = invoices.filter((i) => invoiceBalance(i) > BALANCE_EPSILON);
   const target = invoices.find((i) => i.id === invId) ?? null;
 
@@ -254,7 +261,16 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
     if (!invId) { setErr("Pick an invoice."); return; }
     const fd = new FormData(e.currentTarget);
     setErr(null);
-    start(async () => { const r = await recordPayment(invId, fd); if (!r.ok) { setErr(r.error); return; } onClose(); router.refresh(); });
+    start(async () => {
+      if (proof) {
+        const supabase = createClient();
+        const safe = proof.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+        const path = `invoices/${invId}/proof/${Date.now()}-${safe}`;
+        const { error } = await supabase.storage.from("product-media").upload(path, proof, { upsert: true });
+        if (!error) fd.set("proof_url", supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl);
+      }
+      const r = await recordPayment(invId, fd); if (!r.ok) { setErr(r.error); return; } onClose(); router.refresh();
+    });
   }
 
   return (
@@ -270,6 +286,12 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
           <Field label="Method"><input name="method" className={inputCls} placeholder="Mercury / Wire / …" /></Field>
           <Field label="Status"><Select name="status" value={payStatus} onChange={setPayStatus} options={["Cleared", "Scheduled", "Pending"].map((s) => ({ value: s, label: s }))} /></Field>
         </div>
+        <Field label="Proof of payment (optional)">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-[12px] text-muted-foreground hover:border-primary/40">
+            <Paperclip className="h-3.5 w-3.5" /> {proof ? proof.name : "Attach receipt / bank confirmation (image or PDF)"}
+            <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => setProof(e.target.files?.[0] ?? null)} />
+          </label>
+        </Field>
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Record payment"}</PrimaryButton></div>
       </form>
@@ -287,6 +309,8 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
   const i = invoice;
   const [vType, setVType] = useState<string>(i?.vendor_type ?? "Supplier");
   const [orderId, setOrderId] = useState<string>(i?.order_id ?? "");
+  const [termType, setTermType] = useState<string>(i?.term_type ?? "TT");
+  const [deposit, setDeposit] = useState<number>(i?.term_deposit_pct ?? 30);
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -305,7 +329,14 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
           <Field label="Due"><input name="due" type="date" defaultValue={i?.due ?? ""} className={inputCls} /></Field>
           {!i && <Field label="Already paid (USD)"><input name="paid" type="number" step="0.01" defaultValue="0" className={inputCls} /></Field>}
         </div>
-        <Field label="Terms"><input name="terms" defaultValue={i?.terms ?? ""} className={inputCls} placeholder="e.g. 30% deposit / 70% balance" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Payment term"><Select name="term_type" value={termType} onChange={setTermType} options={PAYTERM_TYPES.map((t) => ({ value: t.key, label: `${t.label} — ${t.name}` }))} /></Field>
+          {termType === "TT"
+            ? <Field label="Deposit %"><input name="term_deposit_pct" type="number" min={0} max={100} value={deposit} onChange={(e) => setDeposit(Number(e.target.value) || 0)} className={inputCls} /></Field>
+            : termType === "OA"
+            ? <Field label="Net days"><input name="term_net_days" type="number" min={0} defaultValue={i?.term_net_days ?? 30} className={inputCls} /></Field>
+            : <span />}
+        </div>
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save invoice"}</PrimaryButton></div>
       </form>

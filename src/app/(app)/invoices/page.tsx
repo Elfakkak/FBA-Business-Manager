@@ -6,7 +6,7 @@ export default async function InvoicesPage() {
   const supabase = await createClient();
   const [{ data: invoices }, { data: payments }, { data: orders }, { data: suppliers }, { data: partners }] = await Promise.all([
     supabase.from("invoices").select("*").order("due", { ascending: true, nullsFirst: false }),
-    supabase.from("invoice_payments").select("id, invoice_id, amount, payment_date, method, status"),
+    supabase.from("invoice_payments").select("id, invoice_id, amount, payment_date, method, status, proof_kind, proof_url"),
     supabase.from("orders").select("id, title"),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("partners").select("name").order("name"),
@@ -15,7 +15,7 @@ export default async function InvoicesPage() {
   const payByInvoice = new Map<string, Payment[]>();
   for (const p of (payments ?? []) as (Payment & { invoice_id: string })[]) {
     if (!payByInvoice.has(p.invoice_id)) payByInvoice.set(p.invoice_id, []);
-    payByInvoice.get(p.invoice_id)!.push({ id: p.id, amount: p.amount, payment_date: p.payment_date, method: p.method, status: p.status });
+    payByInvoice.get(p.invoice_id)!.push({ id: p.id, amount: p.amount, payment_date: p.payment_date, method: p.method, status: p.status, proof_kind: p.proof_kind, proof_url: p.proof_url });
   }
   const orderTitle = new Map(((orders ?? []) as { id: string; title: string }[]).map((o) => [o.id, o.title]));
 

@@ -7,14 +7,18 @@ import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
 import { StatCard } from "@/components/ui/detail";
 import { createClient } from "@/lib/supabase/client";
-import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary, type PayTermCfg, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { RecordPaymentModal, InvoiceModal, type InvRow } from "../invoices-table";
 import { updateInvoice, deletePayment, saveInvoiceDocument } from "../actions";
+import { PaymentTermsCard } from "./payment-terms-card";
+import { PaymentProofCell } from "./payment-proof";
 import {
   ChevronRight, Factory, Calendar, Package, DollarSign, Receipt, ListChecks, FileText,
-  ArrowUpRight, ArrowRight, Pencil, Trash2, ImagePlus, Loader2, ExternalLink, CalendarClock,
+  ArrowUpRight, ArrowRight, Pencil, Trash2, ImagePlus, Loader2, ExternalLink,
 } from "lucide-react";
+
+function termCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTermCfg["type"]) ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days }; }
 
 const fmtDate = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
@@ -76,7 +80,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
         <StatCard label="Paid" value={money(i.paid)} sub={`${paidPct}% of total`} tone="success" />
         <StatCard label="Balance" value={bal > BALANCE_EPSILON ? money(bal) : money(0)} sub="outstanding" tone={bal > BALANCE_EPSILON ? "warning" : "success"} />
         <StatCard label="Due" value={fmtDate(i.due)} sub={dueBadge ?? "—"} />
-        <StatCard label="Status" value={st} sub={i.terms ?? "—"} tone={INVOICE_STATUS_TONE[st]} />
+        <StatCard label="Status" value={st} sub={payTermSummary(termCfg(i))} tone={INVOICE_STATUS_TONE[st]} />
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.5fr_1fr]">
@@ -102,13 +106,14 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
             {i.payments.length === 0 ? <p className="px-5 pb-4 text-[12px] text-muted-foreground">No payments recorded yet.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-sm">
-                  <thead><tr className="border-y bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground"><th className="px-5 py-2 font-medium">Date</th><th className="px-3 py-2 text-right font-medium">Amount</th><th className="px-3 py-2 font-medium">Method</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 text-right font-medium">Balance after</th><th className="px-3 py-2" /></tr></thead>
+                  <thead><tr className="border-y bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground"><th className="px-5 py-2 font-medium">Date</th><th className="px-3 py-2 text-right font-medium">Amount</th><th className="px-3 py-2 font-medium">Method</th><th className="px-3 py-2 font-medium">Proof</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 text-right font-medium">Balance after</th><th className="px-3 py-2" /></tr></thead>
                   <tbody className="divide-y">
                     {withBalance.map((p) => (
                       <tr key={p.id}>
                         <td className="px-5 py-2.5 font-mono text-[12px]">{fmtDate(p.payment_date)}</td>
                         <td className="px-3 py-2.5 text-right font-mono font-semibold">{money(p.amount)}</td>
                         <td className="px-3 py-2.5">{p.method ?? "—"}</td>
+                        <td className="px-3 py-2.5"><PaymentProofCell paymentId={p.id} invoiceId={i.id} proofKind={p.proof_kind} proofUrl={p.proof_url} /></td>
                         <td className="px-3 py-2.5"><Badge tone={PAY_STATUS_TONE[p.status] ?? "muted"}>{p.status}</Badge></td>
                         <td className="px-3 py-2.5 text-right font-mono text-warning">{money(p.balanceAfter)}</td>
                         <td className="px-3 py-2.5 text-right"><button onClick={() => start(async () => { await deletePayment(p.id, i.id); router.refresh(); })} className="vy-icon-btn" aria-label="Delete payment"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
@@ -128,12 +133,8 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
         </div>
 
         <div className="flex flex-col gap-4">
-          {/* Payment progress */}
-          <Card className="p-5">
-            <div className="mb-3 flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><CalendarClock className="h-4 w-4" /></span><div><div className="font-semibold">Payment progress</div><p className="text-[11px] text-muted-foreground">{i.terms ?? "Paid vs outstanding"}</p></div></div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success" style={{ width: `${Math.min(100, paidPct)}%` }} /></div>
-            <div className="mt-2 flex justify-between text-[12px]"><span className="font-mono font-semibold text-success">{money(i.paid)} paid</span><span className="font-mono text-muted-foreground">{money(bal)} left</span></div>
-          </Card>
+          {/* Payment terms + schedule */}
+          <PaymentTermsCard invoiceId={i.id} vendor={i.vendor} total={i.total ?? 0} paid={i.paid ?? 0} cfg={termCfg(i)} />
 
           {/* Dates & terms */}
           <Card className="p-5">
@@ -141,7 +142,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
             <div className="grid grid-cols-2 gap-3">
               <div><div className="vy-kicker mb-0.5">Issued</div><div className="font-mono text-[13px] font-semibold">{fmtDate(i.issued)}</div></div>
               <div><div className="vy-kicker mb-0.5">Due</div><div className="font-mono text-[13px] font-semibold">{fmtDate(i.due)}</div></div>
-              <div className="col-span-2"><div className="vy-kicker mb-0.5">Terms</div><div className="text-[13px] font-semibold">{i.terms ?? "—"}</div></div>
+              <div className="col-span-2"><div className="vy-kicker mb-0.5">Terms</div><div className="text-[13px] font-semibold">{payTermSummary(termCfg(i))}</div></div>
             </div>
           </Card>
 

@@ -245,6 +245,57 @@ export function invoiceAging(dueISO: string | null, balance: number, nowMs: numb
   return { days, label: "Upcoming", tone: "muted" };
 }
 
+// ---------- Structured supplier payment terms (T/T · L/C · O/A · D/P · D/A) ----------
+export type PayTermType = "TT" | "LC" | "OA" | "DP" | "DA";
+export type PayTermCfg = { type: PayTermType; depositPct?: number | null; netDays?: number | null };
+export const PAYTERM_TYPES: { key: PayTermType; label: string; name: string; blurb: string; hasDeposit: boolean }[] = [
+  { key: "TT", label: "T/T", name: "Telegraphic Transfer (bank wire)", blurb: "A direct bank wire, normally split into a deposit to start production and a balance before the goods ship. The most common term for China factories — fast, but unsecured, so trust matters.", hasDeposit: true },
+  { key: "LC", label: "L/C", name: "Letter of Credit", blurb: "Your bank guarantees payment to the supplier once they present shipping documents that match the L/C exactly. Safest for large or first-time orders, but slower and carries bank fees.", hasDeposit: false },
+  { key: "OA", label: "O/A", name: "Open Account", blurb: "You receive the goods first and pay later — net 30/60/90 days after shipment. Best cash flow for you; only offered by suppliers who already trust you.", hasDeposit: false },
+  { key: "DP", label: "D/P", name: "Documents against Payment", blurb: "The bank releases the shipping documents (which you need to collect the goods) only after you pay in full. A middle ground — safer than T/T balance, cheaper than an L/C.", hasDeposit: false },
+  { key: "DA", label: "D/A", name: "Documents against Acceptance", blurb: "You get the documents by accepting (signing) a draft to pay on a future date. Effectively short-term credit from the supplier, secured by your accepted draft.", hasDeposit: false },
+];
+export const PAYTERM_BY_KEY: Record<string, (typeof PAYTERM_TYPES)[number]> = Object.fromEntries(PAYTERM_TYPES.map((t) => [t.key, t]));
+export const PAYTERM_TT_PRESETS = [30, 50, 0, 100];
+
+export type PayScheduleStep = { label: string; when: string; pct: number; amount: number; paidAmt: number; settled: boolean; partial: boolean };
+// Given a term config + supplier-invoice total & paid-to-date, produce ordered milestones
+// (deposit first, then balance) with paid/partial/settled status. Mirrors the prototype.
+export function payTermSchedule(cfg: PayTermCfg | null | undefined, total: number, paid: number): PayScheduleStep[] {
+  total = Number(total) || 0;
+  paid = Number(paid) || 0;
+  const type = cfg?.type ?? "TT";
+  let steps: { label: string; when: string; pct: number; amount: number }[] = [];
+  if (type === "TT") {
+    const dep = Math.max(0, Math.min(100, Number(cfg?.depositPct) || 0));
+    if (dep > 0 && dep < 100) steps = [
+      { label: "Deposit", when: "To start production", pct: dep, amount: Math.round(total * dep) / 100 },
+      { label: "Balance", when: "Before goods ship", pct: 100 - dep, amount: Math.round(total * (100 - dep)) / 100 },
+    ];
+    else if (dep >= 100) steps = [{ label: "Full payment", when: "Upfront, before production", pct: 100, amount: total }];
+    else steps = [{ label: "Full payment", when: "Before goods ship", pct: 100, amount: total }];
+  } else if (type === "OA") {
+    const nd = Number(cfg?.netDays) || 30;
+    steps = [{ label: "Full payment", when: `Net ${nd} days after shipment`, pct: 100, amount: total }];
+  } else if (type === "LC") steps = [{ label: "L/C settlement", when: "On compliant document presentation", pct: 100, amount: total }];
+  else if (type === "DP") steps = [{ label: "Full payment", when: "To release shipping documents", pct: 100, amount: total }];
+  else if (type === "DA") steps = [{ label: "Accepted draft", when: "Payable at draft maturity", pct: 100, amount: total }];
+  let remaining = paid;
+  return steps.map((s) => {
+    const covered = Math.min(s.amount, Math.max(0, remaining));
+    remaining -= covered;
+    const settled = covered >= s.amount - 0.005 && s.amount > 0;
+    return { ...s, paidAmt: covered, settled, partial: covered > 0.005 && !settled };
+  });
+}
+export function payTermSummary(cfg: PayTermCfg | null | undefined): string {
+  const t = PAYTERM_BY_KEY[cfg?.type ?? "TT"];
+  if (!t) return "—";
+  if (t.key === "TT") { const d = Number(cfg?.depositPct) || 0; return d <= 0 ? "T/T · balance before ship" : d >= 100 ? "T/T · 100% upfront" : `T/T · ${d} / ${100 - d}`; }
+  if (t.key === "OA") return `O/A · net ${Number(cfg?.netDays) || 30}`;
+  return `${t.label} · ${t.name}`;
+}
+
 // Derived "needs attention" / next-actions for an order — shared by the order Home
 // page and the orders-list peek drawer so both surface the same guidance.
 export type OrderNeed = { key: string; headline: string; detail: string; section: string; sectionLabel: string; severity: Tone };
