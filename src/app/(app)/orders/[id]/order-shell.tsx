@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, Chip, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
 import {
@@ -273,6 +274,7 @@ function ProductionPanel({ orderId, lines, variants, units, cogs }: {
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [variantId, setVariantId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -283,7 +285,7 @@ function ProductionPanel({ orderId, lines, variants, units, cogs }: {
     start(async () => {
       const res = await addOrderLine(orderId, form);
       if (!res.ok) { setError(res.error); return; }
-      setAdding(false);
+      setAdding(false); setVariantId("");
       router.refresh();
     });
   }
@@ -344,10 +346,8 @@ function ProductionPanel({ orderId, lines, variants, units, cogs }: {
       <Modal open={adding} onClose={() => setAdding(false)} title="Add line item">
         <form onSubmit={onAdd} className="space-y-4">
           <Field label="Variant">
-            <select name="variant_id" required className={inputCls} defaultValue="">
-              <option value="" disabled>Pick a SKU…</option>
-              {variants.map((v) => <option key={v.id} value={v.id}>{v.sku} — {v.name}</option>)}
-            </select>
+            <Select name="variant_id" value={variantId} onChange={setVariantId} placeholder="Pick a SKU…" searchable
+              options={variants.map((v) => ({ value: v.id, label: v.sku, sub: v.name }))} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantity"><input name="qty" type="number" required className={inputCls} placeholder="500" /></Field>
@@ -367,6 +367,7 @@ function ProductionPanel({ orderId, lines, variants, units, cogs }: {
 function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgItemOpt[]; used: PkgUsed[] }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [itemId, setItemId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const totalCost = used.reduce((s, u) => s + u.qty * u.unitCost, 0);
@@ -378,7 +379,7 @@ function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgI
     start(async () => {
       const res = await addOrderPackaging(orderId, form);
       if (!res.ok) { setError(res.error); return; }
-      setAdding(false);
+      setAdding(false); setItemId("");
       router.refresh();
     });
   }
@@ -437,10 +438,8 @@ function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgI
       <Modal open={adding} onClose={() => setAdding(false)} title="Add packaging used">
         <form onSubmit={onAdd} className="space-y-4">
           <Field label="Packaging">
-            <select name="item_id" required className={inputCls} defaultValue="">
-              <option value="" disabled>Pick a packaging item…</option>
-              {items.map((i) => <option key={i.id} value={i.id}>{i.name} — {i.kind}</option>)}
-            </select>
+            <Select name="item_id" value={itemId} onChange={setItemId} placeholder="Pick a packaging item…"
+              options={items.map((i) => ({ value: i.id, label: i.name, sub: i.kind }))} />
           </Field>
           <Field label="Quantity used"><input name="qty" type="number" required autoFocus className={inputCls} placeholder="500" /></Field>
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
