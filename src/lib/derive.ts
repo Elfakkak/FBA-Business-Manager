@@ -311,8 +311,10 @@ export function productionLanded(lines: ProdLine[], costs: Pick<OrderCostRow, "a
     const line = qty * num(l.unit_cost);
     let alloc = 0;
     for (const c of costs) {
-      if (c.basis === "units") alloc += totalUnits ? (num(c.amount) * qty) / totalUnits : 0;
-      else alloc += totalGoods ? (num(c.amount) * line) / totalGoods : 0;
+      // value-basis falls back to per-unit when goods aren't priced yet, so the
+      // cost still lands somewhere instead of silently vanishing.
+      if (c.basis === "units" || totalGoods <= 0) alloc += totalUnits ? (num(c.amount) * qty) / totalUnits : 0;
+      else alloc += (num(c.amount) * line) / totalGoods;
     }
     return { ...l, line, landedUnit: qty ? (line + alloc) / qty : 0 };
   });

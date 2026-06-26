@@ -18,7 +18,7 @@ type ProdLine = { id: string; sku: string | null; product_name: string | null; f
 type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
 type ChargeTypeOpt = { id: string; label: string; owner: string };
 
-const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "info", Inspection: "success" };
+const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "info", Inspection: "warning" };
 
 export function ProductionSection({ order, lines, costs, variants, chargeTypes }: {
   order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: VariantOpt[]; chargeTypes: ChargeTypeOpt[];
