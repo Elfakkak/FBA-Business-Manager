@@ -19,7 +19,10 @@ import {
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
-export type CatalogVariant = { id: string; sku: string; name: string; pack: string | null; familyName: string; familyLastOrdered: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
+export type CatalogVariant = { id: string; sku: string; name: string; pack: string | null; familyName: string; familyLastOrdered: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
+
+// Parse an editable numeric cell → number, or null for blank/non-numeric (never NaN).
+const numOrNull = (s: string) => { if (s.trim() === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
 type ChargeTypeOpt = { id: string; label: string; owner: string };
 type VendorOpt = { name: string; type: string };
 
@@ -163,18 +166,18 @@ const FILE_SLOTS = [
 function ProductionFiles({ orderId, files }: { orderId: string; files: OrderFile[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [upErr, setUpErr] = useState<string | null>(null);
   const bySlot = new Map(files.map((f) => [f.slot, f]));
 
   async function upload(slot: string, file: File) {
-    setBusy(slot);
+    setBusy(slot); setUpErr(null);
     const supabase = createClient();
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
     const path = `orders/${orderId}/files/${slot}/${Date.now()}-${safe}`;
     const { error } = await supabase.storage.from("product-media").upload(path, file, { upsert: true });
-    if (!error) {
-      const url = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
-      await saveOrderFile(orderId, slot, url, file.name);
-    }
+    if (error) { setUpErr(`Upload failed: ${error.message}`); setBusy(null); return; }
+    const url = supabase.storage.from("product-media").getPublicUrl(path).data.publicUrl;
+    await saveOrderFile(orderId, slot, url, file.name);
     setBusy(null);
     router.refresh();
   }
@@ -182,6 +185,7 @@ function ProductionFiles({ orderId, files }: { orderId: string; files: OrderFile
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><ClipboardCheck className="h-4 w-4" /></span><div><div className="font-semibold">Production files</div><p className="text-[11px] text-muted-foreground">WIP photos, specs, and documentation. Separate from PI/PO attachments.</p></div></div>
+      {upErr && <div className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger">{upErr}</div>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {FILE_SLOTS.map((s) => {
           const f = bySlot.get(s.slot);
@@ -316,7 +320,7 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
   const ed = useInlineEditor(
     allLines,
     (l) => ({ qty: String(l.qty ?? 0), unit_cost: l.unit_cost == null ? "" : String(l.unit_cost), unit_cny_ref: l.unit_cny_ref == null ? "" : String(l.unit_cny_ref) }),
-    (id, f) => updateOrderLine(id, order.id, { qty: Math.max(0, Math.round(Number(f.qty) || 0)), unit_cost: f.unit_cost === "" ? null : Number(f.unit_cost), unit_cny_ref: f.unit_cny_ref === "" ? null : Number(f.unit_cny_ref) }),
+    (id, f) => updateOrderLine(id, order.id, { qty: Math.max(0, Math.round(Number(f.qty) || 0)), unit_cost: numOrNull(f.unit_cost), unit_cny_ref: numOrNull(f.unit_cny_ref) }),
     () => router.refresh(),
   );
   const liveUnits = ed.on ? allLines.reduce((s, l) => s + (Number(ed.get(l.id, "qty")) || 0), 0) : totalUnits;

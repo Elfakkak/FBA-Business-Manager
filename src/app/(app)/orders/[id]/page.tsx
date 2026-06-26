@@ -15,7 +15,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
     supabase.from("charge_types").select("id, label, owner").eq("archived", false).order("owner").order("label"),
-    supabase.from("product_variants").select("id, family_id, sku, name, pack, last_cost_usd, last_cost_rmb, has_image, fba_stock, reorder_point, status").order("sku"),
+    supabase.from("product_variants").select("id, family_id, sku, name, pack, last_cost_usd, last_cost_rmb, sale_price, has_image, fba_stock, reorder_point, status").order("sku"),
     supabase.from("products").select("id, parent, last_ordered"),
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
     supabase.from("packaging_moves").select("id, item_id, qty").eq("order_id", id).eq("type", "consume"),
@@ -63,12 +63,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const prodList = (products ?? []) as { id: string; parent: string | null; last_ordered: string | null }[];
   const familyName = new Map(prodList.map((p) => [p.id, p.parent ?? ""]));
   const familyLast = new Map(prodList.map((p) => [p.id, p.last_ordered]));
-  type V = { id: string; family_id: string | null; sku: string; name: string; pack: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; has_image: boolean | null; fba_stock: number | null; reorder_point: number | null; status: string | null };
+  type V = { id: string; family_id: string | null; sku: string; name: string; pack: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean | null; fba_stock: number | null; reorder_point: number | null; status: string | null };
   const catalogVariants = ((variants ?? []) as V[]).map((v) => ({
     id: v.id, sku: v.sku, name: v.name, pack: v.pack,
     familyName: (v.family_id && familyName.get(v.family_id)) || v.name,
     familyLastOrdered: (v.family_id && familyLast.get(v.family_id)) || null,
-    last_cost_usd: v.last_cost_usd, last_cost_rmb: v.last_cost_rmb, has_image: !!v.has_image,
+    last_cost_usd: v.last_cost_usd, last_cost_rmb: v.last_cost_rmb, sale_price: v.sale_price, has_image: !!v.has_image,
     fba_stock: v.fba_stock, reorder_point: v.reorder_point, status: v.status,
   }));
 

@@ -1077,6 +1077,7 @@ export type Database = {
           id: string
           inspection_required: boolean
           placed_on: string | null
+          prelock_status: string | null
           route: string | null
           ship_mode: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -1091,6 +1092,7 @@ export type Database = {
           id: string
           inspection_required?: boolean
           placed_on?: string | null
+          prelock_status?: string | null
           route?: string | null
           ship_mode?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -1105,6 +1107,7 @@ export type Database = {
           id?: string
           inspection_required?: boolean
           placed_on?: string | null
+          prelock_status?: string | null
           route?: string | null
           ship_mode?: string | null
           status?: Database["public"]["Enums"]["order_status"]

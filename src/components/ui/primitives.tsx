@@ -190,7 +190,8 @@ export function EditCell({ value, onChange, placeholder, align = "right", mode =
 // Shared Edit / Done·Cancel (+ optional Add) toolbar driven by an InlineEditor.
 export function EditToolbar({ editor, editable = true, addLabel, onAdd }: { editor: InlineEditor; editable?: boolean; addLabel?: string; onAdd?: () => void }) {
   if (editor.on) return (
-    <div className="flex shrink-0 gap-1.5">
+    <div className="flex shrink-0 items-center gap-1.5">
+      {editor.error && <span className="mr-1 max-w-[220px] truncate text-[11px] text-danger" title={editor.error}>{editor.error}</span>}
       <button type="button" onClick={editor.cancel} className="vy-btn vy-btn--ghost vy-btn--sm">Cancel</button>
       <button type="button" onClick={editor.save} disabled={editor.saving} className="vy-btn vy-btn--primary vy-btn--sm">{editor.saving ? "Saving…" : "Done"}</button>
     </div>
