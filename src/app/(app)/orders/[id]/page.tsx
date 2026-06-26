@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { orderRollup, partnerVendorType, type InvoiceRow, type InvoiceLineRow } from "@/lib/derive";
+import { orderRollup, partnerVendorType, type InvoiceRow, type InvoiceLineRow, type OrderCostRow } from "@/lib/derive";
 import { OrderShell, type OrderShipment, type OrderInbound } from "./order-shell";
 import type { InvRow, Payment } from "../../invoices/invoices-table";
 
@@ -10,9 +10,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: invoices }, { data: lines }, { data: variants }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
+  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
+    supabase.from("order_costs").select("*").eq("order_id", id).order("position"),
+    supabase.from("charge_types").select("id, label, owner").eq("archived", false).order("owner").order("label"),
     supabase.from("product_variants").select("id, sku, name, last_cost_usd").order("sku"),
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
     supabase.from("packaging_moves").select("id, item_id, qty").eq("order_id", id).eq("type", "consume"),
@@ -65,6 +67,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       invoices={invoicesRich}
       vendors={vendors}
       lines={lines ?? []}
+      costs={(orderCosts ?? []) as OrderCostRow[]}
+      chargeTypes={(chargeTypes ?? []) as { id: string; label: string; owner: string }[]}
       variants={(variants ?? []) as { id: string; sku: string; name: string; last_cost_usd: number | null }[]}
       packagingItems={(pkgItems ?? []) as { id: string; name: string; kind: string; unit_cost: number }[]}
       packaging={packaging}

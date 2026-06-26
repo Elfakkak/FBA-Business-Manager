@@ -857,6 +857,69 @@ export type Database = {
         }
         Relationships: []
       }
+      order_costs: {
+        Row: {
+          amount: number
+          basis: string
+          charge_type_id: string | null
+          coverage: string
+          created_at: string
+          description: string
+          id: string
+          line_type: string | null
+          order_id: string
+          position: number
+          qty: number
+          section: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          basis?: string
+          charge_type_id?: string | null
+          coverage?: string
+          created_at?: string
+          description?: string
+          id?: string
+          line_type?: string | null
+          order_id: string
+          position?: number
+          qty?: number
+          section?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          basis?: string
+          charge_type_id?: string | null
+          coverage?: string
+          created_at?: string
+          description?: string
+          id?: string
+          line_type?: string | null
+          order_id?: string
+          position?: number
+          qty?: number
+          section?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_costs_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_costs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_lines: {
         Row: {
           created_at: string
@@ -866,6 +929,7 @@ export type Database = {
           product_name: string | null
           qty: number
           sku: string | null
+          unit_cny_ref: number | null
           unit_cost: number | null
           updated_at: string
           variant_id: string | null
@@ -878,6 +942,7 @@ export type Database = {
           product_name?: string | null
           qty?: number
           sku?: string | null
+          unit_cny_ref?: number | null
           unit_cost?: number | null
           updated_at?: string
           variant_id?: string | null
@@ -890,6 +955,7 @@ export type Database = {
           product_name?: string | null
           qty?: number
           sku?: string | null
+          unit_cny_ref?: number | null
           unit_cost?: number | null
           updated_at?: string
           variant_id?: string | null

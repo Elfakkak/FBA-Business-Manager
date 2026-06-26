@@ -290,6 +290,35 @@ export function invoiceLinesRollup(lines: InvoiceLineRow[]) {
   };
 }
 
+// ---------- Production scope & cost (V2 Production page) ----------
+export type OrderCostRow = Database["public"]["Tables"]["order_costs"]["Row"];
+export const PROD_SECTIONS = ["Production", "Shipping", "Inspection"] as const;
+export const PROD_LINE_TYPES = ["Agent fee", "Cartons", "Inland freight", "Inspection fee", "Packaging", "Tooling", "Duties", "Other"] as const;
+export const PROD_BASES = ["value", "units"] as const;
+
+type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id?: string | null; qty: number; unit_cost: number | null; unit_cny_ref?: number | null };
+
+// Per-SKU landed-cost estimate: spread the non-product cost pool over the goods
+// lines by each cost's basis (per-unit or by line value), then landed = (line +
+// allocated)/qty. Duties are out of scope here, so it's an estimate ("est").
+export function productionLanded(lines: ProdLine[], costs: Pick<OrderCostRow, "amount" | "basis">[]) {
+  const num = (v: number | null | undefined) => Number(v) || 0;
+  const totalUnits = lines.reduce((s, l) => s + num(l.qty), 0);
+  const totalGoods = lines.reduce((s, l) => s + num(l.qty) * num(l.unit_cost), 0);
+  const costPool = costs.reduce((s, c) => s + num(c.amount), 0);
+  const withLanded = lines.map((l) => {
+    const qty = num(l.qty);
+    const line = qty * num(l.unit_cost);
+    let alloc = 0;
+    for (const c of costs) {
+      if (c.basis === "units") alloc += totalUnits ? (num(c.amount) * qty) / totalUnits : 0;
+      else alloc += totalGoods ? (num(c.amount) * line) / totalGoods : 0;
+    }
+    return { ...l, line, landedUnit: qty ? (line + alloc) / qty : 0 };
+  });
+  return { totalUnits, totalGoods, costPool, totalLanded: totalGoods + costPool, withLanded };
+}
+
 // ---------- Structured supplier payment terms (T/T · L/C · O/A · D/P · D/A) ----------
 export type PayTermType = "TT" | "LC" | "OA" | "DP" | "DA";
 export type PayTermCfg = { type: PayTermType; depositPct?: number | null; netDays?: number | null };

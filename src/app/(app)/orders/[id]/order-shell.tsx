@@ -7,14 +7,15 @@ import { Card, Badge, Kpi, Chip, SectionTitle } from "@/components/ui/primitives
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
-import { updateOrder, setOrderStatus, addOrderLine, deleteOrderLine, addOrderPackaging, removeOrderPackaging } from "../actions";
+import { updateOrder, setOrderStatus, addOrderPackaging, removeOrderPackaging } from "../actions";
 import { createInvoice, updateInvoice, deleteInvoice } from "../../invoices/actions";
 import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
 import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
+import { ProductionSection } from "./production-panel";
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
-  type OrderRow, type PayTermCfg,
+  type OrderRow, type PayTermCfg, type OrderCostRow,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import {
@@ -41,7 +42,8 @@ const JOURNEY = [
 ];
 const STATUS_IDX: Record<string, number> = { draft: 0, production: 1, inspection: 2, transit: 3, fba: 4, closed: 5 };
 
-type OrderLine = { id: string; sku: string | null; product_name: string | null; qty: number; unit_cost: number | null };
+type OrderLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
+type ChargeTypeOpt = { id: string; label: string; owner: string };
 type VariantOpt = { id: string; sku: string; name: string; last_cost_usd: number | null };
 type PkgItemOpt = { id: string; name: string; kind: string; unit_cost: number };
 type PkgUsed = { moveId: string; itemId: string; name: string; qty: number; unitCost: number };
@@ -58,11 +60,13 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
   lines: OrderLine[];
+  costs: OrderCostRow[];
+  chargeTypes: ChargeTypeOpt[];
   variants: VariantOpt[];
   packagingItems: PkgItemOpt[];
   packaging: PkgUsed[];
@@ -77,7 +81,6 @@ export function OrderShell({ order, invoices, vendors, lines, variants, packagin
   const [pending, start] = useTransition();
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
   const units = lines.reduce((s, l) => s + (l.qty ?? 0), 0);
-  const cogs = lines.reduce((s, l) => s + (l.qty ?? 0) * (l.unit_cost ?? 0), 0);
   const advance = (key: string) => start(async () => { await setOrderStatus(order.id, key); router.refresh(); });
 
   return (
@@ -113,7 +116,7 @@ export function OrderShell({ order, invoices, vendors, lines, variants, packagin
         <ShippingPanel shipments={shipments} inbounds={inbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
-          <ProductionPanel orderId={order.id} lines={lines} variants={variants} units={units} cogs={cogs} />
+          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : (
@@ -364,101 +367,6 @@ function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices
       {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
       {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
     </div>
-  );
-}
-
-function ProductionPanel({ orderId, lines, variants, units, cogs }: {
-  orderId: string; lines: OrderLine[]; variants: VariantOpt[]; units: number; cogs: number;
-}) {
-  const router = useRouter();
-  const [adding, setAdding] = useState(false);
-  const [variantId, setVariantId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function onAdd(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setError(null);
-    start(async () => {
-      const res = await addOrderLine(orderId, form);
-      if (!res.ok) { setError(res.error); return; }
-      setAdding(false); setVariantId("");
-      router.refresh();
-    });
-  }
-  function onDelete(id: string) {
-    start(async () => { await deleteOrderLine(id, orderId); router.refresh(); });
-  }
-
-  return (
-    <Card className="p-5">
-      <SectionTitle icon={Hammer} tone="brand" title="Production" count={lines.length}
-        action={<GhostButton onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add line</GhostButton>} />
-
-      {lines.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">
-          No line items yet. Add the SKUs and quantities in this production run.
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2 font-medium">SKU</th>
-                  <th className="px-3 py-2 font-medium">Product</th>
-                  <th className="px-3 py-2 text-right font-medium">Qty</th>
-                  <th className="px-3 py-2 text-right font-medium">Unit cost</th>
-                  <th className="px-3 py-2 text-right font-medium">Line total</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {lines.map((l) => (
-                  <tr key={l.id}>
-                    <td className="px-3 py-2 font-mono text-[12px] font-semibold">{l.sku}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{l.product_name}</td>
-                    <td className="tabular px-3 py-2 text-right font-mono">{num(l.qty)}</td>
-                    <td className="tabular px-3 py-2 text-right font-mono">{money(l.unit_cost)}</td>
-                    <td className="tabular px-3 py-2 text-right font-mono font-semibold">{money((l.qty ?? 0) * (l.unit_cost ?? 0))}</td>
-                    <td className="px-3 py-2 text-right"><button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t font-medium">
-                  <td className="px-3 py-2" colSpan={2}>Total</td>
-                  <td className="tabular px-3 py-2 text-right font-mono">{num(units)}</td>
-                  <td></td>
-                  <td className="tabular px-3 py-2 text-right font-mono">{money(cogs)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">COGS = Σ qty × unit cost — feeds the order&apos;s landed cost & finance.</p>
-        </>
-      )}
-
-      <Modal open={adding} onClose={() => setAdding(false)} title="Add line item">
-        <form onSubmit={onAdd} className="space-y-4">
-          <Field label="Variant">
-            <Select name="variant_id" value={variantId} onChange={setVariantId} placeholder="Pick a SKU…" searchable
-              options={variants.map((v) => ({ value: v.id, label: v.sku, sub: v.name }))} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantity"><input name="qty" type="number" required className={inputCls} placeholder="500" /></Field>
-            <Field label="Unit cost (USD)"><input name="unit_cost" type="number" step="0.01" className={inputCls} placeholder="(defaults to variant cost)" /></Field>
-          </div>
-          {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <GhostButton type="button" onClick={() => setAdding(false)}>Cancel</GhostButton>
-            <PrimaryButton type="submit" disabled={pending}>{pending ? "Adding…" : "Add line"}</PrimaryButton>
-          </div>
-        </form>
-      </Modal>
-    </Card>
   );
 }
 
