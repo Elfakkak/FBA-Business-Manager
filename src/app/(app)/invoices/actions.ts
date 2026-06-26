@@ -28,7 +28,7 @@ export async function createInvoice(form: FormData): Promise<Result> {
   const { error } = await supabase.from("invoices").insert({
     id, order_id: txt(form.get("order_id")), vendor, vendor_type: asVendorType(String(form.get("vendor_type") ?? "Supplier")),
     issued: txt(form.get("issued")), due: txt(form.get("due")), total, paid: numOr0(form.get("paid")),
-    currency: txt(form.get("currency")) ?? "USD",
+    currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")),
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/invoices");
@@ -41,11 +41,20 @@ export async function updateInvoice(id: string, form: FormData): Promise<Result>
     order_id: txt(form.get("order_id")), vendor: String(form.get("vendor") ?? "").trim(),
     vendor_type: asVendorType(String(form.get("vendor_type") ?? "Supplier")),
     issued: txt(form.get("issued")), due: txt(form.get("due")),
-    total: numOr0(form.get("total")), currency: txt(form.get("currency")) ?? "USD",
+    total: numOr0(form.get("total")), currency: txt(form.get("currency")) ?? "USD", terms: txt(form.get("terms")),
   }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/invoices");
+  revalidatePath(`/invoices/${id}`);
   return { ok: true, id };
+}
+
+export async function saveInvoiceDocument(id: string, url: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("invoices").update({ document_url: url || null }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/invoices/${id}`);
+  return { ok: true };
 }
 
 export async function deleteInvoice(id: string): Promise<Result> {

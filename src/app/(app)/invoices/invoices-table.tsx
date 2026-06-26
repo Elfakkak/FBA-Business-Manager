@@ -137,7 +137,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
                 const bal = invoiceBalance(i); const st = invoiceStatus(i); const a = aging(i);
                 return (
                   <tr key={i.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(i)}>
-                    <td className="px-3 py-2.5"><div className="font-mono text-[12px] font-bold">{i.id}</div><div className="text-[11px] text-muted-foreground">{i.vendor_type}</div></td>
+                    <td className="px-3 py-2.5"><Link href={`/invoices/${i.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-bold hover:text-primary" title="Open full invoice">{i.id}</Link><div className="text-[11px] text-muted-foreground">{i.vendor_type}</div></td>
                     <td className="px-3 py-2.5">{i.order_id ? <Link href={`/orders/${i.order_id}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary"><div className="font-mono text-[11px] text-muted-foreground">{i.order_id}</div><div className="max-w-[200px] truncate text-[12px]">{i.orderTitle}</div></Link> : <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-3 py-2.5 font-medium">{i.vendor}</td>
                     <td className="px-3 py-2.5"><div className="font-mono text-[12px]">{fmtDue(i.due)}</div>{a.label !== "Upcoming" && a.label !== "Settled" && <Badge tone={a.tone}>{a.label === "Overdue" ? `${Math.abs(a.days)}d overdue` : `in ${a.days}d`}</Badge>}{a.label === "Settled" && <Badge tone="success">settled</Badge>}</td>
@@ -236,12 +236,13 @@ function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord:
         </div>
       )}
 
-      {bal > 0.005 && <button onClick={onRecord} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>}
+      <Link href={`/invoices/${i.id}`} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5"><Receipt className="h-4 w-4" /> Open full invoice <ArrowUpRight className="h-4 w-4" /></Link>
+      {bal > 0.005 && <button onClick={onRecord} className="vy-btn vy-btn--outline flex w-full items-center justify-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>}
     </div>
   );
 }
 
-function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: InvRow | null; invoices: InvRow[]; onClose: () => void }) {
+export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: InvRow | null; invoices: InvRow[]; onClose: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -279,7 +280,7 @@ function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: InvRow | 
   );
 }
 
-function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmit }: {
+export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmit }: {
   title: string; invoice?: InvRow; orders: { id: string; title: string }[]; vendors: string[];
   onClose: () => void; onSubmit: (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
 }) {
@@ -305,6 +306,7 @@ function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmit }: {
           <Field label="Due"><input name="due" type="date" defaultValue={i?.due ?? ""} className={inputCls} /></Field>
           {!i && <Field label="Already paid (USD)"><input name="paid" type="number" step="0.01" defaultValue="0" className={inputCls} /></Field>}
         </div>
+        <Field label="Terms"><input name="terms" defaultValue={i?.terms ?? ""} className={inputCls} placeholder="e.g. 30% deposit / 70% balance" /></Field>
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save invoice"}</PrimaryButton></div>
       </form>

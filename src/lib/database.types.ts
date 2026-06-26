@@ -669,12 +669,14 @@ export type Database = {
         Row: {
           created_at: string
           currency: string | null
+          document_url: string | null
           due: string | null
           fx_rate_locked: number | null
           id: string
           issued: string | null
           order_id: string | null
           paid: number
+          terms: string | null
           total: number
           updated_at: string
           vendor: string
@@ -683,12 +685,14 @@ export type Database = {
         Insert: {
           created_at?: string
           currency?: string | null
+          document_url?: string | null
           due?: string | null
           fx_rate_locked?: number | null
           id: string
           issued?: string | null
           order_id?: string | null
           paid?: number
+          terms?: string | null
           total?: number
           updated_at?: string
           vendor: string
@@ -697,12 +701,14 @@ export type Database = {
         Update: {
           created_at?: string
           currency?: string | null
+          document_url?: string | null
           due?: string | null
           fx_rate_locked?: number | null
           id?: string
           issued?: string | null
           order_id?: string | null
           paid?: number
+          terms?: string | null
           total?: number
           updated_at?: string
           vendor?: string
