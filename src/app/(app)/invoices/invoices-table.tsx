@@ -154,7 +154,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-[12px] text-muted-foreground">
             <div>Showing {from + 1}–{Math.min(from + pageSize, filtered.length)} of {num(filtered.length)} invoices</div>
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5">Rows <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-md border bg-background px-2 py-1">{[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+              <label className="flex items-center gap-1.5">Rows <Select value={String(pageSize)} onChange={(v) => setPageSize(Number(v))} className="w-20" options={[25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))} /></label>
               <div className="flex items-center gap-1"><button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Prev</button><span className="px-1">{safePage} / {pageCount}</span><button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={safePage >= pageCount} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Next</button></div>
             </div>
           </div>

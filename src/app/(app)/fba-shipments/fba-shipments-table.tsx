@@ -163,9 +163,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
             <div>Showing {from + 1}–{Math.min(from + pageSize, filtered.length)} of {num(filtered.length)} shipments</div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-1.5">Rows
-                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-md border bg-background px-2 py-1">
-                  {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
+                <Select value={String(pageSize)} onChange={(v) => setPageSize(Number(v))} className="w-20" options={[25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))} />
               </label>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Prev</button>
