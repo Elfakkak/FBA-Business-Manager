@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
-import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, type InvoiceRow, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createInvoice, updateInvoice, deleteInvoice, recordPayment, deletePayment } from "./actions";
 import { DollarSign, AlertCircle, Calendar, Check, Receipt, ArrowUpRight, Plus, Trash2, Package } from "lucide-react";
@@ -54,7 +54,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
 
   // rollups
   const outstanding = rows.reduce((n, i) => n + invoiceBalance(i), 0);
-  const openCount = rows.filter((i) => invoiceBalance(i) > 0.005).length;
+  const openCount = rows.filter((i) => invoiceBalance(i) > BALANCE_EPSILON).length;
   const overdue = rows.filter((i) => aging(i).label === "Overdue");
   const overdueAmt = overdue.reduce((n, i) => n + invoiceBalance(i), 0);
   const dueSoon = rows.filter((i) => aging(i).label === "Due soon");
@@ -142,9 +142,9 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
                     <td className="px-3 py-2.5"><div className="font-mono text-[12px]">{fmtDue(i.due)}</div>{a.label !== "Upcoming" && a.label !== "Settled" && <Badge tone={a.tone}>{a.label === "Overdue" ? `${Math.abs(a.days)}d overdue` : `in ${a.days}d`}</Badge>}{a.label === "Settled" && <Badge tone="success">settled</Badge>}</td>
                     <td className="tabular px-3 py-2.5 text-right font-mono">{money(i.total)}</td>
                     <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{(i.paid ?? 0) > 0 ? money(i.paid) : "—"}</td>
-                    <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{bal > 0.005 ? money(bal) : "—"}</td>
+                    <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{bal > BALANCE_EPSILON ? money(bal) : "—"}</td>
                     <td className="px-3 py-2.5"><Badge tone={INVOICE_STATUS_TONE[st]}>{st}</Badge></td>
-                    <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>{bal > 0.005 && <button onClick={() => setPayFor(i)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1"><DollarSign className="h-3 w-3" /> Record</button>}</td>
+                    <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>{bal > BALANCE_EPSILON && <button onClick={() => setPayFor(i)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1"><DollarSign className="h-3 w-3" /> Record</button>}</td>
                   </tr>
                 );
               })}
@@ -204,7 +204,7 @@ function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord:
       <div className="grid grid-cols-3 gap-2 rounded-lg border bg-background/50 p-3">
         <div><div className="vy-kicker">Total</div><div className="mt-0.5 font-mono text-base font-bold">{money(i.total)}</div></div>
         <div><div className="vy-kicker">Paid</div><div className="mt-0.5 font-mono text-base font-bold text-success">{money(i.paid)}</div></div>
-        <div><div className="vy-kicker">Balance</div><div className="mt-0.5 font-mono text-base font-bold text-warning">{bal > 0.005 ? money(bal) : money(0)}</div></div>
+        <div><div className="vy-kicker">Balance</div><div className="mt-0.5 font-mono text-base font-bold text-warning">{bal > BALANCE_EPSILON ? money(bal) : money(0)}</div></div>
       </div>
 
       <div><div className="vy-kicker mb-1.5">Details</div><div className="grid grid-cols-2 gap-3"><div><div className="vy-kicker mb-0.5">Issued</div><div className="font-mono text-[13px] font-semibold">{fmtDue(i.issued)}</div></div><div><div className="vy-kicker mb-0.5">Due</div><div className="font-mono text-[13px] font-semibold">{fmtDue(i.due)}</div></div></div></div>
@@ -236,7 +236,7 @@ function InvoiceDetail({ i, onRecord, onEdit, onDelete }: { i: InvRow; onRecord:
       )}
 
       <Link href={`/invoices/${i.id}`} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5"><Receipt className="h-4 w-4" /> Open full invoice <ArrowUpRight className="h-4 w-4" /></Link>
-      {bal > 0.005 && <button onClick={onRecord} className="vy-btn vy-btn--outline flex w-full items-center justify-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>}
+      {bal > BALANCE_EPSILON && <button onClick={onRecord} className="vy-btn vy-btn--outline flex w-full items-center justify-center gap-1.5"><DollarSign className="h-4 w-4" /> Record payment</button>}
     </div>
   );
 }
@@ -246,7 +246,7 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [invId, setInvId] = useState(invoice?.id ?? "");
-  const open = invoices.filter((i) => invoiceBalance(i) > 0.005);
+  const open = invoices.filter((i) => invoiceBalance(i) > BALANCE_EPSILON);
   const target = invoices.find((i) => i.id === invId) ?? null;
 
   function submit(e: React.FormEvent<HTMLFormElement>) {

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
 import { StatCard } from "@/components/ui/detail";
 import { createClient } from "@/lib/supabase/client";
-import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
+import { num, money, INVOICE_STATUS_TONE, PAY_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { RecordPaymentModal, InvoiceModal, type InvRow } from "../invoices-table";
 import { updateInvoice, deletePayment, saveInvoiceDocument } from "../actions";
@@ -63,7 +63,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
-            {bal > 0.005 && <button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5" /> Record payment</button>}
+            {bal > BALANCE_EPSILON && <button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5" /> Record payment</button>}
             <button onClick={() => setEditOpen(true)} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
             {i.order_id && <Link href={`/orders/${i.order_id}`} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> Open order</Link>}
           </div>
@@ -74,7 +74,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Total" value={money(i.total)} sub="invoice amount" />
         <StatCard label="Paid" value={money(i.paid)} sub={`${paidPct}% of total`} tone="success" />
-        <StatCard label="Balance" value={bal > 0.005 ? money(bal) : money(0)} sub="outstanding" tone={bal > 0.005 ? "warning" : "success"} />
+        <StatCard label="Balance" value={bal > BALANCE_EPSILON ? money(bal) : money(0)} sub="outstanding" tone={bal > BALANCE_EPSILON ? "warning" : "success"} />
         <StatCard label="Due" value={fmtDate(i.due)} sub={dueBadge ?? "—"} />
         <StatCard label="Status" value={st} sub={i.terms ?? "—"} tone={INVOICE_STATUS_TONE[st]} />
       </div>
@@ -98,7 +98,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors }: { row: InvRow; or
 
           {/* Payments */}
           <Card className="overflow-hidden p-0">
-            <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-success/12 text-success"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Payments ({i.payments.length})</div><p className="text-[11px] text-muted-foreground">Every payment recorded against this bill, with the balance after each.</p></div></div>{bal > 0.005 && <button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><DollarSign className="h-3 w-3" /> Record</button>}</div>
+            <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-success/12 text-success"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Payments ({i.payments.length})</div><p className="text-[11px] text-muted-foreground">Every payment recorded against this bill, with the balance after each.</p></div></div>{bal > BALANCE_EPSILON && <button onClick={() => setPayOpen(true)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><DollarSign className="h-3 w-3" /> Record</button>}</div>
             {i.payments.length === 0 ? <p className="px-5 pb-4 text-[12px] text-muted-foreground">No payments recorded yet.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-sm">

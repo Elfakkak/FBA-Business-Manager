@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { track17Register, track17Get, map17ToStage, type Track17Event } from "@/lib/track17";
+import { SHIPMENT_STAGES, SHIPMENT_CUSTOMS } from "@/lib/derive";
 
 type Result = { ok: true; id?: string } | { ok: false; error: string };
 type Stage = Database["public"]["Enums"]["shipment_stage"];
 type Customs = Database["public"]["Enums"]["customs_status"];
-const STAGES: Stage[] = ["Draft", "Booked", "Picked up", "In transit", "Customs", "Delivered", "At FBA"];
-const CUSTOMS: Customs[] = ["Cleared", "In clearance", "Pending", "Docs missing"];
-const asStage = (v: string): Stage => (STAGES as string[]).includes(v) ? (v as Stage) : "Draft";
-const asCustoms = (v: string): Customs | null => (CUSTOMS as string[]).includes(v) ? (v as Customs) : null;
+const STAGES = SHIPMENT_STAGES as readonly Stage[];
+const asStage = (v: string): Stage => (STAGES as readonly string[]).includes(v) ? (v as Stage) : "Draft";
+const asCustoms = (v: string): Customs | null => (SHIPMENT_CUSTOMS as readonly string[]).includes(v) ? (v as Customs) : null;
 
 const txt = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim(); return s === "" ? null : s; };
 const numOrNull = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };

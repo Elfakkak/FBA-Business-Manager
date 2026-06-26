@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui/primitives";
 import { StatCard, GridField } from "@/components/ui/detail";
-import { num, money, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, type Tone } from "@/lib/derive";
+import { num, money, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, incotermInfo, type Tone } from "@/lib/derive";
 import { STATUS17_TONE } from "@/lib/track17";
 import { cn } from "@/lib/utils";
 import { ShipmentModal, TrackingModal, type ShipRow, type OrderOpt } from "../shipments-table";
@@ -17,21 +17,6 @@ import {
 
 type Checkpoint = { time: string | null; description: string; location: string; stage: string | null };
 const FBA_TONE: Record<string, Tone> = { Working: "muted", Shipped: "info", "In transit": "info", Receiving: "warning", Closed: "success", Problem: "danger" };
-
-// Incoterm → who clears customs + pays import duties (the importer's key question).
-function incoterm(term: string | null): { customsBy: string; dutiesBy: string; needsBroker: boolean; tone: Tone; blurb: string } {
-  const t = (term || "").toUpperCase();
-  const map: Record<string, { customsBy: string; dutiesBy: string; needsBroker: boolean; tone: Tone; blurb: string }> = {
-    DDP: { customsBy: "Seller / forwarder", dutiesBy: "Seller / forwarder", needsBroker: false, tone: "success", blurb: "Delivered Duty Paid — the seller/forwarder clears customs and pays all duties & taxes. Nothing more for you at the border; it's baked into the freight price." },
-    DAP: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Delivered At Place — the forwarder delivers, but YOU are importer of record: you clear customs and pay duties & taxes on arrival. Line up a customs broker." },
-    CIF: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Cost, Insurance & Freight — seller covers freight to the destination port; you handle import customs, duties and final delivery. Broker needed." },
-    CFR: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Cost & Freight — seller pays freight to the port; you handle import customs + duties. Broker needed." },
-    FOB: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Free On Board — your responsibility starts at the origin port: ocean freight, import customs and duties are yours. Broker needed." },
-    FCA: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Free Carrier — seller hands off to your carrier at origin; import customs and duties are yours." },
-    EXW: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "danger", blurb: "Ex Works — you handle everything from the factory door: export + import customs, freight and all duties. Broker needed." },
-  };
-  return map[t] || { customsBy: "—", dutiesBy: "—", needsBroker: true, tone: "muted", blurb: "Set the incoterm to see who clears customs and pays import duties." };
-}
 
 export function ShipmentDetail({ row: s, checkpoints, liveStatus, track17Connected, orders, suppliers, forwarders }: {
   row: ShipRow; checkpoints: Checkpoint[]; liveStatus: string | null; track17Connected: boolean;
@@ -48,7 +33,7 @@ export function ShipmentDetail({ row: s, checkpoints, liveStatus, track17Connect
   const curIdx = SHIPMENT_STAGES.indexOf(s.stage as typeof SHIPMENT_STAGES[number]);
   const hasTracking = !!s.tracking?.trackingNo;
   const atEnd = curIdx >= SHIPMENT_STAGES.length - 1;
-  const ic = incoterm(s.incoterm);
+  const ic = incotermInfo(s.incoterm);
   const icTone = ic.tone;
 
   const doSync = () => { setErr(null); start(async () => { const r = await syncShipmentTracking(s.id); if (!r.ok) setErr(r.error); router.refresh(); }); };

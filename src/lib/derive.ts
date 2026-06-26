@@ -152,6 +152,22 @@ export const SHIPMENT_STAGE_TONE: Record<string, Tone> = {
 export const CUSTOMS_TONE: Record<string, Tone> = {
   Cleared: "success", "In clearance": "info", Pending: "warning", "Docs missing": "danger",
 };
+export const SHIPMENT_CUSTOMS = ["Cleared", "In clearance", "Pending", "Docs missing"] as const;
+
+// Incoterm → who clears customs + pays import duties (the importer's key question).
+export function incotermInfo(term: string | null): { customsBy: string; dutiesBy: string; needsBroker: boolean; tone: Tone; blurb: string } {
+  const t = (term || "").toUpperCase();
+  const map: Record<string, { customsBy: string; dutiesBy: string; needsBroker: boolean; tone: Tone; blurb: string }> = {
+    DDP: { customsBy: "Seller / forwarder", dutiesBy: "Seller / forwarder", needsBroker: false, tone: "success", blurb: "Delivered Duty Paid — the seller/forwarder clears customs and pays all duties & taxes. Nothing more for you at the border; it's baked into the freight price." },
+    DAP: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Delivered At Place — the forwarder delivers, but YOU are importer of record: you clear customs and pay duties & taxes on arrival. Line up a customs broker." },
+    CIF: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Cost, Insurance & Freight — seller covers freight to the destination port; you handle import customs, duties and final delivery. Broker needed." },
+    CFR: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Cost & Freight — seller pays freight to the port; you handle import customs + duties. Broker needed." },
+    FOB: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Free On Board — your responsibility starts at the origin port: ocean freight, import customs and duties are yours. Broker needed." },
+    FCA: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "warning", blurb: "Free Carrier — seller hands off to your carrier at origin; import customs and duties are yours." },
+    EXW: { customsBy: "You (buyer)", dutiesBy: "You (buyer)", needsBroker: true, tone: "danger", blurb: "Ex Works — you handle everything from the factory door: export + import customs, freight and all duties. Broker needed." },
+  };
+  return map[t] || { customsBy: "—", dutiesBy: "—", needsBroker: true, tone: "muted", blurb: "Set the incoterm to see who clears customs and pays import duties." };
+}
 // shipments whose cargo is moving (left origin) — for "shipped/on-water" rollups
 export const SHIPMENT_MOVING = ["Picked up", "In transit", "Customs", "Delivered", "At FBA"];
 
@@ -212,14 +228,16 @@ export function fbaDoneIdx(status: string, received: number): number {
 // ---------- Invoices / accounts payable ----------
 export const INVOICE_STATUS_TONE: Record<string, Tone> = { Paid: "success", Partial: "warning", Unpaid: "danger" };
 export const PAY_STATUS_TONE: Record<string, Tone> = { Cleared: "success", Scheduled: "info", Pending: "warning" };
+// half-cent tolerance so float rounding doesn't leave an invoice "1¢ unpaid"
+export const BALANCE_EPSILON = 0.005;
 export function invoiceBalance(i: Pick<InvoiceRow, "total" | "paid">) { return Math.max(0, (i.total ?? 0) - (i.paid ?? 0)); }
 export function invoiceStatus(i: Pick<InvoiceRow, "total" | "paid">): "Paid" | "Partial" | "Unpaid" {
-  if (invoiceBalance(i) <= 0.005) return "Paid";
+  if (invoiceBalance(i) <= BALANCE_EPSILON) return "Paid";
   if ((i.paid ?? 0) > 0) return "Partial";
   return "Unpaid";
 }
 export function invoiceAging(dueISO: string | null, balance: number, nowMs: number): { days: number; label: "Settled" | "Overdue" | "Due soon" | "Upcoming"; tone: Tone } {
-  if (balance <= 0.005) return { days: 0, label: "Settled", tone: "success" };
+  if (balance <= BALANCE_EPSILON) return { days: 0, label: "Settled", tone: "success" };
   if (!dueISO) return { days: 0, label: "Upcoming", tone: "muted" };
   const days = Math.round((new Date(dueISO + "T00:00:00").getTime() - nowMs) / 86_400_000);
   if (days < 0) return { days, label: "Overdue", tone: "danger" };
