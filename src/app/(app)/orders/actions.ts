@@ -241,7 +241,10 @@ export async function lockLandedCost(orderId: string): Promise<Result> {
   }
   const { error } = await supabase.from("variant_cost_history").insert(hist);
   if (error) return { ok: false, error: error.message };
-  await supabase.from("orders").update({ status: "closed" }).eq("id", orderId);
+  // Remember the pre-lock status so Unlock restores it (don't jump the order forward).
+  const { data: cur } = await supabase.from("orders").select("status").eq("id", orderId).maybeSingle();
+  const prior = cur?.status && cur.status !== "closed" ? cur.status : null;
+  await supabase.from("orders").update({ status: "closed", prelock_status: prior }).eq("id", orderId);
   revalidatePath(`/orders/${orderId}`); revalidatePath("/orders"); revalidatePath("/catalog");
   return { ok: true };
 }
@@ -249,8 +252,43 @@ export async function lockLandedCost(orderId: string): Promise<Result> {
 export async function unlockLandedCost(orderId: string): Promise<Result> {
   const supabase = await createClient();
   await supabase.from("variant_cost_history").delete().eq("order_id", orderId).eq("kind", "landed");
-  await supabase.from("orders").update({ status: "fba" }).eq("id", orderId);
+  // Restore the status the order had before locking (fallback to 'fba' for legacy locks).
+  const { data: o } = await supabase.from("orders").select("prelock_status").eq("id", orderId).maybeSingle();
+  const restore = (o?.prelock_status as OrderStatus) || "fba";
+  await supabase.from("orders").update({ status: restore, prelock_status: null }).eq("id", orderId);
   revalidatePath(`/orders/${orderId}`); revalidatePath("/orders"); revalidatePath("/catalog");
+  return { ok: true };
+}
+
+// Save a SKU's sale price from the "Did it make money?" projection — pushes it
+// back to the catalog so the product carries the price you actually sell at.
+export async function saveVariantSalePrice(sku: string, price: number | null): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("product_variants").update({ sale_price: price && price > 0 ? price : null }).eq("sku", sku);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/catalog");
+  return { ok: true };
+}
+
+// Save the landed cost buckets from the Adjust modal: update each existing cost's
+// amount + allocation basis, and upsert the manual Duties & customs bucket.
+export type BucketEdit = { id: string | null; amount: number; basis: string; isDuties: boolean };
+export async function saveLandedBuckets(orderId: string, items: BucketEdit[]): Promise<Result> {
+  const supabase = await createClient();
+  for (const it of items) {
+    if (it.id) {
+      const { error } = await supabase.from("order_costs").update({ amount: Math.max(0, it.amount), basis: it.basis }).eq("id", it.id);
+      if (error) return { ok: false, error: error.message };
+    } else if (it.isDuties && it.amount > 0) {
+      const { error } = await supabase.from("order_costs").insert({
+        order_id: orderId, description: "Duties & customs", line_type: "duties",
+        treatment: "inventoriable", basis: it.basis || "value", amount: it.amount, currency: "USD",
+        section: "Landed", qty: 1, coverage: "Uncovered",
+      });
+      if (error) return { ok: false, error: error.message };
+    }
+  }
+  revalidatePath(`/orders/${orderId}`);
   return { ok: true };
 }
 

@@ -123,7 +123,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : tab === "landed" ? (
-        <LandedPanel order={order} lines={lines} costs={costs} />
+        <LandedPanel order={order} lines={lines} costs={costs} variants={variants} />
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}
