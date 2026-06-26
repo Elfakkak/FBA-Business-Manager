@@ -3,11 +3,15 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/database.types";
 
 const slug = (s: string) =>
   s.toLowerCase().replace(/["'(),]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 
 type Result = { ok: true } | { ok: false; error: string };
+type PackagingKind = Database["public"]["Enums"]["packaging_kind"];
+const PACKAGING_KINDS: PackagingKind[] = ["Mailer", "Master carton", "Insert", "Polybag", "Label", "Box", "Other"];
+const asKind = (v: string): PackagingKind => (PACKAGING_KINDS as string[]).includes(v) ? (v as PackagingKind) : "Other";
 
 export async function addPackagingItem(form: FormData): Promise<Result> {
   const name = String(form.get("name") ?? "").trim();
@@ -25,7 +29,7 @@ export async function addPackagingItem(form: FormData): Promise<Result> {
   const { error } = await supabase.from("packaging_items").insert({
     id,
     name,
-    kind: kind as never,
+    kind: asKind(kind),
     family_id: familyId,
     unit_cost: unitCost,
     reorder_point: reorder,
@@ -56,7 +60,7 @@ export async function updatePackaging(id: string, form: FormData): Promise<Resul
   const reorderRaw = String(form.get("reorder_point") ?? "");
   const { error } = await supabase.from("packaging_items").update({
     name,
-    kind: (String(form.get("kind") ?? "Other").trim() || "Other") as never,
+    kind: asKind(String(form.get("kind") ?? "Other").trim()),
     size: String(form.get("size") ?? "").trim() || null,
     family_id: String(form.get("family_id") ?? "").trim() || null,
     unit_cost: parseFloat(String(form.get("unit_cost") ?? "")) || 0,
