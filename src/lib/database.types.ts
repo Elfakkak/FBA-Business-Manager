@@ -1324,36 +1324,45 @@ export type Database = {
         Row: {
           booking_ref: string | null
           carrier: string | null
+          checkpoints: Json
           created_at: string
           eta_override: string | null
           last_sync: string | null
           scac: string | null
           shipment_id: string
           stage: Database["public"]["Enums"]["shipment_stage"] | null
+          status: string | null
+          sub_status: string | null
           tracking_no: string | null
           updated_at: string
         }
         Insert: {
           booking_ref?: string | null
           carrier?: string | null
+          checkpoints?: Json
           created_at?: string
           eta_override?: string | null
           last_sync?: string | null
           scac?: string | null
           shipment_id: string
           stage?: Database["public"]["Enums"]["shipment_stage"] | null
+          status?: string | null
+          sub_status?: string | null
           tracking_no?: string | null
           updated_at?: string
         }
         Update: {
           booking_ref?: string | null
           carrier?: string | null
+          checkpoints?: Json
           created_at?: string
           eta_override?: string | null
           last_sync?: string | null
           scac?: string | null
           shipment_id?: string
           stage?: Database["public"]["Enums"]["shipment_stage"] | null
+          status?: string | null
+          sub_status?: string | null
           tracking_no?: string | null
           updated_at?: string
         }
@@ -1369,12 +1378,15 @@ export type Database = {
       }
       shipments: {
         Row: {
+          archived: boolean
           bol: string | null
+          broker: string | null
           cartons: number | null
           cbm: number | null
           created_at: string
           customs: Database["public"]["Enums"]["customs_status"] | null
           destination: string | null
+          duties_usd: number | null
           eta: string | null
           etd: string | null
           forwarder: string | null
@@ -1392,12 +1404,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived?: boolean
           bol?: string | null
+          broker?: string | null
           cartons?: number | null
           cbm?: number | null
           created_at?: string
           customs?: Database["public"]["Enums"]["customs_status"] | null
           destination?: string | null
+          duties_usd?: number | null
           eta?: string | null
           etd?: string | null
           forwarder?: string | null
@@ -1415,12 +1430,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived?: boolean
           bol?: string | null
+          broker?: string | null
           cartons?: number | null
           cbm?: number | null
           created_at?: string
           customs?: Database["public"]["Enums"]["customs_status"] | null
           destination?: string | null
+          duties_usd?: number | null
           eta?: string | null
           etd?: string | null
           forwarder?: string | null

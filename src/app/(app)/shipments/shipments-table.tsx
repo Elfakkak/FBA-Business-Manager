@@ -8,8 +8,8 @@ import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { num, money, type ShipmentRow, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, SHIPMENT_MOVING, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { createShipment, updateShipment, deleteShipment, updateTracking } from "./actions";
-import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, Pencil, Trash2, Link as LinkIcon, Check } from "lucide-react";
+import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived } from "./actions";
+import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, Pencil, Trash2, Link as LinkIcon, Check, Archive } from "lucide-react";
 
 type FbaLink = { id: string; fc: string; expected: number; received: number; amazonStatus: string; skuCount: number };
 export type ShipRow = ShipmentRow & {
@@ -29,6 +29,7 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
   const [mode, setMode] = useState("All");
   const [forwarder, setForwarder] = useState("All");
   const [stage, setStage] = useState("All");
+  const [showArchived, setShowArchived] = useState(false);
   const [peek, setPeek] = useState<ShipRow | null>(null);
   const [modal, setModal] = useState<"new" | null>(null);
   const [editing, setEditing] = useState<ShipRow | null>(null);
@@ -40,13 +41,15 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
     return rows.filter((s) => {
+      if (!showArchived && s.archived) return false;
       if (mode !== "All" && s.mode !== mode) return false;
       if (forwarder !== "All" && s.forwarder !== forwarder) return false;
       if (stage !== "All" && s.stage !== stage) return false;
       if (n && ![s.id, s.order_id, s.order_title, s.supplier, s.forwarder, s.bol, s.origin, s.destination].filter(Boolean).join(" ").toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [rows, q, mode, forwarder, stage]);
+  }, [rows, q, mode, forwarder, stage, showArchived]);
+  const archivedCount = rows.filter((r) => r.archived).length;
 
   // rollups
   const onWater = rows.filter((s) => s.stage === "In transit" || s.stage === "Customs").length;
@@ -111,7 +114,10 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
           <select value={mode} onChange={(e) => setMode(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">{modes.map((m) => <option key={m}>{m}</option>)}</select>
           <select value={forwarder} onChange={(e) => setForwarder(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm">{fwds.map((f) => <option key={f}>{f}</option>)}</select>
         </div>
-        <div className="mt-2.5 flex flex-wrap gap-1">{STAGE_CHIPS.map((c) => <button key={c} onClick={() => setStage(c)} className={cn("vy-chip", stage === c && "is-active")}>{c}</button>)}</div>
+        <div className="mt-2.5 flex flex-wrap gap-1">
+          {STAGE_CHIPS.map((c) => <button key={c} onClick={() => setStage(c)} className={cn("vy-chip", stage === c && "is-active")}>{c}</button>)}
+          {archivedCount > 0 && <button onClick={() => setShowArchived((v) => !v)} className={cn("vy-chip ml-auto", showArchived && "is-active")}>Archived ({archivedCount})</button>}
+        </div>
       </Card>
 
       {/* Table */}
@@ -139,8 +145,8 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
               ) : filtered.map((s) => {
                 const short = s.fba.filter((f) => f.received > 0 && f.received < f.expected).length;
                 return (
-                  <tr key={s.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(s)}>
-                    <td className="px-3 py-2.5"><div className="font-mono text-[12px] font-bold">{s.id}</div><div className="text-[11px] text-muted-foreground">{[s.mode, s.bol].filter(Boolean).join(" · ")}</div></td>
+                  <tr key={s.id} className={cn("cursor-pointer hover:bg-accent/40", s.archived && "opacity-55")} onClick={() => setPeek(s)}>
+                    <td className="px-3 py-2.5"><div className="flex items-center gap-1.5"><Link href={`/shipments/${s.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-bold hover:text-primary" title="Open shipment page">{s.id}</Link>{s.archived && <Badge tone="muted">Archived</Badge>}</div><div className="text-[11px] text-muted-foreground">{[s.mode, s.bol].filter(Boolean).join(" · ")}</div></td>
                     <td className="px-3 py-2.5">{s.order_id ? <Link href={`/orders/${s.order_id}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary"><div className="font-mono text-[11px] text-muted-foreground">{s.order_id}</div><div className="max-w-[200px] truncate text-[12px] font-semibold">{s.order_title}</div><div className="text-[11px] text-muted-foreground">{s.supplier}</div></Link> : <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-3 py-2.5 text-[12px] text-muted-foreground">{s.origin || "—"}<br />→ {s.destination || "—"}</td>
                     <td className="px-3 py-2.5"><div className="font-medium">{s.forwarder || "—"}</div><div className="text-[11px] text-muted-foreground">{s.incoterm}</div></td>
@@ -165,7 +171,10 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
 
       {/* New / Edit modals */}
       {modal === "new" && <ShipmentModal title="New shipment" orders={orders} suppliers={suppliers} forwarders={forwarders} onClose={() => setModal(null)} onSubmit={(fd) => createShipment(fd)} />}
-      {editing && <ShipmentModal title={`Edit ${editing.id}`} shipment={editing} orders={orders} suppliers={suppliers} forwarders={forwarders} onClose={() => setEditing(null)} onSubmit={(fd) => updateShipment(editing.id, fd)} onDelete={async () => { await deleteShipment(editing.id); setEditing(null); router.refresh(); }} />}
+      {editing && <ShipmentModal title={`Edit ${editing.id}`} shipment={editing} orders={orders} suppliers={suppliers} forwarders={forwarders} onClose={() => setEditing(null)}
+        onSubmit={(fd) => updateShipment(editing.id, fd)}
+        onDelete={async () => { const r = await deleteShipment(editing.id); if (!r.ok) { alert(r.error); return; } setEditing(null); router.refresh(); }}
+        onArchive={async () => { await setShipmentArchived(editing.id, !editing.archived); setEditing(null); router.refresh(); }} />}
       {trackingFor && <TrackingModal s={trackingFor} onClose={() => setTrackingFor(null)} />}
     </div>
   );
@@ -182,7 +191,10 @@ function ShipmentDetail({ s, onEdit, onTracking }: { s: ShipRow; onEdit: () => v
           <Badge tone={SHIPMENT_STAGE_TONE[s.stage] ?? "muted"}>{s.stage}</Badge>
           {s.customs && <Badge tone={CUSTOMS_TONE[s.customs] ?? "muted"}>Customs: {s.customs}</Badge>}
           {s.order_id && <Link href={`/orders/${s.order_id}`}><Badge tone="muted">{s.order_id}</Badge></Link>}
-          <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm ml-auto inline-flex items-center gap-1.5"><Pencil className="h-3 w-3" /> Edit</button>
+          <div className="ml-auto flex gap-1.5">
+            <Link href={`/shipments/${s.id}`} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><ArrowUpRight className="h-3 w-3" /> Full page</Link>
+            <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3 w-3" /> Edit</button>
+          </div>
         </div>
       </div>
 
@@ -261,9 +273,9 @@ function ShipmentDetail({ s, onEdit, onTracking }: { s: ShipRow; onEdit: () => v
   );
 }
 
-function ShipmentModal({ title, shipment, orders, suppliers, forwarders, onClose, onSubmit, onDelete }: {
+export function ShipmentModal({ title, shipment, orders, suppliers, forwarders, onClose, onSubmit, onDelete, onArchive }: {
   title: string; shipment?: ShipRow; orders: OrderOpt[]; suppliers: string[]; forwarders: string[];
-  onClose: () => void; onSubmit: (fd: FormData) => Promise<{ ok: boolean; error?: string }>; onDelete?: () => void;
+  onClose: () => void; onSubmit: (fd: FormData) => Promise<{ ok: boolean; error?: string }>; onDelete?: () => void; onArchive?: () => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -318,7 +330,10 @@ function ShipmentModal({ title, shipment, orders, suppliers, forwarders, onClose
 
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex items-center justify-between gap-2">
-          {onDelete ? <button type="button" onClick={() => { if (confirm(`Delete ${s?.id}?`)) onDelete(); }} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5 text-danger"><Trash2 className="h-3.5 w-3.5" /> Delete</button> : <span />}
+          <div className="flex gap-2">
+            {onDelete && <button type="button" onClick={() => { if (confirm(`Delete ${s?.id}? Linked shipments can't be deleted — archive instead.`)) onDelete(); }} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5 text-danger"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
+            {onArchive && <button type="button" onClick={onArchive} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5"><Archive className="h-3.5 w-3.5" /> {s?.archived ? "Unarchive" : "Archive"}</button>}
+          </div>
           <div className="flex gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save shipment"}</PrimaryButton></div>
         </div>
       </form>
@@ -326,7 +341,7 @@ function ShipmentModal({ title, shipment, orders, suppliers, forwarders, onClose
   );
 }
 
-function TrackingModal({ s, onClose }: { s: ShipRow; onClose: () => void }) {
+export function TrackingModal({ s, onClose }: { s: ShipRow; onClose: () => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
