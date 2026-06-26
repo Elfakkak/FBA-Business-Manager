@@ -128,6 +128,54 @@ export function Kpi({
   );
 }
 
+const DOT_BG: Record<Tone, string> = {
+  success: "bg-success", warning: "bg-warning", danger: "bg-danger",
+  info: "bg-info", brand: "bg-primary", muted: "bg-muted-foreground",
+};
+
+// Responsive KPI strip wrapper — one source of truth for the grid so spacing &
+// breakpoints stay identical app-wide. 5-up collapses 5→2; 3-up collapses 3→1.
+export function KpiStrip({ cols = 5, children }: { cols?: 3 | 5; children: React.ReactNode }) {
+  return <div className={cn("grid gap-3", cols === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 lg:grid-cols-5")}>{children}</div>;
+}
+
+// Two-column section header (identity + optional "Next action" panel). Shared by
+// the order Overview, the Invoices section, and Production — fix once, propagates.
+export type NextAction = { kicker?: string; severity?: Tone; headline: React.ReactNode; detail?: React.ReactNode; cta?: React.ReactNode };
+export function SectionHeader({ title, blurb, badges, topBadges, actions, nextAction }: {
+  title: React.ReactNode; blurb?: React.ReactNode; badges?: React.ReactNode;
+  topBadges?: React.ReactNode; actions?: React.ReactNode; nextAction?: NextAction | null;
+}) {
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="grid lg:grid-cols-[1.6fr_1fr]">
+        <div className="p-5">
+          {(topBadges || actions) && (
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">{topBadges}</div>
+              {actions && <div className="flex shrink-0 gap-1.5">{actions}</div>}
+            </div>
+          )}
+          <h1 className="text-2xl font-bold">{title}</h1>
+          {blurb && <p className="mt-1.5 max-w-[60ch] text-[13px] text-muted-foreground">{blurb}</p>}
+          {badges && <div className="mt-3 flex flex-wrap gap-1.5">{badges}</div>}
+        </div>
+        {nextAction && (
+          <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
+            <div className="vy-kicker mb-1.5 flex items-center gap-1.5">
+              {nextAction.severity && <span className={cn("h-1.5 w-1.5 rounded-full", DOT_BG[nextAction.severity])} />}
+              {nextAction.kicker ?? "Next action"}
+            </div>
+            <div className="text-base font-bold">{nextAction.headline}</div>
+            {nextAction.detail && <p className="mb-3 mt-1 text-[12px] text-muted-foreground">{nextAction.detail}</p>}
+            {nextAction.cta}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function SourceTag({ source }: { source: "amazon" | "manual" }) {
   const amazon = source === "amazon";
   return (

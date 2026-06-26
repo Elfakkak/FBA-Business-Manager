@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, Chip, SectionTitle } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, KpiStrip, SectionHeader, Chip, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
@@ -153,48 +153,40 @@ function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, o
 
   return (
     <div className="space-y-5">
-      {/* Header card — identity + next action */}
-      <Card className="overflow-hidden p-0">
-        <div className="grid lg:grid-cols-[1.6fr_1fr]">
-          <div className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Badge tone="muted">{order.id}</Badge>
-                <Badge tone={liveTone} >{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
-              </div>
-              <div className="flex shrink-0 gap-1.5">
-                <button className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Activity</button>
-                <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-              </div>
-            </div>
-            <h1 className="mt-3 text-2xl font-bold">{order.title}</h1>
-            <p className="mt-1.5 max-w-[60ch] text-[13px] text-muted-foreground">Hub for this purchase order. Track every stage at a glance — the work happens inside each owning section.</p>
-            <div className="mt-3.5 flex flex-wrap gap-1.5">
-              <Chip icon={Route}>Agent · {order.agent ?? "Direct"}</Chip>
-              {order.supplier && <Chip icon={Factory}>Factory · {order.supplier}</Chip>}
-              {units > 0 && <Chip icon={Boxes}>{num(units)} units</Chip>}
-              {order.placed_on && <Chip icon={Calendar}>Placed {order.placed_on}</Chip>}
-            </div>
-          </div>
-          {top && (
-            <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
-              <div className="vy-kicker mb-1.5 flex items-center gap-1.5"><span className={cn("h-1.5 w-1.5 rounded-full", top.severity === "warning" ? "bg-warning" : top.severity === "danger" ? "bg-danger" : "bg-info")} /> Next action</div>
-              <div className="text-base font-bold">{top.headline}</div>
-              <p className="mb-3.5 mt-1 text-[12px] text-muted-foreground">{top.detail}</p>
-              <button onClick={() => onJump(top.section)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5">Open {top.sectionLabel} <ArrowRight className="h-4 w-4" /></button>
-            </div>
-          )}
-        </div>
-      </Card>
+      {/* Header — identity + next action (shared SectionHeader) */}
+      <SectionHeader
+        title={order.title}
+        blurb="Hub for this purchase order. Track every stage at a glance — the work happens inside each owning section."
+        topBadges={<>
+          <Badge tone="muted">{order.id}</Badge>
+          <Badge tone={liveTone}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
+        </>}
+        actions={<>
+          <button className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Activity</button>
+          <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+        </>}
+        badges={<>
+          <Chip icon={Route}>Agent · {order.agent ?? "Direct"}</Chip>
+          {order.supplier && <Chip icon={Factory}>Factory · {order.supplier}</Chip>}
+          {units > 0 && <Chip icon={Boxes}>{num(units)} units</Chip>}
+          {order.placed_on && <Chip icon={Calendar}>Placed {order.placed_on}</Chip>}
+        </>}
+        nextAction={top ? {
+          severity: top.severity,
+          headline: top.headline,
+          detail: top.detail,
+          cta: <button onClick={() => onJump(top.section)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5">Open {top.sectionLabel} <ArrowRight className="h-4 w-4" /></button>,
+        } : null}
+      />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <KpiStrip cols={5}>
         <Kpi label="Order total" value={rollup.total > 0 ? money(rollup.total) : "—"} sub={`${num(units)} units · ${skuCount} SKU${skuCount === 1 ? "" : "s"}`} icon={Receipt} />
         <Kpi label="Paid" value={money(rollup.paid)} sub={`${rollup.paidPct}% of total`} icon={Check} tone="success" progress={rollup.paidPct} />
         <Kpi label="Balance due" value={money(rollup.balance)} sub="Due before shipment" icon={AlertCircle} tone={rollup.balance > 0.5 ? "warning" : "success"} />
         <Kpi label="Units" value={num(units)} sub="Ordered scope" icon={Boxes} />
         <Kpi label="FBA ETA" value={order.fba_eta ?? "—"} sub="Estimated arrival" icon={Truck} source="amazon" />
-      </div>
+      </KpiStrip>
 
       {/* Order journey */}
       <Card className="p-5">
@@ -274,37 +266,30 @@ function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices
 
   return (
     <div className="space-y-5">
-      {/* Header + next action */}
-      <Card className="overflow-hidden p-0">
-        <div className="grid lg:grid-cols-[1.6fr_1fr]">
-          <div className="p-5">
-            <h2 className="text-2xl font-bold">Invoices</h2>
-            <p className="mt-1 max-w-[52ch] text-[13px] text-muted-foreground">Vendor bills, balances, payments, and proof of payment for this order.</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {partialCount > 0 && <Badge tone="warning">{partialCount} partial</Badge>}
-              {proofMissing > 0 && <Badge tone="warning">{proofMissing} proof missing</Badge>}
-              {invoices.length === 0 && <Badge tone="muted">No invoices yet</Badge>}
-            </div>
-          </div>
-          {balance > BALANCE_EPSILON && (
-            <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
-              <div className="vy-kicker mb-1.5">Next action</div>
-              <div className="text-base font-bold">Settle balance due</div>
-              <p className="mb-3 mt-1 text-[12px] text-muted-foreground">{money(balance)} open across {openInv.length} {openInv.length === 1 ? "invoice" : "invoices"}{nextDue ? ` · next due ${fmtDue(nextDue.due)}` : ""}</p>
-              <button onClick={() => setPayFor(nextDue ?? openInv[0] ?? null)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Log payment</button>
-            </div>
-          )}
-        </div>
-      </Card>
+      {/* Header + next action (shared SectionHeader) */}
+      <SectionHeader
+        title="Invoices"
+        blurb="Vendor bills, balances, payments, and proof of payment for this order."
+        badges={<>
+          {partialCount > 0 && <Badge tone="warning">{partialCount} partial</Badge>}
+          {proofMissing > 0 && <Badge tone="warning">{proofMissing} proof missing</Badge>}
+          {invoices.length === 0 && <Badge tone="muted">No invoices yet</Badge>}
+        </>}
+        nextAction={balance > BALANCE_EPSILON ? {
+          headline: "Settle balance due",
+          detail: `${money(balance)} open across ${openInv.length} ${openInv.length === 1 ? "invoice" : "invoices"}${nextDue ? ` · next due ${fmtDue(nextDue.due)}` : ""}`,
+          cta: <button onClick={() => setPayFor(nextDue ?? openInv[0] ?? null)} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Log payment</button>,
+        } : null}
+      />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <KpiStrip cols={5}>
         <Kpi label="Total invoiced" value={total > 0 ? money(total) : "—"} sub={`${invoices.length} ${invoices.length === 1 ? "invoice" : "invoices"}`} icon={Receipt} />
         <Kpi label="Paid" value={money(paid)} sub={`${paidPct}% of total`} icon={Check} tone="success" progress={paidPct} />
         <Kpi label="Balance due" value={money(balance)} sub={`${openInv.length} open`} icon={DollarSign} tone={balance > BALANCE_EPSILON ? "warning" : "success"} />
         <Kpi label="Next due" value={nextDue ? fmtDue(nextDue.due) : "—"} sub={nextDue?.id ?? "All settled"} icon={Calendar} />
         <Kpi label="Proof missing" value={String(proofMissing)} sub="Receipts needed" icon={ShieldCheck} tone={proofMissing ? "warning" : "success"} />
-      </div>
+      </KpiStrip>
 
       {/* Action banner */}
       {balance > BALANCE_EPSILON && (

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, KpiStrip, SectionHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/derive";
 import { addOrderLines, deleteOrderLine, addOrderCost, deleteOrderCost } from "../actions";
 import {
-  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign,
+  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight,
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
@@ -46,36 +46,30 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
 
   return (
     <div className="space-y-5">
-      {/* Header + next action */}
-      <Card className="overflow-hidden p-0">
-        <div className="grid lg:grid-cols-[1.6fr_1fr]">
-          <div className="p-5">
-            <h2 className="text-2xl font-bold">Production</h2>
-            <p className="mt-1 max-w-[60ch] text-[13px] text-muted-foreground">Factory scope, product lines, charges, readiness, and supplier files.</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Badge tone="info">{statusLabel}</Badge>
-              <Badge tone="muted">{skuCount} {skuCount === 1 ? "variant" : "variants"}</Badge>
-              <Badge tone="muted">{num(roll.totalUnits)} pcs</Badge>
-              {goodsMissing > 0 && <Badge tone="warning">{goodsMissing} missing cost</Badge>}
-            </div>
-          </div>
-          <div className="border-t bg-accent/40 p-5 lg:border-l lg:border-t-0">
-            <div className="vy-kicker mb-1.5">Next action</div>
-            <div className="text-base font-bold">{goodsMissing > 0 ? "Close readiness gaps" : "Generate the PO"}</div>
-            <p className="mb-3 mt-1 text-[12px] text-muted-foreground">{goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} need a unit cost — build the scope, then generate the PO.` : "Scope is priced — ready to generate the purchase order."}</p>
-            <button type="button" onClick={() => setShowPO(true)} disabled={lines.length === 0} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5 disabled:opacity-50">
-              <FileText className="h-4 w-4" /> Generate PO
-            </button>
-          </div>
-        </div>
-      </Card>
+      {/* Header + next action (shared SectionHeader) */}
+      <SectionHeader
+        title="Production"
+        blurb="Factory scope, product lines, charges, readiness, and supplier files."
+        badges={<>
+          <Badge tone="info">{statusLabel}</Badge>
+          <Badge tone="muted">{skuCount} {skuCount === 1 ? "variant" : "variants"}</Badge>
+          <Badge tone="muted">{num(roll.totalUnits)} pcs</Badge>
+          {goodsMissing > 0 && <Badge tone="warning">{goodsMissing} missing cost</Badge>}
+        </>}
+        nextAction={{
+          severity: goodsMissing > 0 ? "warning" : undefined,
+          headline: goodsMissing > 0 ? "Close readiness gaps" : "Generate the PO",
+          detail: goodsMissing > 0 ? `${goodsMissing} line${goodsMissing === 1 ? "" : "s"} need a unit cost — build the scope, then generate the PO.` : "Scope is priced — ready to generate the purchase order.",
+          cta: <button type="button" onClick={() => setShowPO(true)} disabled={lines.length === 0} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5 disabled:opacity-50"><FileText className="h-4 w-4" /> Generate PO</button>,
+        }}
+      />
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <KpiStrip cols={3}>
         <Kpi label="Production scope" value={`${skuCount} ${skuCount === 1 ? "SKU" : "SKUs"}`} sub={`${num(roll.totalUnits)} pcs · ${money(roll.totalGoods)} product cost`} icon={Package} />
         <Kpi label="Readiness" value={goodsMissing > 0 ? `${goodsMissing} missing` : "Ready"} sub={goodsMissing > 0 ? "lines need a cost" : "all lines priced"} icon={ClipboardCheck} tone={goodsMissing > 0 ? "warning" : "success"} />
         <Kpi label="Factory clock" value={statusLabel} sub={order.placed_on ? `Placed ${order.placed_on}` : "Not placed yet"} icon={Activity} />
-      </div>
+      </KpiStrip>
 
       <div className="vy-kicker text-[11px]">Scope &amp; cost</div>
 
@@ -251,15 +245,19 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
 }
 
 const SKU_FILTERS = ["All", "Reorder needed", "Missing cost", "Missing image"];
+type SkuPick = { qty: number; unit_cost: number | null; unit_cny: number | null };
+const skuStatusTone = (s: string | null): "success" | "warning" | "muted" => (!s ? "muted" : /ready/i.test(s) ? "success" : "warning");
+const rmb = (v: number | null) => (v == null ? "—" : `¥${Number(v).toFixed(2)}`);
 
-// Multi-select catalog browser — tick variants, set quantities, batch-add as lines.
+// Multi-select catalog browser — collapsible family cards, per-line qty/price review.
 function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants: CatalogVariant[]; onClose: () => void }) {
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("All");
-  const [sel, setSel] = useState<Map<string, number>>(new Map()); // variantId -> qty
+  const [sel, setSel] = useState<Map<string, SkuPick>>(new Map());
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
   const byId = useMemo(() => new Map(variants.map((v) => [v.id, v])), [variants]);
   const matchesFilter = (v: CatalogVariant) => {
@@ -276,16 +274,20 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
     return [...m.entries()];
   }, [filtered]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggle = (id: string) => setSel((m) => { const c = new Map(m); if (c.has(id)) c.delete(id); else c.set(id, 0); return c; });
-  const setQty = (id: string, qty: number) => setSel((m) => new Map(m).set(id, Math.max(0, Math.round(qty) || 0)));
+  const mkPick = (v: CatalogVariant): SkuPick => ({ qty: 100, unit_cost: v.last_cost_usd, unit_cny: v.last_cost_rmb });
+  const toggle = (v: CatalogVariant) => setSel((m) => { const c = new Map(m); if (c.has(v.id)) c.delete(v.id); else c.set(v.id, mkPick(v)); return c; });
+  const setField = (id: string, patch: Partial<SkuPick>) => setSel((m) => { const cur = m.get(id); if (!cur) return m; return new Map(m).set(id, { ...cur, ...patch }); });
+  const toggleOpen = (fam: string) => setOpen((s) => { const c = new Set(s); if (c.has(fam)) c.delete(fam); else c.add(fam); return c; });
+  const setFamily = (vs: CatalogVariant[], on: boolean) => setSel((m) => { const c = new Map(m); for (const v of vs) { if (on) { if (!c.has(v.id)) c.set(v.id, mkPick(v)); } else c.delete(v.id); } return c; });
 
-  const selected = [...sel.entries()].map(([id, qty]) => ({ v: byId.get(id), qty })).filter((x): x is { v: CatalogVariant; qty: number } => !!x.v);
-  const totalUnits = selected.reduce((s, x) => s + x.qty, 0);
-  const subtotal = selected.reduce((s, x) => s + x.qty * (x.v.last_cost_usd ?? 0), 0);
+  const selected = [...sel.entries()].map(([id, p]) => ({ v: byId.get(id), p })).filter((x): x is { v: CatalogVariant; p: SkuPick } => !!x.v);
+  const totalUnits = selected.reduce((s, x) => s + x.p.qty, 0);
+  const subtotal = selected.reduce((s, x) => s + x.p.qty * (x.p.unit_cost ?? 0), 0);
+  const needsReview = selected.some((x) => !x.v.has_image || x.p.unit_cost == null || skuStatusTone(x.v.status) === "warning");
 
   function submit() {
     setErr(null);
-    const lines = selected.filter((x) => x.qty > 0).map((x) => ({ variant_id: x.v.id, qty: x.qty, unit_cost: x.v.last_cost_usd, unit_cny_ref: x.v.last_cost_rmb }));
+    const lines = selected.filter((x) => x.p.qty > 0).map((x) => ({ variant_id: x.v.id, qty: x.p.qty, unit_cost: x.p.unit_cost, unit_cny_ref: x.p.unit_cny }));
     if (!lines.length) { setErr("Select at least one SKU and set a quantity."); return; }
     start(async () => { const r = await addOrderLines(orderId, lines); if (!r.ok) { setErr(r.error); return; } onClose(); router.refresh(); });
   }
@@ -297,42 +299,77 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, title, family…" className={inputCls} />
         <div className="flex flex-wrap gap-1.5">{SKU_FILTERS.map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn("vy-chip", filter === f && "is-active")}>{f}</button>)}</div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          {/* catalog list */}
-          <div className="max-h-[46vh] overflow-y-auto rounded-lg border">
-            {groups.map(([fam, vs]) => (
-              <div key={fam}>
-                <div className="sticky top-0 z-10 border-b bg-muted/70 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">{fam} · {vs.length}</div>
-                {vs.map((v) => (
-                  <label key={v.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-accent/40">
-                    <input type="checkbox" checked={sel.has(v.id)} onChange={() => toggle(v.id)} className="h-4 w-4 accent-primary" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-mono text-[12px] font-semibold">{v.sku}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{[v.name, v.pack].filter(Boolean).join(" · ")}{!v.has_image && " · no image"}</div>
+        <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
+          {/* catalog list — collapsible family cards */}
+          <div className="max-h-[52vh] space-y-2.5 overflow-y-auto pr-1">
+            {groups.map(([fam, vs]) => {
+              const isOpen = !!n || open.has(fam);
+              const selCount = vs.filter((v) => sel.has(v.id)).length;
+              return (
+                <div key={fam} className={cn("overflow-hidden rounded-xl border", selCount > 0 ? "border-primary/50" : "")}>
+                  <div className={cn("flex items-center gap-2 px-3.5 py-3", selCount > 0 ? "bg-primary/5" : "")}>
+                    <button type="button" onClick={() => toggleOpen(fam)} className="flex min-w-0 flex-1 items-start gap-2 text-left">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
+                        <div className="text-[11px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"}</div>
+                      </div>
+                    </button>
+                    <button type="button" onClick={() => setFamily(vs, selCount !== vs.length)} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{selCount === vs.length ? "Deselect all" : "Select all"}</button>
+                    <button type="button" onClick={() => toggleOpen(fam)} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
+                  </div>
+                  {isOpen && (
+                    <div className="divide-y border-t">
+                      {vs.map((v) => {
+                        const on = sel.has(v.id);
+                        return (
+                          <label key={v.id} className={cn("flex cursor-pointer items-center gap-3 px-3.5 py-2.5", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
+                            <input type="checkbox" checked={on} onChange={() => toggle(v)} className="h-4 w-4 shrink-0 accent-primary" />
+                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>
+                            <span className={cn("w-36 shrink-0 font-mono text-[12px] font-semibold", on && "text-primary")}>{v.sku}</span>
+                            <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
+                            {v.fba_stock != null && <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">{num(v.fba_stock)} FBA</span>}
+                            <span className="shrink-0 font-mono text-[12px] font-semibold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
+                            <span className="hidden shrink-0 font-mono text-[11px] text-muted-foreground sm:block">{rmb(v.last_cost_rmb)}</span>
+                            <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>
+                          </label>
+                        );
+                      })}
                     </div>
-                    <div className="shrink-0 text-right font-mono text-[12px] text-muted-foreground">{v.last_cost_usd != null ? money(v.last_cost_usd) : "no cost"}</div>
-                  </label>
-                ))}
-              </div>
-            ))}
-            {filtered.length === 0 && <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">No variants match. <span className="text-muted-foreground">Add new ones in Products.</span></div>}
+                  )}
+                </div>
+              );
+            })}
+            {filtered.length === 0 && <div className="rounded-lg border px-3 py-8 text-center text-[12px] text-muted-foreground">No variants match. Add new ones in Products.</div>}
           </div>
 
-          {/* selected lines */}
-          <div className="rounded-lg border bg-accent/30 p-3">
-            <div className="vy-kicker mb-1.5">Selected lines</div>
+          {/* selected lines — review qty + pricing */}
+          <div className="rounded-xl border bg-accent/30 p-3">
+            <div className="mb-1.5"><div className="font-semibold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>
+            {needsReview && <div className="mb-2 rounded-md border px-2.5 py-1.5 text-[11px] text-warning" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>Needs review: missing images, titles, or costs</div>}
             {selected.length === 0 ? (
-              <p className="py-8 text-center text-[12px] text-muted-foreground">No SKUs selected. Tick variants on the left and set a quantity.</p>
+              <p className="py-10 text-center text-[12px] text-muted-foreground">No SKUs selected. Tick variants on the left — only selected rows become order lines.</p>
             ) : (
-              <ul className="space-y-1.5">
-                {selected.map(({ v, qty }) => (
-                  <li key={v.id} className="flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5">
-                    <div className="min-w-0 flex-1"><div className="truncate font-mono text-[11px] font-semibold">{v.sku}</div><div className="text-[10px] text-muted-foreground">{v.last_cost_usd != null ? `${money(v.last_cost_usd)} / u` : "no cost"}</div></div>
-                    <input type="number" value={qty || ""} onChange={(e) => setQty(v.id, Number(e.target.value))} placeholder="qty" className="w-16 rounded-md border bg-background px-2 py-1 text-right font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" />
-                    <button type="button" onClick={() => toggle(v.id)} className="vy-icon-btn" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
-                  </li>
+              <div className="max-h-[44vh] space-y-2 overflow-y-auto pr-0.5">
+                {selected.map(({ v, p }) => (
+                  <div key={v.id} className="rounded-lg border bg-card p-2.5">
+                    <div className="flex items-start gap-2">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-muted text-muted-foreground"><Package className="h-3.5 w-3.5" /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-[12px] font-semibold">{v.sku}</div>
+                        <div className="text-[11px] text-muted-foreground">{[v.familyName, v.name, v.pack].filter(Boolean).join(" · ")}</div>
+                        {skuStatusTone(v.status) === "warning" && <div className="text-[10px] text-warning">{v.status}</div>}
+                      </div>
+                      <button type="button" onClick={() => toggle(v)} className="vy-icon-btn shrink-0" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="block"><span className="vy-kicker">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(Number(e.target.value)) || 0) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                      <label className="block"><span className="vy-kicker">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                    </div>
+                    <label className="mt-2 block"><span className="vy-kicker">Supplier ¥</span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                    <div className="mt-2 flex items-center justify-between border-t pt-1.5 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         </div>
@@ -342,7 +379,7 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
           <div className="text-[12px] text-muted-foreground">{selected.length} SKUs · {num(totalUnits)} units · <span className="font-mono font-semibold text-foreground">{money(subtotal)}</span> subtotal</div>
           <div className="ml-auto flex gap-2">
             <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
-            <PrimaryButton type="button" onClick={submit} disabled={pending}>{pending ? "Adding…" : "Add selected lines"}</PrimaryButton>
+            <PrimaryButton type="button" onClick={submit} disabled={pending || selected.length === 0}>{pending ? "Adding…" : "Add selected lines"}</PrimaryButton>
           </div>
         </div>
       </div>
