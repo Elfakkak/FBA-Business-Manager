@@ -13,7 +13,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
-    supabase.from("order_costs").select("*").eq("order_id", id).order("position"),
+    supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
     supabase.from("charge_types").select("id, label, owner").eq("archived", false).order("owner").order("label"),
     supabase.from("product_variants").select("id, sku, name, last_cost_usd").order("sku"),
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
