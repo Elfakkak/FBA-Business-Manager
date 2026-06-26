@@ -1,5 +1,7 @@
 import { cn, initials } from "@/lib/utils";
 import type { Tone } from "@/lib/derive";
+import type { InlineEditor } from "@/lib/use-inline-editor";
+import { Pencil, Plus } from "lucide-react";
 
 const TONE_FG: Record<Tone, string> = {
   success: "bg-success/12 text-success",
@@ -173,6 +175,31 @@ export function SectionHeader({ title, blurb, badges, topBadges, actions, nextAc
         )}
       </div>
     </Card>
+  );
+}
+
+// Shared inline-edit number/text cell — pairs with useInlineEditor. One styling
+// source so every editable cell in the app looks and behaves the same.
+export function EditCell({ value, onChange, placeholder, align = "right", mode = "decimal" }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; align?: "left" | "right"; mode?: "numeric" | "decimal" | "text";
+}) {
+  return <input inputMode={mode === "text" ? undefined : mode} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+    className={cn("w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring", align === "right" && "text-right")} />;
+}
+
+// Shared Edit / Done·Cancel (+ optional Add) toolbar driven by an InlineEditor.
+export function EditToolbar({ editor, editable = true, addLabel, onAdd }: { editor: InlineEditor; editable?: boolean; addLabel?: string; onAdd?: () => void }) {
+  if (editor.on) return (
+    <div className="flex shrink-0 gap-1.5">
+      <button type="button" onClick={editor.cancel} className="vy-btn vy-btn--ghost vy-btn--sm">Cancel</button>
+      <button type="button" onClick={editor.save} disabled={editor.saving} className="vy-btn vy-btn--primary vy-btn--sm">{editor.saving ? "Saving…" : "Done"}</button>
+    </div>
+  );
+  return (
+    <div className="flex shrink-0 gap-1.5">
+      {editable && <button type="button" onClick={editor.begin} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
+      {onAdd && <button type="button" onClick={onAdd} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> {addLabel ?? "Add"}</button>}
+    </div>
   );
 }
 
