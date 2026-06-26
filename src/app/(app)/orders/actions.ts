@@ -63,12 +63,14 @@ export async function addOrderLine(orderId: string, form: FormData): Promise<Res
 
   const unitCny = parseFloat(String(form.get("unit_cny_ref") ?? ""));
   const supabase = await createClient();
-  const { data: v } = await supabase.from("product_variants").select("id, sku, family_id, name, last_cost_usd").eq("id", variantId).maybeSingle();
+  const { data: v } = await supabase.from("product_variants").select("id, sku, family_id, name, last_cost_usd, last_cost_rmb").eq("id", variantId).maybeSingle();
   if (!v) return { ok: false, error: "Variant not found." };
+  // Price seeds from the catalog's last known cost (a reference/suggestion you can
+  // override). The ACTUAL price is recorded later on the invoice.
   const { error } = await supabase.from("order_lines").insert({
     order_id: orderId, variant_id: v.id, family_id: v.family_id, sku: v.sku, product_name: v.name,
     qty, unit_cost: Number.isFinite(unitCost) ? unitCost : v.last_cost_usd,
-    unit_cny_ref: Number.isFinite(unitCny) ? unitCny : null,
+    unit_cny_ref: Number.isFinite(unitCny) ? unitCny : v.last_cost_rmb,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/orders/${orderId}`);
@@ -160,8 +162,9 @@ export async function addOrderCost(orderId: string, form: FormData): Promise<Res
     line_type: costTxt(form.get("line_type")),
     charge_type_id: costTxt(form.get("charge_type_id")),
     qty: costNum(form.get("qty"), 1),
-    amount: costNum(form.get("amount")),
-    currency: costTxt(form.get("currency")) ?? "USD",
+    amount: costNum(form.get("amount")),            // USD — the calculation amount
+    amount_cny_ref: form.get("amount_cny_ref") != null && String(form.get("amount_cny_ref")).trim() !== "" ? costNum(form.get("amount_cny_ref")) : null, // ¥ reference only
+    currency: "USD",
     treatment: costTxt(form.get("treatment")) ?? "inventoriable",
     vendor: costTxt(form.get("vendor")),
     notes: costTxt(form.get("notes")),
