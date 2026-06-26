@@ -61,13 +61,25 @@ export async function addOrderLine(orderId: string, form: FormData): Promise<Res
   if (!variantId) return { ok: false, error: "Pick a variant." };
   if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "Quantity must be positive." };
 
+  const unitCny = parseFloat(String(form.get("unit_cny_ref") ?? ""));
   const supabase = await createClient();
   const { data: v } = await supabase.from("product_variants").select("id, sku, family_id, name, last_cost_usd").eq("id", variantId).maybeSingle();
   if (!v) return { ok: false, error: "Variant not found." };
   const { error } = await supabase.from("order_lines").insert({
     order_id: orderId, variant_id: v.id, family_id: v.family_id, sku: v.sku, product_name: v.name,
     qty, unit_cost: Number.isFinite(unitCost) ? unitCost : v.last_cost_usd,
+    unit_cny_ref: Number.isFinite(unitCny) ? unitCny : null,
   });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  return { ok: true };
+}
+
+// Inline-edit a production line (qty / $ invoice cost / ¥ reference cost).
+export async function updateOrderLine(id: string, orderId: string, patch: { qty?: number; unit_cost?: number | null; unit_cny_ref?: number | null }): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_lines").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
@@ -106,6 +118,46 @@ export async function removeOrderPackaging(moveId: string, orderId: string): Pro
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/packaging");
+  return { ok: true };
+}
+
+// ---- Non-product / factory costs on an order (Production page) --------------
+const costNum = (v: FormDataEntryValue | null, d = 0) => { const n = Number(String(v ?? "").trim()); return Number.isFinite(n) ? n : d; };
+const costTxt = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim(); return s === "" ? null : s; };
+
+export async function addOrderCost(orderId: string, form: FormData): Promise<Result> {
+  const description = String(form.get("description") ?? "").trim();
+  if (!description) return { ok: false, error: "Description is required." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_costs").insert({
+    order_id: orderId,
+    description,
+    section: costTxt(form.get("section")) ?? "Production",
+    line_type: costTxt(form.get("line_type")),
+    charge_type_id: costTxt(form.get("charge_type_id")),
+    qty: costNum(form.get("qty"), 1),
+    amount: costNum(form.get("amount")),
+    coverage: costTxt(form.get("coverage")) ?? "Uncovered",
+    basis: costTxt(form.get("basis")) ?? "value",
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+export async function updateOrderCost(id: string, orderId: string, patch: Partial<{ description: string; section: string; line_type: string | null; qty: number; amount: number; coverage: string; basis: string }>): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_costs").update(patch).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+export async function deleteOrderCost(id: string, orderId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("order_costs").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
   return { ok: true };
 }
 
