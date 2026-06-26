@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, SourceTag, SectionTitle, CostHistoryList } from "@/components/ui/primitives";
 import {
   catFamilyStats, familyEco, familyWeightLb, marginTone, invStats, skuProfit,
   FAMILY_HEALTH_TONE, ORDER_STATUS_TONE, ORDER_STATUS_LABEL,
@@ -367,16 +367,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <EmptyBlock>No cost history yet — it builds as you record invoices for this product&apos;s SKUs.</EmptyBlock>
           ) : (
             <>
-              <ul className="divide-y">
-                {costHistory.map((c, i) => (
-                  <li key={i} className="flex items-center gap-2.5 py-2 text-sm">
-                    <span className="w-[88px] shrink-0 text-[12px] text-muted-foreground">{c.date ?? "—"}</span>
-                    {c.invoiceId ? <Link href={`/invoices/${c.invoiceId}`} className="font-mono text-[12px] font-medium hover:text-primary" title={c.vendor ?? undefined}>{c.invoiceId}</Link> : <span className="text-[12px] text-muted-foreground">manual</span>}
-                    {c.orderId && <Link href={`/orders/${c.orderId}`} className="hidden truncate font-mono text-[11px] text-muted-foreground hover:text-primary md:inline">{c.orderId}</Link>}
-                    <span className={cn("tabular ml-auto shrink-0 font-mono font-semibold", i === costHistory.length - 1 && "text-primary")}>{money(c.cost)}</span>
-                  </li>
-                ))}
-              </ul>
+              <CostHistoryList highlight="primary" items={costHistory.map((c) => ({
+                date: c.date, href: c.invoiceId ? `/invoices/${c.invoiceId}` : null, code: c.invoiceId ?? "manual", subtitle: c.vendor,
+                href2: c.orderId ? `/orders/${c.orderId}` : null, code2: c.orderId, amount: c.cost,
+              }))} />
               <p className="mt-2 text-[11px] text-muted-foreground">Each price traces to the invoice it was billed on — the truthful source. Latest = the current last cost.</p>
             </>
           )}
@@ -386,15 +380,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           {landedHistory.length === 0 ? (
             <EmptyBlock>Lands here when an order&apos;s Landed cost is locked — the all-in cost per unit, not just the supplier price.</EmptyBlock>
           ) : (
-            <ul className="divide-y">
-              {landedHistory.map((h, i) => (
-                <li key={i} className="flex items-center gap-2.5 py-2 text-sm">
-                  <span className="w-[88px] shrink-0 text-[12px] text-muted-foreground">{h.date ?? "—"}</span>
-                  {h.orderId ? <Link href={`/orders/${h.orderId}`} className="font-mono text-[12px] font-medium hover:text-primary" title={h.orderTitle ?? undefined}>{h.orderId}</Link> : <span className="text-[12px] text-muted-foreground">—</span>}
-                  <span className={cn("tabular ml-auto shrink-0 font-mono font-semibold", i === landedHistory.length - 1 && "text-info")}>{money(h.cost)}</span>
-                </li>
-              ))}
-            </ul>
+            <CostHistoryList highlight="info" items={landedHistory.map((h) => ({
+              date: h.date, href: h.orderId ? `/orders/${h.orderId}` : null, code: h.orderId, subtitle: h.orderTitle, amount: h.cost,
+            }))} />
           )}
         </Card>
       </div>

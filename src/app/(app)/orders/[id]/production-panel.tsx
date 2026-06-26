@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, KpiStrip, SectionHeader, EditCell, EditToolbar } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, KpiStrip, SectionHeader, SectionTitle, EditCell, EditToolbar } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -113,10 +113,8 @@ function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
   const total = items.reduce((s, i) => s + i.onHand * (i.unitCost ?? 0), 0);
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Package className="h-4 w-4" /></span><div><div className="font-semibold">Packaging on hand</div><p className="text-[11px] text-muted-foreground">Live from your Packaging inventory — orders draw from here.</p></div></div>
-        <Link href="/packaging" className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link>
-      </div>
+      <div className="px-5 pt-4"><SectionTitle icon={Package} tone="info" strong title="Packaging on hand" sub="Live from your Packaging inventory — orders draw from here."
+        action={<Link href="/packaging" className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link>} /></div>
       {items.length === 0 ? (
         <div className="border-t px-5 py-8 text-center text-sm text-muted-foreground">No packaging on hand. Add stock on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page.</div>
       ) : (
@@ -140,7 +138,7 @@ function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
 function PurchaseOrderCard({ skuCount, totalUnits, totalGoods, onGenerate }: { skuCount: number; totalUnits: number; totalGoods: number; onGenerate: () => void }) {
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex items-center gap-2.5 px-5 py-4"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><FileText className="h-4 w-4" /></span><div><div className="font-semibold">Purchase order</div><p className="text-[11px] text-muted-foreground">Outgoing purchase order sent to supplier. Incoming PIs &amp; invoices are tracked in the Invoices section.</p></div></div>
+      <div className="px-5 pt-4"><SectionTitle icon={FileText} tone="brand" strong title="Purchase order" sub="Outgoing purchase order sent to supplier. Incoming PIs & invoices are tracked in the Invoices section." /></div>
       <div className="flex flex-wrap items-center gap-3 border-t bg-accent/30 px-5 py-4">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"><FileText className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">
@@ -184,7 +182,7 @@ function ProductionFiles({ orderId, files }: { orderId: string; files: OrderFile
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><ClipboardCheck className="h-4 w-4" /></span><div><div className="font-semibold">Production files</div><p className="text-[11px] text-muted-foreground">WIP photos, specs, and documentation. Separate from PI/PO attachments.</p></div></div>
+      <SectionTitle icon={ClipboardCheck} tone="brand" strong title="Production files" sub="WIP photos, specs, and documentation. Separate from PI/PO attachments." />
       {upErr && <div className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger">{upErr}</div>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {FILE_SLOTS.map((s) => {
@@ -328,10 +326,8 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><Package className="h-4 w-4" /></span><div><div className="font-semibold">Production lines</div><p className="text-[11px] text-muted-foreground">{ed.on ? "Editing — change quantities or unit cost; totals update live." : "Sellable SKUs and variants included in this factory commitment."}</p></div></div>
-        <EditToolbar editor={ed} editable={allLines.length > 0} addLabel="Add SKU" onAdd={() => setAdding(true)} />
-      </div>
+      <div className="px-5 pt-4"><SectionTitle icon={Package} tone="brand" strong title="Production lines" sub={ed.on ? "Editing — change quantities or unit cost; totals update live." : "Sellable SKUs and variants included in this factory commitment."}
+        action={<EditToolbar editor={ed} editable={allLines.length > 0} addLabel="Add SKU" onAdd={() => setAdding(true)} />} /></div>
       {groups.length === 0 ? (
         <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No SKUs yet — add the products in this factory commitment.</div>
       ) : (
@@ -560,10 +556,8 @@ function NonProductCosts({ order, costs, chargeTypes, vendors, goodsTotal }: { o
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-warning/12 text-warning"><DollarSign className="h-4 w-4" /></span><div><div className="font-semibold">Non-product costs</div><p className="text-[11px] text-muted-foreground">{ed.on ? "Editing — adjust qty or amount; totals update live." : "Service fees, packaging, freight, and other charges bundled into production or the agent CI."}</p></div></div>
-        <EditToolbar editor={ed} editable={costs.length > 0} addLabel="Add cost" onAdd={() => setAdding(true)} />
-      </div>
+      <div className="px-5 pt-4"><SectionTitle icon={DollarSign} tone="warning" strong title="Non-product costs" sub={ed.on ? "Editing — adjust qty or amount; totals update live." : "Service fees, packaging, freight, and other charges bundled into production or the agent CI."}
+        action={<EditToolbar editor={ed} editable={costs.length > 0} addLabel="Add cost" onAdd={() => setAdding(true)} />} /></div>
       {costs.length === 0 ? (
         <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No non-product costs yet — add agent fees, packaging, freight or inspection.</div>
       ) : (

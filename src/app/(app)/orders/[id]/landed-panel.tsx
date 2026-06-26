@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, KpiStrip, SectionHeader } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, KpiStrip, SectionHeader, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { money, num, productionLanded, costUsd, type OrderRow, type OrderCostRow } from "@/lib/derive";
@@ -92,11 +92,8 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
 
       {/* Cost buckets */}
       <Card className="p-5">
-        <div className="mb-3 flex items-center gap-2.5">
-          <span className="inline-grid h-7 w-7 place-items-center rounded-md bg-primary/12 text-primary"><Receipt className="h-4 w-4" /></span>
-          <div className="min-w-0"><div className="font-semibold">Cost buckets</div><p className="text-[11px] text-muted-foreground">Classified by charge type from this order&apos;s costs · allocated across SKUs</p></div>
-          <button type="button" onClick={() => setAdjust(true)} disabled={locked} className="vy-btn vy-btn--outline vy-btn--sm ml-auto inline-flex items-center gap-1.5 disabled:opacity-40"><Pencil className="h-3 w-3" /> Adjust</button>
-        </div>
+        <SectionTitle icon={Receipt} tone="brand" strong title="Cost buckets" sub="Classified by charge type from this order's costs · allocated across SKUs"
+          action={<button type="button" onClick={() => setAdjust(true)} disabled={locked} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-40"><Pencil className="h-3 w-3" /> Adjust</button>} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-lg border bg-background/40 p-3">
             <div className="vy-kicker">Goods (direct)</div>
@@ -120,7 +117,7 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
 
       {/* Per-SKU landed table */}
       <Card className="overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 px-5 py-4"><span className="inline-grid h-7 w-7 place-items-center rounded-md bg-info/12 text-info"><Boxes className="h-4 w-4" /></span><div><div className="font-semibold">Landed cost per SKU</div><p className="text-[11px] text-muted-foreground">Goods + allocated costs ÷ units</p></div></div>
+        <div className="px-5 pt-4"><SectionTitle icon={Boxes} tone="info" strong title="Landed cost per SKU" sub="Goods + allocated costs ÷ units" /></div>
         {roll.withLanded.length === 0 ? (
           <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No production lines yet — add SKUs in Production.</div>
         ) : (
@@ -213,14 +210,11 @@ function ProfitCard({ order, roll, variants }: { order: OrderRow; roll: ReturnTy
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex flex-wrap items-center gap-2.5">
-        <span className={cn("inline-grid h-7 w-7 place-items-center rounded-md", good ? "bg-success/12 text-success" : "bg-danger/12 text-danger")}><DollarSign className="h-4 w-4" /></span>
-        <div className="min-w-0"><div className="font-semibold">Did it make money?</div><p className="text-[11px] text-muted-foreground">Projected margin = sale price − landed cost − Amazon fees</p></div>
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11.5px] text-muted-foreground">
+      <SectionTitle icon={DollarSign} tone={good ? "success" : "danger"} strong title="Did it make money?" sub="Projected margin = sale price − landed cost − Amazon fees"
+        action={<div className="flex flex-wrap items-center gap-3 text-[11.5px] text-muted-foreground">
           <label className="inline-flex items-center gap-1.5">Referral <input type="number" min="0" max="60" value={referralPct} onChange={(e) => setReferralPct(e.target.value)} className="w-14 rounded-md border bg-background px-2 py-1 text-right font-mono text-xs" /> %</label>
           <label className="inline-flex items-center gap-1.5">FBA $/u <input type="number" min="0" step="0.01" value={fbaUnit} onChange={(e) => setFbaUnit(e.target.value)} className="w-16 rounded-md border bg-background px-2 py-1 text-right font-mono text-xs" /></label>
-        </div>
-      </div>
+        </div>} />
 
       <div className="mb-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[

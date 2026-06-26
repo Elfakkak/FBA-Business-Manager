@@ -181,12 +181,23 @@ export async function saveInvoiceLines(invoiceId: string, lines: InvoiceLineInpu
     const skus = [...new Set(goods.map((r) => r.sku as string))];
     const { data: vs } = await supabase.from("product_variants").select("id, sku, family_id").in("sku", skus);
     const vmap = new Map(((vs ?? []) as { id: string; sku: string; family_id: string | null }[]).map((v) => [v.sku, v]));
+    // Don't let an invoice re-save clobber a NEWER locked landed cost: landed is the
+    // truer figure, so we only refresh last_cost when this invoice post-dates any
+    // landed lock for that SKU. (Provenance history is still recorded either way.)
+    const { data: landed } = await supabase.from("variant_cost_history").select("sku, recorded_at").eq("kind", "landed").in("sku", skus);
+    const landedMax = new Map<string, string>();
+    for (const r of (landed ?? []) as { sku: string | null; recorded_at: string }[]) {
+      if (!r.sku) continue; const cur = landedMax.get(r.sku);
+      if (!cur || r.recorded_at > cur) landedMax.set(r.sku, r.recorded_at);
+    }
+    const invDate = inv.issued ?? new Date().toISOString();
     // idempotent: replace this invoice's product cost-history (re-saving doesn't duplicate)
     await supabase.from("variant_cost_history").delete().eq("invoice_id", invoiceId).eq("kind", "product");
     const hist: Database["public"]["Tables"]["variant_cost_history"]["Insert"][] = [];
     for (const r of goods) {
       const unit = Math.round((r.billed / Number(r.qty)) * 100) / 100;
-      await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", r.sku!);
+      const lm = landedMax.get(r.sku!);
+      if (!lm || invDate >= lm) await supabase.from("product_variants").update({ last_cost_usd: unit }).eq("sku", r.sku!);
       const v = vmap.get(r.sku!);
       hist.push({
         variant_id: v?.id ?? null, sku: r.sku, family_id: v?.family_id ?? null,
