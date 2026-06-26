@@ -99,3 +99,62 @@ export async function fetchFbaInbounds(creds: AmazonCreds): Promise<FbaInboundSh
   }
   return shipments;
 }
+
+// Legacy v0 Fulfillment Inbound — pre-"Send to Amazon" shipments (older history).
+// Kept so the app holds the FULL shipment ledger, not just current STA shipments.
+const V0_STATUSES = "WORKING,SHIPPED,IN_TRANSIT,DELIVERED,CHECKED_IN,RECEIVING,CLOSED,CANCELLED,ERROR";
+export async function fetchLegacyInbounds(creds: AmazonCreds): Promise<FbaInboundShipment[]> {
+  const token = await getAccessToken(creds);
+  const host = hostFor(creds.region);
+  const marketplace = creds.marketplace_id || "ATVPDKIKX0DER";
+
+  const raw: { ShipmentId: string; ShipmentName?: string; DestinationFulfillmentCenterId?: string; ShipmentStatus?: string }[] = [];
+  let next: string | undefined;
+  do {
+    const qs = next
+      ? new URLSearchParams({ QueryType: "NEXT_TOKEN", NextToken: next })
+      : new URLSearchParams({ MarketplaceId: marketplace, QueryType: "SHIPMENT", ShipmentStatusList: V0_STATUSES });
+    const json = await getJson(`${host}/fba/inbound/v0/shipments?${qs}`, token);
+    for (const s of json.payload?.ShipmentData ?? []) raw.push(s);
+    next = json.pagination?.NextToken;
+  } while (next);
+
+  const shipments: FbaInboundShipment[] = [];
+  for (const s of raw) {
+    const items: FbaInboundItem[] = [];
+    let itoken: string | undefined;
+    do {
+      const qs = new URLSearchParams({ MarketplaceId: marketplace });
+      if (itoken) qs.set("NextToken", itoken);
+      const json = await getJson(`${host}/fba/inbound/v0/shipments/${s.ShipmentId}/items?${qs}`, token);
+      for (const it of json.payload?.ItemData ?? []) {
+        items.push({ sellerSku: it.SellerSKU, fnSku: it.FulfillmentNetworkSKU ?? null, quantityShipped: it.QuantityShipped ?? 0, quantityReceived: it.QuantityReceived ?? 0 });
+      }
+      itoken = json.pagination?.NextToken;
+    } while (itoken);
+
+    shipments.push({
+      shipmentId: s.ShipmentId,
+      shipmentName: s.ShipmentName ?? null,
+      fc: s.DestinationFulfillmentCenterId ?? "—",
+      amazonStatus: STATUS_MAP[s.ShipmentStatus ?? ""] ?? "Problem",
+      items,
+      expected: items.reduce((n, i) => n + i.quantityShipped, 0),
+      received: items.reduce((n, i) => n + i.quantityReceived, 0),
+      skuCount: new Set(items.map((i) => i.sellerSku)).size,
+    });
+  }
+  return shipments;
+}
+
+// Both sources merged into the full ledger (STA + legacy), deduped by shipment id.
+export async function fetchAllInbounds(creds: AmazonCreds): Promise<FbaInboundShipment[]> {
+  const [sta, legacy] = await Promise.all([
+    fetchFbaInbounds(creds),
+    fetchLegacyInbounds(creds).catch(() => [] as FbaInboundShipment[]),
+  ]);
+  const byId = new Map<string, FbaInboundShipment>();
+  for (const s of legacy) byId.set(s.shipmentId, s);
+  for (const s of sta) byId.set(s.shipmentId, s); // STA wins on any id collision
+  return [...byId.values()];
+}

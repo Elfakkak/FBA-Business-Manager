@@ -28,7 +28,7 @@ if (MODE === "fetch" || MODE === "all") {
     next = j.pagination?.paginationToken;
   } while (next);
 
-  const shipments = []; const seen = new Set();
+  const byId = new Map(); const seen = new Set();
   for (const plan of plans) {
     const shipmentIds = []; let pnext;
     do {
@@ -48,12 +48,36 @@ if (MODE === "fetch" || MODE === "all") {
         for (const i of j.items ?? []) items.push({ sku: i.msku, fnsku: i.fnsku ?? null, expected: i.quantity ?? 0, received: i.receivedQuantity?.amount ?? 0 });
         inext = j.pagination?.paginationToken;
       } while (inext);
-      shipments.push({ id: s.shipmentConfirmationId || sid, fc: s.destination?.warehouseId ?? "—", status: STATUS_MAP[s.status] ?? "Problem", items, expected: items.reduce((n, i) => n + i.expected, 0), received: items.reduce((n, i) => n + i.received, 0), skuCount: new Set(items.map((i) => i.sku)).size });
+      const id = s.shipmentConfirmationId || sid;
+      byId.set(id, { id, fc: s.destination?.warehouseId ?? "—", status: STATUS_MAP[s.status] ?? "Problem", items, expected: items.reduce((n, i) => n + i.expected, 0), received: items.reduce((n, i) => n + i.received, 0), skuCount: new Set(items.map((i) => i.sku)).size });
     }
   }
+
+  // legacy v0 history (older / pre-STA shipments) — keep the full ledger
+  const V0 = "WORKING,SHIPPED,IN_TRANSIT,DELIVERED,CHECKED_IN,RECEIVING,CLOSED,CANCELLED,ERROR";
+  const mkt = process.env.AMAZON_SP_MARKETPLACE_ID || "ATVPDKIKX0DER";
+  const raw = []; let lnext;
+  do {
+    const qs = lnext ? new URLSearchParams({ QueryType: "NEXT_TOKEN", NextToken: lnext }) : new URLSearchParams({ MarketplaceId: mkt, QueryType: "SHIPMENT", ShipmentStatusList: V0 });
+    const j = await getJson(`${host}/fba/inbound/v0/shipments?${qs}`, t);
+    for (const s of j.payload?.ShipmentData ?? []) raw.push(s); lnext = j.pagination?.NextToken;
+  } while (lnext);
+  for (const s of raw) {
+    if (byId.has(s.ShipmentId)) continue;
+    const items = []; let it;
+    do {
+      const qs = new URLSearchParams({ MarketplaceId: mkt }); if (it) qs.set("NextToken", it);
+      const j = await getJson(`${host}/fba/inbound/v0/shipments/${s.ShipmentId}/items?${qs}`, t);
+      for (const i of j.payload?.ItemData ?? []) items.push({ sku: i.SellerSKU, fnsku: i.FulfillmentNetworkSKU ?? null, expected: i.QuantityShipped ?? 0, received: i.QuantityReceived ?? 0 });
+      it = j.pagination?.NextToken;
+    } while (it);
+    byId.set(s.ShipmentId, { id: s.ShipmentId, fc: s.DestinationFulfillmentCenterId ?? "—", status: STATUS_MAP[s.ShipmentStatus] ?? "Problem", items, expected: items.reduce((n, i) => n + i.expected, 0), received: items.reduce((n, i) => n + i.received, 0), skuCount: new Set(items.map((i) => i.sku)).size });
+  }
+
+  const shipments = [...byId.values()];
   writeFileSync(CACHE, JSON.stringify(shipments));
   const dist = {}; for (const s of shipments) dist[s.status] = (dist[s.status] || 0) + 1;
-  console.log(`Fetched ${shipments.length} inbound shipments from ${plans.length} plans →`, JSON.stringify(dist));
+  console.log(`Fetched ${shipments.length} shipments (${plans.length} STA plans + legacy v0) →`, JSON.stringify(dist));
   if (MODE === "fetch") process.exit(0);
 }
 
@@ -64,9 +88,4 @@ for (const s of shipments) {
   await db.from("fba_inbound_items").delete().eq("inbound_id", s.id);
   if (s.items.length) await db.from("fba_inbound_items").insert(s.items.map((i) => ({ inbound_id: s.id, sku: i.sku, fnsku: i.fnsku, expected: i.expected, received: i.received })));
 }
-// prune stale legacy rows Amazon no longer returns
-const keep = new Set(shipments.map((s) => s.id));
-const { data: all } = await db.from("fba_inbounds").select("id");
-const staleIds = (all ?? []).map((r) => r.id).filter((id) => !keep.has(id));
-if (staleIds.length) { await db.from("fba_inbound_items").delete().in("inbound_id", staleIds); await db.from("fba_inbounds").delete().in("id", staleIds); }
-console.log(`✅ Loaded ${shipments.length} shipments, pruned ${staleIds.length} stale. View at /fba-shipments.`);
+console.log(`✅ Loaded ${shipments.length} shipments (full ledger). View at /fba-shipments.`);

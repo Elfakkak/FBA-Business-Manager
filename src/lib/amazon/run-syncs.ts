@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { gunzipSync } from "node:zlib";
 import { fetchFbaInventory, getAccessToken, hostFor, type AmazonCreds } from "./sp-api";
-import { fetchFbaInbounds } from "./fba-inbound";
+import { fetchAllInbounds } from "./fba-inbound";
 
 type DB = SupabaseClient<Database>; // keep update payloads type-checked
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -27,7 +27,8 @@ export async function runInventorySync(db: DB, creds: AmazonCreds) {
 
 // ---------- FBA inbound shipments + items ----------
 export async function runInboundSync(db: DB, creds: AmazonCreds) {
-  const shipments = await fetchFbaInbounds(creds);
+  // full ledger: current Send-to-Amazon shipments + legacy v0 history (never pruned)
+  const shipments = await fetchAllInbounds(creds);
   for (const s of shipments) {
     await db.from("fba_inbounds").upsert({
       id: s.shipmentId, fc: s.fc, sku_count: s.skuCount, expected: s.expected,
@@ -38,16 +39,6 @@ export async function runInboundSync(db: DB, creds: AmazonCreds) {
       await db.from("fba_inbound_items").insert(
         s.items.map((i) => ({ inbound_id: s.shipmentId, sku: i.sellerSku, fnsku: i.fnSku, expected: i.quantityShipped, received: i.quantityReceived })),
       );
-    }
-  }
-  // prune shipments Amazon no longer returns (e.g. stale legacy v0 rows)
-  const keep = shipments.map((s) => s.shipmentId);
-  if (keep.length) {
-    const { data: stale } = await db.from("fba_inbounds").select("id").not("id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
-    const staleIds = (stale ?? []).map((r) => r.id);
-    if (staleIds.length) {
-      await db.from("fba_inbound_items").delete().in("inbound_id", staleIds);
-      await db.from("fba_inbounds").delete().in("id", staleIds);
     }
   }
   return { shipments: shipments.length };
