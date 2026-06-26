@@ -596,6 +596,7 @@ export type Database = {
           note: string | null
           oauth_token: Json | null
           status: Database["public"]["Enums"]["integration_status"]
+          sync_state: Json
           updated_at: string
         }
         Insert: {
@@ -605,6 +606,7 @@ export type Database = {
           note?: string | null
           oauth_token?: Json | null
           status?: Database["public"]["Enums"]["integration_status"]
+          sync_state?: Json
           updated_at?: string
         }
         Update: {
@@ -614,6 +616,7 @@ export type Database = {
           note?: string | null
           oauth_token?: Json | null
           status?: Database["public"]["Enums"]["integration_status"]
+          sync_state?: Json
           updated_at?: string
         }
         Relationships: []
@@ -1191,6 +1194,7 @@ export type Database = {
           order_history: Json
           parent: string
           primary_sku: string | null
+          status: string
           supplier: string | null
           supplier_route: string | null
           units_per_carton: number | null
@@ -1220,6 +1224,7 @@ export type Database = {
           order_history?: Json
           parent: string
           primary_sku?: string | null
+          status?: string
           supplier?: string | null
           supplier_route?: string | null
           units_per_carton?: number | null
@@ -1249,6 +1254,7 @@ export type Database = {
           order_history?: Json
           parent?: string
           primary_sku?: string | null
+          status?: string
           supplier?: string | null
           supplier_route?: string | null
           units_per_carton?: number | null

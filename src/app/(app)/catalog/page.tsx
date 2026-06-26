@@ -38,6 +38,8 @@ export default async function CatalogPage() {
       health: s.health,
       lowStock: s.lowStock,
       avgMargin: eco.avgMargin,
+      status: (p as Product & { status?: string }).status ?? "active",
+      favorite: (p as Product & { favorite?: boolean }).favorite ?? false,
       skus: vs.map((v) => ({ sku: v.sku, stock: v.fba_stock ?? 0, status: v.status })),
     };
   });

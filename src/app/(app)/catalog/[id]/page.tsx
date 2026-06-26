@@ -83,6 +83,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
+  const { data: catList } = await supabase.from("categories").select("name").order("name");
+  const categoryNames = (catList ?? []).map((c) => c.name);
   const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref, file_size").eq("family_id", id);
   const dimHistory = Array.isArray(p.dim_history) ? (p.dim_history as never[]) : [];
 
@@ -103,11 +105,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </Badge>
             <EditProductButton
               product={{
-                id: p.id, material: p.material, supplier: p.supplier, supplier_route: p.supplier_route,
+                id: p.id, parent: p.parent, category: p.category, status: (p as Product & { status?: string }).status ?? "active",
+                material: p.material, supplier: p.supplier, supplier_route: p.supplier_route,
                 lead_time_days: p.lead_time_days, moq: p.moq, last_ordered: p.last_ordered,
                 weight_kg: p.weight_kg, units_per_carton: p.units_per_carton, dim_cm: dim, carton_cm: carton,
               }}
               suppliers={supplierNames}
+              categories={categoryNames}
             />
             <Link href="/orders" className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><ShoppingCart className="h-4 w-4" /> Reorder</Link>
           </>

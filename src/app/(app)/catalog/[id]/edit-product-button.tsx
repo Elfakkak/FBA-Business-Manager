@@ -7,6 +7,9 @@ import { Pencil } from "lucide-react";
 
 export type ProductEdit = {
   id: string;
+  parent: string;
+  category: string;
+  status: string;
   material: string | null;
   supplier: string | null;
   supplier_route: string | null;
@@ -19,7 +22,7 @@ export type ProductEdit = {
   carton_cm: { l?: number | null; w?: number | null; h?: number | null } | null;
 };
 
-export function EditProductButton({ product, suppliers }: { product: ProductEdit; suppliers: string[] }) {
+export function EditProductButton({ product, suppliers, categories }: { product: ProductEdit; suppliers: string[]; categories: string[] }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => updateProduct(product.id, form));
   const d = product.dim_cm ?? {};
   const c = product.carton_cm ?? {};
@@ -29,7 +32,23 @@ export function EditProductButton({ product, suppliers }: { product: ProductEdit
       <GhostButton onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit details</GhostButton>
       <Modal open={open} onClose={() => setOpen(false)} title="Edit product details">
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="vy-kicker">Specs &amp; supplier</div>
+          {/* Product (parent) identity — variants keep their own Amazon names */}
+          <div className="vy-kicker">Product</div>
+          <Field label="Product name"><input name="parent" required defaultValue={product.parent} className={inputCls} placeholder="e.g. 18&quot; Semi Truck Steering Wheel Cover" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Category">
+              <select name="category" defaultValue={product.category} className={inputCls}>
+                {[product.category, ...categories.filter((c) => c !== product.category)].map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Status">
+              <select name="status" defaultValue={product.status} className={inputCls}>
+                {["active", "draft", "archived"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div className="vy-kicker pt-1">Specs &amp; supplier</div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Material"><input name="material" defaultValue={product.material ?? ""} className={inputCls} placeholder="e.g. Microfiber leather" /></Field>
             <Field label="Supplier">

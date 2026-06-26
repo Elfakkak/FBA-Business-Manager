@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
-import { FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, marginTone, num, type FamilyHealth } from "@/lib/derive";
+import { FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, marginTone, num, type FamilyHealth, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Package, ArrowRight, ArrowUpRight, Layers } from "lucide-react";
+import { ChevronRight, ChevronDown, Package, ArrowRight, ArrowUpRight, Layers, Star } from "lucide-react";
 import { NewProductButton } from "./new-product-button";
 import { CategoryManagerButton, type CategoryRow } from "./category-manager";
+import { setProductFavorite } from "./actions";
+
+const STATUS_TONE: Record<string, Tone> = { active: "success", draft: "info", archived: "muted" };
 
 export type FamilySummary = {
   id: string;
@@ -25,6 +29,8 @@ export type FamilySummary = {
   health: FamilyHealth;
   lowStock: boolean;
   avgMargin: number | null;
+  status: string;
+  favorite: boolean;
   skus: { sku: string; stock: number; status: string }[];
 };
 
@@ -37,15 +43,22 @@ const CHIPS: { key: "all" | FamilyHealth; label: string }[] = [
 type SortKey = "parent" | "category" | "skuCount" | "stock" | "inbound" | "avgMargin";
 
 export function CatalogList({ families, categories }: { families: FamilySummary[]; categories: CategoryRow[] }) {
+  const router = useRouter();
+  const [, startFav] = useTransition();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
   const [chip, setChip] = useState<"all" | FamilyHealth>("all");
   const [supplier, setSupplier] = useState("all");
   const [singleOnly, setSingleOnly] = useState(false);
+  const [favOnly, setFavOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"current" | "active" | "draft" | "archived" | "all">("current");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
   const [peek, setPeek] = useState<FamilySummary | null>(null);
+
+  const toggleFav = (id: string, v: boolean) => startFav(async () => { await setProductFavorite(id, v); router.refresh(); });
 
   const categoryNames = categories.map((c) => c.name);
   const supplierNames = useMemo(
@@ -60,13 +73,15 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
       if (supplier !== "all" && f.supplier !== supplier) return false;
       if (chip !== "all" && f.health !== chip) return false;
       if (singleOnly && f.skuCount > 1) return false;
+      if (favOnly && !f.favorite) return false;
+      if (statusFilter === "current" ? f.status === "archived" : statusFilter !== "all" && f.status !== statusFilter) return false;
       if (needle) {
         const hay = `${f.parent} ${f.category} ${f.supplier ?? ""} ${f.skus.map((s) => s.sku).join(" ")}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [families, q, category, supplier, chip, singleOnly]);
+  }, [families, q, category, supplier, chip, singleOnly, favOnly, statusFilter]);
 
   const sorted = useMemo(() => {
     if (!sort) return filtered;
@@ -82,12 +97,14 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
   const reorderCount = families.filter((f) => f.health === "Reorder").length;
   const gapCount = families.filter((f) => f.health === "Data gap").length;
   const singleCount = families.filter((f) => f.skuCount === 1).length;
+  const favCount = families.filter((f) => f.favorite).length;
+  const draftCount = families.filter((f) => f.status === "draft").length;
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const from = (safePage - 1) * pageSize;
   const pageRows = sorted.slice(from, from + pageSize);
-  useEffect(() => { setPage(1); }, [q, category, supplier, chip, singleOnly, pageSize]);
+  useEffect(() => { setPage(1); }, [q, category, supplier, chip, singleOnly, favOnly, statusFilter, pageSize]);
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "parent" || key === "category" ? "asc" : "desc" }));
@@ -120,14 +137,24 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
             <option value="all">All suppliers</option>
             {supplierNames.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {CHIPS.map((c) => (
               <button key={c.key} onClick={() => setChip(c.key)} className={cn("vy-chip", chip === c.key && "is-active")}>{c.label}</button>
             ))}
             <button onClick={() => setSingleOnly((v) => !v)} className={cn("vy-chip inline-flex items-center gap-1", singleOnly && "is-active")} title="Single-SKU products — likely orphans to group under a parent">
               <Layers className="h-3 w-3" /> Single-SKU{singleCount ? ` (${singleCount})` : ""}
             </button>
+            <button onClick={() => setFavOnly((v) => !v)} className={cn("vy-chip inline-flex items-center gap-1", favOnly && "is-active")} title="Favorited products">
+              <Star className={cn("h-3 w-3", favOnly && "fill-current")} /> Favorites{favCount ? ` (${favCount})` : ""}
+            </button>
           </div>
+        </div>
+        {/* lifecycle status */}
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-[11px] text-muted-foreground">Status:</span>
+          {([["current", "Current"], ["active", "Active"], ["draft", `Draft${draftCount ? ` (${draftCount})` : ""}`], ["archived", "Archived"], ["all", "All"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setStatusFilter(k)} className={cn("vy-chip", statusFilter === k && "is-active")}>{label}</button>
+          ))}
         </div>
       </Card>
 
@@ -151,27 +178,54 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
             <tbody className="divide-y">
               {pageRows.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No products match your filters.</td></tr>
-              ) : pageRows.map((f) => (
-                <tr key={f.id} onClick={() => setPeek(f)} className="cursor-pointer hover:bg-accent/40">
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>
-                      <div className="min-w-0">
-                        <Link href={`/catalog/${f.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-[280px] truncate font-medium hover:text-primary" title={f.parent}>{f.parent}{f.color ? ` · ${f.color}` : ""}</Link>
-                        {f.supplier && <div className="text-[11px] text-muted-foreground">{f.supplier}{f.lastOrdered ? ` · last ordered ${f.lastOrdered}` : ""}</div>}
+              ) : pageRows.map((f) => {
+                const open = !!expanded[f.id];
+                return (
+                <FamilyRows key={f.id}>
+                  <tr onClick={() => setPeek(f)} className={cn("cursor-pointer hover:bg-accent/40", f.status === "archived" && "opacity-60")}>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); setExpanded((s) => ({ ...s, [f.id]: !open })); }} className="shrink-0 text-muted-foreground hover:text-foreground" title={open ? "Collapse" : "Show variants"} aria-label="Toggle variants">
+                          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); toggleFav(f.id, !f.favorite); }} className="shrink-0 text-muted-foreground hover:text-warning" title={f.favorite ? "Unfavorite" : "Favorite"} aria-label="Toggle favorite">
+                          <Star className={cn("h-4 w-4", f.favorite && "fill-warning text-warning")} />
+                        </button>
+                        <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <Link href={`/catalog/${f.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-[240px] truncate font-medium hover:text-primary" title={f.parent}>{f.parent}{f.color ? ` · ${f.color}` : ""}</Link>
+                            {f.status !== "active" && <Badge tone={STATUS_TONE[f.status] ?? "muted"}>{f.status}</Badge>}
+                          </div>
+                          {f.supplier && <div className="text-[11px] text-muted-foreground">{f.supplier}{f.lastOrdered ? ` · last ordered ${f.lastOrdered}` : ""}</div>}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-[12px] text-muted-foreground">{f.category}</td>
-                  <td className="tabular px-3 py-2.5 text-right font-mono">{num(f.skuCount)}</td>
-                  <td className={cn("tabular px-3 py-2.5 text-right font-mono font-semibold", f.lowStock && "text-warning")}>{num(f.stock)}</td>
-                  <td className={cn("tabular px-3 py-2.5 text-right font-mono", f.inbound > 0 ? "text-info" : "text-muted-foreground")}>{f.inbound > 0 ? num(f.inbound) : "—"}</td>
-                  <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{f.costLabel}</td>
-                  <td className="px-3 py-2.5 text-right">{f.avgMargin != null ? <Badge tone={marginTone(f.avgMargin)}>{f.avgMargin}%</Badge> : <span className="text-[11px] text-muted-foreground">—</span>}</td>
-                  <td className="px-3 py-2.5"><Badge tone={FAMILY_HEALTH_TONE[f.health]}>{f.health}</Badge></td>
-                  <td className="px-3 py-2.5 text-right"><ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" /></td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px] text-muted-foreground">{f.category}</td>
+                    <td className="tabular px-3 py-2.5 text-right font-mono">{num(f.skuCount)}</td>
+                    <td className={cn("tabular px-3 py-2.5 text-right font-mono font-semibold", f.lowStock && "text-warning")}>{num(f.stock)}</td>
+                    <td className={cn("tabular px-3 py-2.5 text-right font-mono", f.inbound > 0 ? "text-info" : "text-muted-foreground")}>{f.inbound > 0 ? num(f.inbound) : "—"}</td>
+                    <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{f.costLabel}</td>
+                    <td className="px-3 py-2.5 text-right">{f.avgMargin != null ? <Badge tone={marginTone(f.avgMargin)}>{f.avgMargin}%</Badge> : <span className="text-[11px] text-muted-foreground">—</span>}</td>
+                    <td className="px-3 py-2.5"><Badge tone={FAMILY_HEALTH_TONE[f.health]}>{f.health}</Badge></td>
+                    <td className="px-3 py-2.5 text-right"><ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" /></td>
+                  </tr>
+                  {open && f.skus.map((sk) => (
+                    <tr key={sk.sku} className="bg-muted/20 text-[12px]">
+                      <td className="py-1.5 pl-14 pr-3">
+                        <Link href={`/inventory?q=${encodeURIComponent(sk.sku)}`} className="font-mono hover:text-primary">{sk.sku}</Link>
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground">variant</td>
+                      <td />
+                      <td className={cn("tabular px-3 py-1.5 text-right font-mono", sk.stock <= 40 && "text-warning")}>{num(sk.stock)}</td>
+                      <td colSpan={3} />
+                      <td className="px-3 py-1.5"><Badge tone={VARIANT_STATUS_TONE[sk.status] ?? "muted"}>{sk.status}</Badge></td>
+                      <td />
+                    </tr>
+                  ))}
+                </FamilyRows>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -230,6 +284,10 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
       </Drawer>
     </div>
   );
+}
+
+function FamilyRows({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }
 
 function SortTh({ label, k, right, sort, onSort }: {

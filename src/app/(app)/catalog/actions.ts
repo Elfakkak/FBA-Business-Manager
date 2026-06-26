@@ -61,6 +61,9 @@ export async function updateProduct(id: string, form: FormData): Promise<Result>
   for (const k of ["material", "supplier", "supplier_route", "last_ordered"]) {
     const v = txt(k); if (v !== undefined) (patch as Record<string, unknown>)[k] = v;
   }
+  const parent = txt("parent"); if (parent) patch.parent = parent;          // rename the product (never blank — it's required)
+  const category = txt("category"); if (category) patch.category = category;
+  const status = txt("status"); if (status) patch.status = status;          // active / draft / archived
   const lead = int("lead_time_days"); if (lead !== undefined) patch.lead_time_days = lead ?? 0;
   const moq = int("moq"); if (moq !== undefined) patch.moq = moq ?? 0;
   const wkg = flt("weight_kg"); if (wkg !== undefined) patch.weight_kg = wkg;
@@ -105,6 +108,23 @@ export async function logNewSize(id: string, form: FormData): Promise<Result> {
     dim_history: history as never,
   }).eq("id", id);
   if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${id}`);
+  return { ok: true };
+}
+
+export async function setProductFavorite(id: string, favorite: boolean): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").update({ favorite }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/catalog");
+  return { ok: true };
+}
+
+export async function setProductStatus(id: string, status: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").update({ status }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/catalog");
   revalidatePath(`/catalog/${id}`);
   return { ok: true };
 }
