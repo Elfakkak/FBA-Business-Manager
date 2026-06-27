@@ -21,13 +21,26 @@ import {
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: product } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+  // All queries that depend only on the id run in parallel (one round-trip, not ~10).
+  const [
+    { data: product }, { data: variantsData }, { data: allProducts }, { data: lineRows },
+    { data: vchRows }, { data: lvchRows }, { data: amzInt }, { data: supplierList },
+    { data: catList }, { data: techPacks },
+  ] = await Promise.all([
+    supabase.from("products").select("*").eq("id", id).maybeSingle(),
+    supabase.from("product_variants").select("*").eq("family_id", id).order("sku"),
+    supabase.from("products").select("id, parent").order("parent"),
+    supabase.from("order_lines").select("id, order_id, qty, unit_cost, orders(title, status, placed_on)").eq("family_id", id),
+    supabase.from("variant_cost_history").select("unit_cost, qty, recorded_at, invoice_id, order_id, invoices(vendor), orders(title)").eq("family_id", id).eq("kind", "product").order("recorded_at", { ascending: true }),
+    supabase.from("variant_cost_history").select("unit_cost, recorded_at, order_id, orders(title)").eq("family_id", id).eq("kind", "landed").order("recorded_at", { ascending: true }),
+    supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle(),
+    supabase.from("suppliers").select("name").order("name"),
+    supabase.from("categories").select("name").order("name"),
+    supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref, file_size").eq("family_id", id),
+  ]);
   if (!product) notFound();
-  const { data: variantsData } = await supabase.from("product_variants").select("*").eq("family_id", id).order("sku");
   const variants = (variantsData ?? []) as Variant[];
   const p = product as Product;
-  // all products — for the "move SKU to another product" picker in the variant editor
-  const { data: allProducts } = await supabase.from("products").select("id, parent").order("parent");
   const productOptions = (allProducts ?? []) as { id: string; parent: string }[];
 
   // inbound shipments touching this family's SKUs → "what's coming to FBA & when"
@@ -56,30 +69,16 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const famDaysCover = famVelocity > 0 ? Math.round(famAvailable / famVelocity) : null;
   const haveVelocity = famVelocity > 0;
 
-  // order-line history for this family → cost history + order history
-  const { data: lineRows } = await supabase
-    .from("order_lines")
-    .select("id, order_id, qty, unit_cost, orders(title, status, placed_on)")
-    .eq("family_id", id);
+  // order-line history for this family → cost history + order history (queried above)
   type LineJoin = { order_id: string; qty: number; unit_cost: number | null; orders: { title: string; status: string; placed_on: string | null } | null };
   const lines = (lineRows ?? []) as unknown as LineJoin[];
   // Product cost history — the ACTUAL unit price paid, sourced from invoices (provenance).
-  const { data: vchRows } = await supabase
-    .from("variant_cost_history")
-    .select("unit_cost, qty, recorded_at, invoice_id, order_id, invoices(vendor), orders(title)")
-    .eq("family_id", id).eq("kind", "product")
-    .order("recorded_at", { ascending: true });
   type VCH = { unit_cost: number; qty: number | null; recorded_at: string; invoice_id: string | null; order_id: string | null; invoices: { vendor: string } | null; orders: { title: string } | null };
   const costHistory = ((vchRows ?? []) as unknown as VCH[]).map((h) => ({
     date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, qty: h.qty,
     invoiceId: h.invoice_id, orderId: h.order_id, vendor: h.invoices?.vendor ?? null,
   }));
-  // Landed cost history — the all-in cost per unit, locked at closeout (kind='landed').
-  const { data: lvchRows } = await supabase
-    .from("variant_cost_history")
-    .select("unit_cost, recorded_at, order_id, orders(title)")
-    .eq("family_id", id).eq("kind", "landed")
-    .order("recorded_at", { ascending: true });
+  // Landed cost history — the all-in cost per unit, locked at closeout (queried above)
   type LVCH = { unit_cost: number; recorded_at: string; order_id: string | null; orders: { title: string } | null };
   const landedHistory = ((lvchRows ?? []) as unknown as LVCH[]).map((h) => ({
     date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, orderId: h.order_id, orderTitle: h.orders?.title ?? null,
@@ -98,13 +97,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const linked = variants.filter((v) => v.asin && v.asin !== "Pending sync").length;
   const dim = (p.dim_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
-  const { data: amzInt } = await supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle();
   const amazonLastSync = (amzInt?.last_sync as string | null) ?? null;
-  const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
-  const { data: catList } = await supabase.from("categories").select("name").order("name");
   const categoryNames = (catList ?? []).map((c) => c.name);
-  const { data: techPacks } = await supabase.from("product_tech_packs").select("id, version, file_name, note, doc_date, asset_ref, file_size").eq("family_id", id);
   const dimHistory = Array.isArray(p.dim_history) ? (p.dim_history as never[]) : [];
 
   return (
