@@ -2,7 +2,26 @@ import Link from "next/link";
 import { cn, initials } from "@/lib/utils";
 import { money, type Tone } from "@/lib/derive";
 import type { InlineEditor } from "@/lib/use-inline-editor";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+
+// Shared sortable table header — click to sort asc/desc. One component so every
+// table sorts identically.
+export type SortState<K extends string> = { key: K; dir: "asc" | "desc" } | null;
+export function makeToggleSort<K extends string>(set: (fn: (s: SortState<K>) => SortState<K>) => void) {
+  return (k: K) => set((s) => (s?.key === k ? (s.dir === "asc" ? { key: k, dir: "desc" } : null) : { key: k, dir: "asc" }));
+}
+export function SortableTh<K extends string>({ label, k, right, sort, onSort, className }: {
+  label: string; k: K; right?: boolean; sort: SortState<K>; onSort: (k: K) => void; className?: string;
+}) {
+  const active = sort?.key === k;
+  return (
+    <th className={cn("whitespace-nowrap px-3 py-2 font-medium", right && "text-right", className)}>
+      <button type="button" onClick={() => onSort(k)} className={cn("inline-flex items-center gap-1 hover:text-foreground", right && "flex-row-reverse")}>
+        {label}{active ? (sort!.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </th>
+  );
+}
 
 const TONE_FG: Record<Tone, string> = {
   success: "bg-success/12 text-success",

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, CardHeader, SortableTh, makeToggleSort, type SortState } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { num, money, type InvoiceRow, type InvoiceLineRow, INVOICE_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, PAYTERM_TYPES, PAYTERM_BY_KEY } from "@/lib/derive";
@@ -34,6 +34,9 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
   const [payPicker, setPayPicker] = useState(false);          // list-level: pick which invoice
   const [newOpen, setNewOpen] = useState(false);
   const [editing, setEditing] = useState<InvRow | null>(null);
+  type InvSortKey = "id" | "order" | "vendor" | "issued" | "due" | "total" | "paid" | "balance" | "status";
+  const [sort, setSort] = useState<SortState<InvSortKey>>(null);
+  const toggleSort = makeToggleSort(setSort);
 
   const now = Date.now();
   const aging = (i: InvRow) => invoiceAging(i.due, invoiceBalance(i), now);
@@ -51,10 +54,29 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
     });
   }, [rows, q, status, vtype, now]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (i: InvRow): string | number => {
+      switch (sort.key) {
+        case "id": return i.id;
+        case "order": return i.order_id ?? "";
+        case "vendor": return i.vendor ?? "";
+        case "issued": return i.issued ?? "";
+        case "due": return i.due ?? "";
+        case "total": return i.total ?? 0;
+        case "paid": return i.paid ?? 0;
+        case "balance": return invoiceBalance(i);
+        case "status": return invoiceStatus(i);
+        default: return "";
+      }
+    };
+    return [...filtered].sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "number" ? x - (y as number) : String(x).localeCompare(String(y))) * dir; });
+  }, [filtered, sort]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const from = (safePage - 1) * pageSize;
-  const pageRows = filtered.slice(from, from + pageSize);
+  const pageRows = sorted.slice(from, from + pageSize);
   useEffect(() => { setPage(1); }, [q, status, vtype, pageSize]);
 
   // rollups
@@ -123,20 +145,21 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
           <table className="w-full min-w-[920px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 font-medium">Invoice</th>
-                <th className="px-3 py-2 font-medium">Order</th>
-                <th className="px-3 py-2 font-medium">Vendor</th>
-                <th className="px-3 py-2 font-medium">Due</th>
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="px-3 py-2 text-right font-medium">Paid</th>
-                <th className="px-3 py-2 text-right font-medium">Balance</th>
-                <th className="px-3 py-2 font-medium">Status</th>
+                <SortableTh label="Invoice" k="id" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Order" k="order" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Vendor" k="vendor" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Issued" k="issued" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Due" k="due" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Total" k="total" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Paid" k="paid" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Balance" k="balance" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Status" k="status" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">{rows.length === 0 ? "No invoices yet — add one with “New invoice”." : "No invoices match your filters."}</td></tr>
+                <tr><td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">{rows.length === 0 ? "No invoices yet — add one with “New invoice”." : "No invoices match your filters."}</td></tr>
               ) : pageRows.map((i) => {
                 const bal = invoiceBalance(i); const st = invoiceStatus(i); const a = aging(i);
                 return (
@@ -144,6 +167,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
                     <td className="px-3 py-2.5"><Link href={`/invoices/${i.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-bold hover:text-primary" title="Open full invoice">{i.id}</Link><div className="text-[11px] text-muted-foreground">{i.vendor_type}</div></td>
                     <td className="px-3 py-2.5">{i.order_id ? <Link href={`/orders/${i.order_id}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary"><div className="font-mono text-[11px] text-muted-foreground">{i.order_id}</div><div className="max-w-[200px] truncate text-[12px]">{i.orderTitle}</div></Link> : <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-3 py-2.5 font-medium">{i.vendor}</td>
+                    <td className="px-3 py-2.5 font-mono text-[12px] text-muted-foreground">{fmtDue(i.issued)}</td>
                     <td className="px-3 py-2.5"><div className="font-mono text-[12px]">{fmtDue(i.due)}</div>{a.label !== "Upcoming" && a.label !== "Settled" && <Badge tone={a.tone}>{a.label === "Overdue" ? `${Math.abs(a.days)}d overdue` : `in ${a.days}d`}</Badge>}{a.label === "Settled" && <Badge tone="success">settled</Badge>}</td>
                     <td className="tabular px-3 py-2.5 text-right font-mono">{money(i.total)}</td>
                     <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{(i.paid ?? 0) > 0 ? money(i.paid) : "—"}</td>
