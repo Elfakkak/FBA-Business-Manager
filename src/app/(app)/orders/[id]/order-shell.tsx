@@ -276,10 +276,14 @@ function invTermCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayT
 function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order: OrderRow; invoices: InvRow[]; vendors: VendorOpt[]; lines: OrderLine[]; chargeTypes: ChargeTypeOpt[] }) {
   const orderLinesLite = lines.map((l) => ({ id: l.id, sku: l.sku, product_name: l.product_name, qty: l.qty, unit_cost: l.unit_cost }));
   const router = useRouter();
-  const [peek, setPeek] = useState<InvRow | null>(null);
+  // Track the open invoice by ID and derive the LIVE row from props, so edits
+  // (charges, payment terms…) reflect immediately after router.refresh().
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [payFor, setPayFor] = useState<InvRow | null>(null);
   const [newOpen, setNewOpen] = useState(false);
-  const [editing, setEditing] = useState<InvRow | null>(null);
+  const peek = peekId ? invoices.find((x) => x.id === peekId) ?? null : null;
+  const editing = editingId ? invoices.find((x) => x.id === editingId) ?? null : null;
   const now = Date.now();
 
   const total = invoices.reduce((s, i) => s + (i.total ?? 0), 0);
@@ -338,7 +342,7 @@ function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order
             <Card key={inv.id} className="flex flex-col p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <button onClick={() => setPeek(inv)} className="font-mono text-[13px] font-bold hover:text-primary">{inv.id}</button>
+                  <button onClick={() => setPeekId(inv.id)} className="font-mono text-[13px] font-bold hover:text-primary">{inv.id}</button>
                   <div className="mt-0.5 truncate text-[12px] text-muted-foreground">{inv.vendor} · {inv.vendor_type} · {VENDOR_KIND[inv.vendor_type] ?? "—"}</div>
                 </div>
                 <Badge tone={INVOICE_STATUS_TONE[st]}>{st}</Badge>
@@ -354,7 +358,7 @@ function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order
               <div className="mt-3 flex items-center justify-between border-t pt-2.5">
                 {pm > 0 ? <span className="inline-flex items-center gap-1 text-[12px] text-warning"><AlertCircle className="h-3.5 w-3.5" /> {pm} proof missing</span>
                   : a.label !== "Settled" && inv.due ? <span className="text-[12px] text-muted-foreground">Due {fmtDue(inv.due)}</span> : <span className="text-[12px] text-muted-foreground">Settled</span>}
-                <button onClick={() => setPeek(inv)} className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">Quick view <ArrowRight className="h-3.5 w-3.5" /></button>
+                <button onClick={() => setPeekId(inv.id)} className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">Quick view <ArrowRight className="h-3.5 w-3.5" /></button>
               </div>
             </Card>
           );
@@ -371,16 +375,16 @@ function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order
       <InvoiceQuickDrawer
         open={!!peek}
         invoice={peek}
-        onClose={() => setPeek(null)}
+        onClose={() => setPeekId(null)}
         onRecord={() => peek && setPayFor(peek)}
-        onEdit={() => { if (peek) setEditing(peek); }}
-        onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }}
+        onEdit={() => { if (peek) setEditingId(peek.id); }}
+        onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeekId(null); router.refresh(); }}
         orderLines={orderLinesLite}
         chargeTypes={chargeTypes}
       />
       {payFor && <RecordPaymentModal invoice={payFor} invoices={invoices} onClose={() => setPayFor(null)} />}
       {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
-      {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
+      {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setEditingId(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
     </div>
   );
 }
