@@ -258,10 +258,11 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
                   <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
                 </Link>
               ) : (
-                <div className="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/40 px-3 py-2.5">
+                <Link href={`/fba-shipments/${peek.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/40 px-3 py-2.5 hover:border-primary/40">
                   <PackageCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">Not linked to an order</div><div className="text-[11px] text-muted-foreground">Direct from Seller Central — order linking is coming.</div></div>
-                </div>
+                  <div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">Not linked to an order</div><div className="text-[11px] text-muted-foreground">Direct from Seller Central — link it to the freight shipment &amp; order.</div></div>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary">Link <ArrowUpRight className="h-3.5 w-3.5" /></span>
+                </Link>
               )}
 
               {/* Receiving · Amazon leg */}
