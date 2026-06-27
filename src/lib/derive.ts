@@ -515,6 +515,13 @@ export function estFbaFee(weightLb: number) {
   return 5.4 + (w - 2) * 0.4;
 }
 
+// Monthly FBA storage estimate from a unit's dimensions (standard-size 2026 ≈ $0.87/cu ft).
+export function estStorage(dimCm: { l?: number | null; w?: number | null; h?: number | null } | null | undefined): number {
+  if (!dimCm || !dimCm.l || !dimCm.w || !dimCm.h) return 0;
+  const cuft = (dimCm.l / 2.54) * (dimCm.w / 2.54) * (dimCm.h / 2.54) / 1728;
+  return Math.round(cuft * 0.87 * 100) / 100;
+}
+
 export function familyWeightLb(p: Product) {
   if (p.weight_lbs) return p.weight_lbs;
   if (p.weight_kg) return Math.round(p.weight_kg * 2.205 * 100) / 100;

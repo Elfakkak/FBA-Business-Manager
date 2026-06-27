@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, SourceTag } from "@/components/ui/primitives";
 import {
-  variantEco, invStats, familyWeightLb, marginTone, INV_HEALTH_TONE,
+  variantEco, invStats, familyWeightLb, estStorage, marginTone, INV_HEALTH_TONE,
   money, num, type Variant, type Product,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -17,22 +17,39 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
   const sku = decodeURIComponent(rawSku);
   const supabase = await createClient();
   const [
-    { data: product }, { data: variantData }, { data: lineRows }, { data: vchRows }, { data: lvchRows },
+    { data: product }, { data: variantData }, { data: lineRows }, { data: vchRows }, { data: lvchRows }, { data: inbRows },
   ] = await Promise.all([
     supabase.from("products").select("*").eq("id", id).maybeSingle(),
     supabase.from("product_variants").select("*").eq("family_id", id).eq("sku", sku).maybeSingle(),
     supabase.from("order_lines").select("order_id, qty, unit_cost, orders(title, placed_on)").eq("family_id", id).eq("sku", sku),
     supabase.from("variant_cost_history").select("unit_cost, recorded_at, order_id").eq("family_id", id).eq("sku", sku).eq("kind", "product").order("recorded_at", { ascending: true }),
     supabase.from("variant_cost_history").select("unit_cost, recorded_at, order_id").eq("family_id", id).eq("sku", sku).eq("kind", "landed").order("recorded_at", { ascending: true }),
+    supabase.from("fba_inbound_items").select("received, fba_inbounds(order_id, fc, synced)").eq("sku", sku),
   ]);
   if (!product || !variantData) notFound();
   const p = product as Product;
   const v = variantData as Variant;
   const weightLb = familyWeightLb(p);
-  const eco = variantEco(v, weightLb);
+  const dimCm = (p.dim_cm ?? null) as { l?: number; w?: number; h?: number } | null;
+  const storage = estStorage(dimCm);
+  const ecoBase = variantEco(v, weightLb);
+  // FBA storage isn't in the shared variantEco — fold it in here for the full page.
+  const eco = { ...ecoBase, storage, net: Math.round((ecoBase.net - storage) * 100) / 100 };
+  eco.marginPct = eco.price > 0 ? Math.round((eco.net / eco.price) * 100) : null;
   const inv = invStats(v, p.lead_time_days ?? 0);
   const linked = !!v.asin && v.asin !== "Pending sync";
   const mtone = marginTone(eco.marginPct);
+
+  // Real per-order receipts + primary FC, from the FBA inbound feed for this SKU.
+  type InbItem = { received: number; fba_inbounds: { order_id: string | null; fc: string; synced: string | null } | null };
+  const receivedByOrder = new Map<string, number>();
+  const fcUnits = new Map<string, number>();
+  for (const it of (inbRows ?? []) as unknown as InbItem[]) {
+    const inb = it.fba_inbounds; if (!inb) continue;
+    if (inb.order_id) receivedByOrder.set(inb.order_id, (receivedByOrder.get(inb.order_id) ?? 0) + (it.received ?? 0));
+    fcUnits.set(inb.fc, (fcUnits.get(inb.fc) ?? 0) + (it.received ?? 0));
+  }
+  const primaryFc = [...fcUnits.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
   // Per-order maps for billed/u (from invoices) and landed/u (from closeout).
   const billedByOrder = new Map<string, number>();
@@ -50,11 +67,23 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
     cur.units += l.qty ?? 0;
     byOrder.set(l.order_id, cur);
   }
-  const runs = [...byOrder.values()].map((r) => ({ ...r, landed: landedByOrder.get(r.orderId) ?? null }))
+  const runs0 = [...byOrder.values()].map((r) => ({ ...r, landed: landedByOrder.get(r.orderId) ?? null, received: receivedByOrder.get(r.orderId) ?? null }))
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  // FIFO sell-through: the current on-hand sits in the newest runs; everything
+  // received before that has sold through. Gives a real per-run sell-through.
+  let remainingOnHand = inv.onHand;
+  const runs = runs0.map((r) => {
+    const recv = r.received ?? 0;
+    const unsold = Math.min(recv, remainingOnHand);
+    remainingOnHand -= unsold;
+    return { ...r, sellThrough: recv > 0 ? Math.round(((recv - unsold) / recv) * 100) : null };
+  });
   const totalUnits = runs.reduce((s, r) => s + r.units, 0);
+  const totalReceived = runs.reduce((s, r) => s + (r.received ?? 0), 0);
   const totalSpend = runs.reduce((s, r) => s + r.units * (r.billed ?? 0), 0);
   const avgBilled = totalUnits > 0 ? totalSpend / totalUnits : null;
+  const soldTotal = Math.max(0, totalReceived - Math.min(inv.onHand, totalReceived));
+  const avgSell = totalReceived > 0 ? Math.round((soldTotal / totalReceived) * 100) : null;
 
   const fmtDate = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—";
   const variantLabel = [v.name, v.pack].filter(Boolean).join(" · ") || v.pack || "";
@@ -116,7 +145,7 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
             {linked ? (
               <>
                 <div className="flex flex-wrap gap-4">
-                  {([["On hand", num(inv.onHand)], ["Available", num(inv.available)], ["Reserved", num(inv.reserved)], ["Inbound", num(inv.inbound)], ["Reorder point", num(inv.reorderPoint)], ["Primary FC", "—"]] as [string, string][]).map(([l, val]) => (
+                  {([["On hand", num(inv.onHand)], ["Available", num(inv.available)], ["Reserved", num(inv.reserved)], ["Inbound", num(inv.inbound)], ["Reorder point", num(inv.reorderPoint)], ["Primary FC", primaryFc]] as [string, string][]).map(([l, val]) => (
                     <div key={l} className="min-w-0 flex-[1_1_88px]">
                       <div className="vy-kicker mb-0.5">{l}</div>
                       <div className="font-mono text-[14.5px] font-bold">{val}</div>
@@ -142,9 +171,9 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
             <MoneyRow label="COGS (landed unit cost)" value={eco.cogs} minus />
             <MoneyRow label="Referral fee (15%)" value={eco.referral} minus />
             <MoneyRow label="FBA fulfilment fee" value={eco.fba} minus />
-            <MoneyRow label="Storage / mo" value={0} minus />
+            <MoneyRow label="Storage / mo" value={storage} minus />
             <MoneyRow label="Net per unit" value={eco.net} strong tone={mtone} />
-            <p className="mt-2.5 text-[10.5px] leading-relaxed text-muted-foreground">FBA fees are 2026 estimates from small-standard tier / weight / category. COGS = the SKU&apos;s last landed unit cost.</p>
+            <p className="mt-2.5 text-[10.5px] leading-relaxed text-muted-foreground">FBA fees + storage are 2026 estimates from weight / size / dimensions. COGS = the SKU&apos;s last landed unit cost.</p>
           </Card>
         </div>
 
@@ -160,32 +189,42 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
           ) : (
             <>
               <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[420px] text-[12.5px]">
+                <table className="w-full min-w-[520px] text-[12.5px]">
                   <thead>
                     <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
                       <th className="px-3 py-2 text-left font-medium">Run</th>
                       <th className="px-3 py-2 text-right font-medium">Units</th>
                       <th className="px-3 py-2 text-right font-medium">Billed/u</th>
                       <th className="px-3 py-2 text-right font-medium">Landed/u</th>
+                      <th className="px-3 py-2 text-right font-medium">Received</th>
+                      <th className="px-3 py-2 text-right font-medium">Sold</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {runs.map((r, i) => (
-                      <tr key={r.orderId} className="hover:bg-accent/40">
-                        <td className="px-3 py-2">
-                          <div className="font-semibold">{fmtDate(r.date)}{i === 0 && <Badge tone="info" className="ml-1.5 align-[1px] text-[9px]">latest</Badge>}</div>
-                          <Link href={`/orders/${r.orderId}`} className="font-mono text-[10.5px] text-muted-foreground hover:text-primary">{r.orderId}</Link>
-                        </td>
-                        <td className="tabular px-3 py-2 text-right font-mono">{num(r.units)}</td>
-                        <td className="tabular px-3 py-2 text-right font-mono">{r.billed != null ? money(r.billed) : "—"}</td>
-                        <td className="tabular px-3 py-2 text-right font-mono">{r.landed != null ? money(r.landed) : "—"}</td>
-                      </tr>
-                    ))}
+                    {runs.map((r, i) => {
+                      const recv = r.received ?? 0;
+                      const short = recv > 0 && recv < r.units;
+                      return (
+                        <tr key={r.orderId} className="hover:bg-accent/40">
+                          <td className="px-3 py-2">
+                            <div className="font-semibold">{fmtDate(r.date)}{i === 0 && <Badge tone="info" className="ml-1.5 align-[1px] text-[9px]">latest</Badge>}</div>
+                            <Link href={`/orders/${r.orderId}`} className="font-mono text-[10.5px] text-muted-foreground hover:text-primary">{r.orderId}</Link>
+                          </td>
+                          <td className="tabular px-3 py-2 text-right font-mono">{num(r.units)}</td>
+                          <td className="tabular px-3 py-2 text-right font-mono">{r.billed != null ? money(r.billed) : "—"}</td>
+                          <td className="tabular px-3 py-2 text-right font-mono">{r.landed != null ? money(r.landed) : "—"}</td>
+                          <td className="tabular px-3 py-2 text-right font-mono">{r.received != null ? <span className="inline-flex items-center gap-1.5">{num(recv)}{short && <Badge tone="warning" className="text-[9px]">{num(r.units - recv)} short</Badge>}</span> : "—"}</td>
+                          <td className="px-3 py-2 text-right">{r.sellThrough != null ? <Badge tone={r.sellThrough >= 85 ? "success" : r.sellThrough >= 60 ? "warning" : "muted"}>{r.sellThrough}%</Badge> : "—"}</td>
+                        </tr>
+                      );
+                    })}
                     <tr className="border-t-2 bg-muted/30 font-bold">
                       <td className="px-3 py-2">All runs</td>
                       <td className="tabular px-3 py-2 text-right font-mono">{num(totalUnits)}</td>
                       <td className="tabular px-3 py-2 text-right font-mono">{avgBilled != null ? money(avgBilled) : "—"}</td>
                       <td className="tabular px-3 py-2 text-right font-mono">{avgLanded != null ? money(avgLanded) : "—"}</td>
+                      <td className="tabular px-3 py-2 text-right font-mono">{num(totalReceived)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{avgSell != null ? `${avgSell}%` : "—"}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -193,7 +232,7 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
               <div className="mt-3.5 flex flex-wrap gap-4 border-t pt-3.5">
                 <Foot label="Total spend" value={money(totalSpend)} />
                 <Foot label="Lifetime units" value={num(totalUnits)} />
-                <Foot label="Runs" value={num(runs.length)} />
+                <Foot label="Avg sell-through" value={avgSell != null ? `${avgSell}%` : "—"} />
               </div>
             </>
           )}
