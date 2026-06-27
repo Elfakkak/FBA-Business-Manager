@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, PageHead } from "@/components/ui/primitives";
 import { ActivityFeed } from "@/components/ui/activity-feed";
-import { deriveOrderActivity, type ActEvent, type ActCat } from "@/lib/activity";
+import { deriveOrderActivity, atDesc, type ActEvent, type ActCat } from "@/lib/activity";
 
 const CATS: ActCat[] = ["Pay", "Inv", "Insp", "Ship", "Prod", "Doc"];
 
@@ -49,7 +49,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       shipments: shipByOrder.get(o.id) ?? [],
     }));
   }
-  events.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  events.sort(atDesc);
   const initialCat = (cat && (CATS as string[]).includes(cat) ? cat : "All") as "All" | ActCat;
 
   return (

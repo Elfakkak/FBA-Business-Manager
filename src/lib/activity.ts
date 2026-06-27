@@ -34,7 +34,7 @@ export function relTime(iso: string, nowMs: number): string {
   const w = Math.round(d / 7); if (w < 5) return `${w}w ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
-export function dayLabel(iso: string, nowMs: number): string {
+function dayLabel(iso: string, nowMs: number): string {
   const d = new Date(iso); const now = new Date(nowMs);
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((startOf(now) - startOf(d)) / 86400000);
@@ -102,5 +102,10 @@ export function deriveOrderActivity(orderId: string, data: { placedOn: string | 
     push("Ship", `Shipment ${s.id} — ${s.stage}`, when, { detail: [s.mode, route, s.eta ? `ETA ${fmtShort(s.eta)}` : null].filter(Boolean).join(" · ") || undefined, actor: s.forwarder || undefined });
   }
 
-  return ev.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  return ev.sort(atDesc);
+}
+
+// Newest-first by actual instant (timestamps mix tz-naive + offset forms — compare by epoch, not lexically).
+export function atDesc(a: ActEvent, b: ActEvent): number {
+  return new Date(b.at).getTime() - new Date(a.at).getTime();
 }

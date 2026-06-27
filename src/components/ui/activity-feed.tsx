@@ -50,7 +50,7 @@ export function ActivityFeed({ events, nowMs, variant = "drawer", showOrder = fa
         {long && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Select value={orderId} onChange={setOrderId} className="w-44" searchable options={[{ value: "all", label: "All orders" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search activity…" className="w-48 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <input name="activity-search" aria-label="Search activity" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search activity…" className="w-48 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
             <button type="button" onClick={exportCsv} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export</button>
           </div>
         )}
@@ -77,7 +77,7 @@ export function ActivityFeed({ events, nowMs, variant = "drawer", showOrder = fa
 
 function Chip({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
   return (
-    <button type="button" onClick={onClick} className={cn("vy-chip inline-flex items-center gap-1.5", active && "is-active")}>
+    <button type="button" onClick={onClick} aria-pressed={active} className={cn("vy-chip inline-flex items-center gap-1.5", active && "border-primary bg-primary text-primary-foreground")}>
       {label}{count > 0 && <span className={cn("text-[10px]", active ? "opacity-80" : "text-muted-foreground")}>{count}</span>}
     </button>
   );
@@ -93,7 +93,7 @@ function Row({ e, nowMs, long, showOrder }: { e: ActEvent; nowMs: number; long: 
         <div className="text-[13px] font-semibold leading-snug">{e.title}</div>
         {long && e.detail && <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{e.detail}</div>}
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
-          <span className="rounded bg-muted px-1 py-px font-mono uppercase tracking-wide">{e.cat}</span>
+          <span className="rounded px-1.5 py-px text-[10px] font-medium" style={{ background: `hsl(var(--${tone}) / 0.14)`, color: `hsl(var(--${tone}))` }}>{ACT_LABEL_LONG[e.cat]}</span>
           {showOrder && <Link href={`/orders/${e.orderId}`} className="font-mono hover:text-primary">{e.orderId}</Link>}
           {long && e.actor && <span className="inline-flex items-center gap-1"><span className="grid h-4 w-4 place-items-center rounded-full bg-primary/12 text-[8px] font-bold text-primary">{initials(e.actor)}</span>{e.actor}</span>}
           {!long && e.actor && <span>· {e.actor}</span>}
