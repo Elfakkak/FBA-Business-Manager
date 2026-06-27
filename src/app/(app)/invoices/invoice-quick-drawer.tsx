@@ -37,6 +37,7 @@ export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, o
     <Drawer
       open={open && !!i}
       onClose={onClose}
+      dismissable={false}
       width={560}
       title={<span className="font-mono text-[15px] font-bold">{i?.id}</span>}
       subtitle={i ? `${i.vendor} · ${i.vendor_type}` : undefined}

@@ -7,10 +7,10 @@ import { X } from "lucide-react";
 // Right slide-in panel (matches the prototype's quick-view drawers).
 // `width` widens the panel (the richer invoice quick-view needs more room);
 // `subtitle` renders under the title; `footer` pins an action bar at the bottom.
-export function Drawer({ open, onClose, title, subtitle, footer, width = 420, children }: {
+export function Drawer({ open, onClose, title, subtitle, footer, width = 420, dismissable = true, children }: {
   open: boolean; onClose: () => void;
   title?: React.ReactNode; subtitle?: React.ReactNode; footer?: React.ReactNode;
-  width?: number; children: React.ReactNode;
+  width?: number; dismissable?: boolean; children: React.ReactNode;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -27,7 +27,8 @@ export function Drawer({ open, onClose, title, subtitle, footer, width = 420, ch
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-100" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* Backdrop — click-to-close only when dismissable (so unsaved edits aren't lost). */}
+      <div className="absolute inset-0 bg-black/40" onClick={dismissable ? onClose : undefined} />
       <div
         className="absolute right-0 top-0 flex h-full max-w-[96vw] flex-col border-l shadow-xl"
         style={{ width, background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)" }}
