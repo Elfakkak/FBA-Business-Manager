@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Badge, SourceTag, TableCard, CostHistoryList } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { variantEco, marginTone, VARIANT_STATUS_TONE, INV_HEALTH_TONE, money, num, type InvHealth } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Package, ArrowUpRight, Check, Layers, History, ShoppingCart, ArrowRight } from "lucide-react";
+import { Package, ArrowUpRight, Check, Layers, History, ShoppingCart, Boxes, Trash2, AlertCircle } from "lucide-react";
 import { AddVariantButton, EditVariantButton } from "./variant-actions";
+import { deleteVariant } from "../actions";
 
 export type VRow = {
   id: string; sku: string; name: string; pack: string; fnsku: string | null; asin: string | null;
@@ -23,6 +25,11 @@ export function VariantsTable({ familyId, familyName, familyImage, weightLb, var
   costHistory: CostH[]; landedHistory: LandedH[]; skuOrders: Record<string, SkuOrder[]>;
 }) {
   const [peek, setPeek] = useState<VRow | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delPending, startDel] = useTransition();
+  const router = useRouter();
+  const closeDrawer = () => { setPeek(null); setConfirmDel(false); };
+  const doDelete = () => { if (!peek) return; const id = peek.id; startDel(async () => { await deleteVariant(id, familyId); router.refresh(); closeDrawer(); }); };
   const eco = peek ? variantEco(peek as never, weightLb) : null;
   const linked = !!peek?.asin && peek.asin !== "Pending sync";
   const skuCost = peek ? costHistory.filter((h) => h.sku === peek.sku) : [];
@@ -98,7 +105,28 @@ export function VariantsTable({ familyId, familyName, familyImage, weightLb, var
         </table>
       </TableCard>
 
-      <Drawer open={!!peek} onClose={() => setPeek(null)} width={520} title={peek?.sku}>
+      <Drawer
+        open={!!peek}
+        onClose={closeDrawer}
+        width={520}
+        title={peek?.sku}
+        footer={peek && (confirmDel ? (
+          <div className="flex flex-wrap items-center gap-3" style={{ background: "hsl(var(--danger) / 0.06)", margin: "-12px -20px", padding: "12px 20px" }}>
+            <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
+            <span className="min-w-[160px] flex-1 text-[12.5px] leading-snug">Delete <strong className="font-mono">{peek.sku}</strong>? Removes it from the product, Inventory &amp; the Add-SKUs picker. This can&apos;t be undone.</span>
+            <button onClick={() => setConfirmDel(false)} className="vy-btn vy-btn--ghost vy-btn--sm">Cancel</button>
+            <button onClick={doDelete} disabled={delPending} className="vy-btn vy-btn--sm inline-flex items-center gap-1.5 text-white" style={{ background: "hsl(var(--danger))" }}><Trash2 className="h-3.5 w-3.5" /> {delPending ? "Deleting…" : "Delete variant"}</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setConfirmDel(true)} className="inline-flex items-center gap-1.5 px-1 text-[12px] text-muted-foreground hover:text-danger"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+            <div className="flex-1" />
+            <Link href={`/catalog/${familyId}/${encodeURIComponent(peek.sku)}`} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><ArrowUpRight className="h-3.5 w-3.5" /> Full page</Link>
+            <Link href={`/inventory?q=${encodeURIComponent(peek.sku)}`} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5" /> View in Inventory</Link>
+            <button onClick={closeDrawer} className="vy-btn vy-btn--primary vy-btn--sm">Close</button>
+          </div>
+        ))}
+      >
         {peek && eco && (
           <div className="space-y-4">
             {/* header — image, name/pack, parent, linked status */}
@@ -174,8 +202,7 @@ export function VariantsTable({ familyId, familyName, familyImage, weightLb, var
 
             <div className="flex flex-wrap gap-2">
               <EditVariantButton variantId={peek.id} familyId={familyId} sku={peek.sku} cost={peek.last_cost_usd} salePrice={peek.sale_price} status={peek.status} reorderPoint={peek.reorder_point} products={products} />
-              <Link href={`/inventory?q=${encodeURIComponent(peek.sku)}`} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5">View in Inventory <ArrowUpRight className="h-4 w-4" /></Link>
-              <Link href={`/catalog/${familyId}`} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5">Open product <ArrowRight className="h-4 w-4" /></Link>
+              <Link href={`/catalog/${familyId}`} className="vy-btn vy-btn--ghost inline-flex items-center gap-1.5">Open product <ArrowUpRight className="h-4 w-4" /></Link>
             </div>
           </div>
         )}

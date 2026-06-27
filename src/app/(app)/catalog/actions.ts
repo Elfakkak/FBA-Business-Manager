@@ -124,6 +124,16 @@ export async function deleteProduct(id: string): Promise<Result> {
   return { ok: true };
 }
 
+export async function deleteVariant(id: string, familyId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("product_variants").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/catalog/${familyId}`);
+  revalidatePath("/catalog");
+  revalidatePath("/inventory");
+  return { ok: true };
+}
+
 export async function setProductFavorite(id: string, favorite: boolean): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("products").update({ favorite }).eq("id", id);
