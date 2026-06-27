@@ -12,12 +12,13 @@ import { cn } from "@/lib/utils";
 import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived, syncShipmentTracking, advanceShipmentStage } from "./actions";
 import { useNewParam } from "@/lib/use-new-param";
 import { intgAgo } from "@/lib/integrations";
+import { TRACK17_CARRIERS } from "@/lib/track17";
 import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, ArrowRight, RefreshCw, Pencil, Trash2, Link as LinkIcon, Check, Archive } from "lucide-react";
 
 type FbaLink = { id: string; fc: string; expected: number; received: number; amazonStatus: string; skuCount: number };
 export type ShipRow = ShipmentRow & {
   fba: FbaLink[];
-  tracking: { trackingNo: string | null; bookingRef: string | null; carrier: string | null; scac: string | null; lastSync: string | null } | null;
+  tracking: { trackingNo: string | null; bookingRef: string | null; carrier: string | null; scac: string | null; lastSync: string | null; carrierCode: number | null } | null;
 };
 export type OrderOpt = { id: string; title: string; supplier: string | null };
 
@@ -378,6 +379,7 @@ export function TrackingModal({ s, onClose }: { s: ShipRow; onClose: () => void 
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [carrierCode, setCarrierCode] = useState(s.tracking?.carrierCode ? String(s.tracking.carrierCode) : "");
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -387,13 +389,17 @@ export function TrackingModal({ s, onClose }: { s: ShipRow; onClose: () => void 
   return (
     <Modal open onClose={onClose} title={`Tracking — ${s.id}`}>
       <form onSubmit={submit} className="space-y-4">
-        <p className="text-[12px] text-muted-foreground">Manual forwarder-leg tracking. (17TRACK auto-sync isn&apos;t connected.)</p>
+        <p className="text-[12px] text-muted-foreground">Forwarder-leg tracking — <span className="font-medium text-foreground">Sync 17TRACK</span> pulls live checkpoints. Pin the carrier below if an ocean B/L number won&apos;t auto-detect.</p>
         <Field label="Tracking number"><input name="tracking_no" defaultValue={s.tracking?.trackingNo ?? ""} autoFocus className={inputCls} /></Field>
+        <Field label="17TRACK carrier">
+          <Select name="carrier_code" value={carrierCode} onChange={setCarrierCode} options={[{ value: "", label: "Auto-detect" }, ...TRACK17_CARRIERS.map((c) => ({ value: String(c.code), label: c.name }))]} />
+          <p className="mt-1 text-[11px] text-muted-foreground">For auto-sync — leave on Auto-detect for couriers (DHL/UPS/FedEx); pin an ocean line for B/L numbers that won&apos;t detect.</p>
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Booking ref"><input name="booking_ref" defaultValue={s.tracking?.bookingRef ?? ""} className={inputCls} /></Field>
           <Field label="SCAC"><input name="scac" defaultValue={s.tracking?.scac ?? ""} className={inputCls} /></Field>
         </div>
-        <Field label="Carrier"><input name="carrier" defaultValue={s.tracking?.carrier ?? ""} className={inputCls} placeholder="Maersk / DHL …" /></Field>
+        <Field label="Carrier name"><input name="carrier" defaultValue={s.tracking?.carrier ?? ""} className={inputCls} placeholder="Maersk / DHL …" /></Field>
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
         <div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save tracking"}</PrimaryButton></div>
       </form>

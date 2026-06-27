@@ -23,7 +23,7 @@ export default async function ShipmentsPage() {
     return {
       ...s,
       fba: fba.map((f) => ({ id: f.id, fc: f.fc, expected: f.expected, received: f.received, amazonStatus: f.amazon_status, skuCount: f.sku_count })),
-      tracking: t ? { trackingNo: t.tracking_no, bookingRef: t.booking_ref, carrier: t.carrier, scac: t.scac, lastSync: t.last_sync } : null,
+      tracking: t ? { trackingNo: t.tracking_no, bookingRef: t.booking_ref, carrier: t.carrier, scac: t.scac, lastSync: t.last_sync, carrierCode: t.carrier_code } : null,
     };
   });
 

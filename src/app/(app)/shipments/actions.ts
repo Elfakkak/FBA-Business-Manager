@@ -100,8 +100,9 @@ export async function advanceShipmentStage(id: string): Promise<Result> {
 // Pull live milestones from 17TRACK for this shipment's tracking number.
 export async function syncShipmentTracking(id: string): Promise<Result> {
   const supabase = await createClient();
-  const { data: trk } = await supabase.from("shipment_tracking").select("tracking_no").eq("shipment_id", id).maybeSingle();
+  const { data: trk } = await supabase.from("shipment_tracking").select("tracking_no, carrier_code").eq("shipment_id", id).maybeSingle();
   if (!trk?.tracking_no) return { ok: false, error: "Add a tracking number first." };
+  const carrier = trk.carrier_code ?? undefined;
   const { data: intg } = await supabase.from("integrations").select("status, oauth_token").eq("id", "track17").maybeSingle();
   // Key from the Integrations connect flow (DB) OR a TRACK17_API_KEY env var fallback.
   const dbKey = intg?.status === "connected" ? (intg?.oauth_token as Record<string, string> | null)?.api_key : undefined;
@@ -109,8 +110,8 @@ export async function syncShipmentTracking(id: string): Promise<Result> {
   if (!apiKey) return { ok: false, error: "Add a 17TRACK API key — connect it in Integrations or set TRACK17_API_KEY." };
 
   try {
-    await track17Register(apiKey, trk.tracking_no).catch(() => {}); // idempotent
-    const res = await track17Get(apiKey, trk.tracking_no);
+    await track17Register(apiKey, trk.tracking_no, carrier).catch(() => {}); // idempotent
+    const res = await track17Get(apiKey, trk.tracking_no, carrier);
     if (!res) return { ok: false, error: "17TRACK has no data for this number yet." };
     await supabase.from("shipment_tracking").update({
       status: res.status, sub_status: res.subStatus,
@@ -139,12 +140,14 @@ export type { Track17Event };
 // Manual tracking (17TRACK not wired) — keep the forwarder-leg IDs on the shipment.
 export async function updateTracking(shipmentId: string, form: FormData): Promise<Result> {
   const supabase = await createClient();
+  const ccRaw = parseInt(String(form.get("carrier_code") ?? ""));
   const { error } = await supabase.from("shipment_tracking").upsert({
     shipment_id: shipmentId,
     tracking_no: txt(form.get("tracking_no")),
     booking_ref: txt(form.get("booking_ref")),
     carrier: txt(form.get("carrier")),
     scac: txt(form.get("scac")),
+    carrier_code: Number.isFinite(ccRaw) && ccRaw > 0 ? ccRaw : null,
   }, { onConflict: "shipment_id" });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/shipments");

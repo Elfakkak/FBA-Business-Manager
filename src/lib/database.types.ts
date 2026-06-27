@@ -1756,6 +1756,7 @@ export type Database = {
         Row: {
           booking_ref: string | null
           carrier: string | null
+          carrier_code: number | null
           checkpoints: Json
           created_at: string
           eta_override: string | null
@@ -1771,6 +1772,7 @@ export type Database = {
         Insert: {
           booking_ref?: string | null
           carrier?: string | null
+          carrier_code?: number | null
           checkpoints?: Json
           created_at?: string
           eta_override?: string | null
@@ -1786,6 +1788,7 @@ export type Database = {
         Update: {
           booking_ref?: string | null
           carrier?: string | null
+          carrier_code?: number | null
           checkpoints?: Json
           created_at?: string
           eta_override?: string | null

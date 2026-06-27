@@ -2,6 +2,21 @@
 // Auth: header `17token: <api_key>`. All endpoints are POST with a JSON array body.
 const BASE = "https://api.17track.net/track/v2.4";
 
+// 17TRACK numeric carrier codes — pin the carrier so ocean B/L numbers that fail
+// auto-detect still register (codes verified against 17TRACK's carrier list).
+export const TRACK17_CARRIERS: { code: number; name: string }[] = [
+  { code: 100768, name: "Maersk" },
+  { code: 101079, name: "MSC" },
+  { code: 100755, name: "CMA CGM" },
+  { code: 100753, name: "ONE (Ocean Network Express)" },
+  { code: 101436, name: "Hapag-Lloyd" },
+  { code: 101161, name: "Matson" },
+  { code: 100001, name: "DHL Express" },
+  { code: 100002, name: "UPS" },
+  { code: 100003, name: "FedEx" },
+  { code: 21051, name: "USPS" },
+];
+
 export type Track17Event = { time: string | null; description: string; location: string; stage: string | null };
 export type Track17Result = { status: string | null; subStatus: string | null; carrier: string | null; events: Track17Event[] };
 
