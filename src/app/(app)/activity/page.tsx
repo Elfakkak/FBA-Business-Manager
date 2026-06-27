@@ -9,12 +9,12 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const { cat } = await searchParams;
   const supabase = await createClient();
   const [{ data: orders }, { data: invoices }, { data: payments }, { data: lines }, { data: inspections }, { data: shipments }] = await Promise.all([
-    supabase.from("orders").select("id, placed_on, archived"),
+    supabase.from("orders").select("id, title, placed_on, archived"),
     supabase.from("invoices").select("id, vendor, total, issued, created_at, order_id"),
     supabase.from("invoice_payments").select("invoice_id, amount, payment_date, status, method"),
     supabase.from("invoice_lines").select("invoice_id"),
     supabase.from("order_inspections").select("*"),
-    supabase.from("shipments").select("id, stage, mode, origin, destination, eta, etd, order_id"),
+    supabase.from("shipments").select("id, stage, mode, origin, destination, eta, etd, forwarder, order_id"),
   ]);
 
   type Pay = { invoice_id: string; amount: number; payment_date: string | null; status: string; method: string | null };
@@ -33,13 +33,15 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const inspByOrder = new Map<string, Record<string, unknown>>();
   for (const insp of (inspections ?? []) as { order_id: string }[]) inspByOrder.set(insp.order_id, insp as unknown as Record<string, unknown>);
 
-  type Ship = { id: string; stage: string; mode: string; origin: string | null; destination: string | null; eta: string | null; etd: string | null; order_id: string | null };
+  type Ship = { id: string; stage: string; mode: string; origin: string | null; destination: string | null; eta: string | null; etd: string | null; forwarder: string | null; order_id: string | null };
   const shipByOrder = new Map<string, Ship[]>();
   for (const s of (shipments ?? []) as Ship[]) { if (!s.order_id) continue; const a = shipByOrder.get(s.order_id) ?? []; a.push(s); shipByOrder.set(s.order_id, a); }
 
   const events: ActEvent[] = [];
-  for (const o of (orders ?? []) as { id: string; placed_on: string | null; archived: boolean }[]) {
+  const orderOpts: { id: string; title: string }[] = [];
+  for (const o of (orders ?? []) as { id: string; title: string; placed_on: string | null; archived: boolean }[]) {
     if (o.archived) continue;
+    orderOpts.push({ id: o.id, title: o.title });
     events.push(...deriveOrderActivity(o.id, {
       placedOn: o.placed_on,
       invoices: invByOrder.get(o.id) ?? [],
@@ -58,7 +60,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
         sub="Every event across all orders — payments, invoices, inspection, shipping, production and documents — newest first. The per-order drawer shows just that order's slice."
       />
       <Card className="p-5">
-        <ActivityFeed events={events} nowMs={Date.now()} variant="page" showOrder initialCat={initialCat} />
+        <ActivityFeed events={events} nowMs={Date.now()} variant="page" showOrder initialCat={initialCat} orders={orderOpts} />
       </Card>
     </div>
   );

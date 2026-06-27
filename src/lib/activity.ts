@@ -58,7 +58,7 @@ export function groupByDay(events: ActEvent[], nowMs: number): { day: string; it
 // ---- derive an order's activity from its real records ----
 type Inv = { id: string; vendor: string; total: number; issued: string | null; created_at: string; payments: { amount: number; payment_date: string | null; status: string; method: string | null }[]; lines?: unknown[] };
 type Insp = { inspector: string | null; partner_name: string | null; aql: string | null; created_at: string; completed_date: string | null; result: string; defects_critical: number | null; defects_minor: number | null } | null;
-type Ship = { id: string; stage: string; mode: string; origin: string | null; destination: string | null; eta: string | null; etd?: string | null; created_at?: string | null };
+type Ship = { id: string; stage: string; mode: string; origin: string | null; destination: string | null; eta: string | null; etd?: string | null; created_at?: string | null; forwarder?: string | null };
 
 export function deriveOrderActivity(orderId: string, data: { placedOn: string | null; invoices: Inv[]; inspection: Insp; shipments: Ship[]; actor?: string }): ActEvent[] {
   const ev: ActEvent[] = [];
@@ -72,24 +72,26 @@ export function deriveOrderActivity(orderId: string, data: { placedOn: string | 
   for (const inv of data.invoices) {
     push("Inv", `${inv.id} logged at ${money(inv.total)}`, at(inv.issued, "09:00:00") ?? inv.created_at, {
       detail: `${inv.vendor}${inv.lines && inv.lines.length ? ` · ${inv.lines.length} line${inv.lines.length > 1 ? "s" : ""}` : ""}`,
+      actor: inv.vendor,
     });
     for (const p of inv.payments) {
       if (p.status === "Cleared") {
-        push("Pay", `Payment cleared · ${money(p.amount)}`, at(p.payment_date, "12:00:00") ?? inv.created_at, { detail: `${inv.id}${p.method ? ` · ${p.method}` : ""}`, tone: "success", icon: "check" });
+        push("Pay", `Payment cleared · ${money(p.amount)}`, at(p.payment_date, "12:00:00") ?? inv.created_at, { detail: `${inv.id}${p.method ? ` · ${p.method}` : ""}`, tone: "success", icon: "check", actor: inv.vendor });
       } else {
-        push("Pay", `Payment ${p.status.toLowerCase()}${p.payment_date ? ` for ${fmtShort(p.payment_date)}` : ""} · ${money(p.amount)}`, at(p.payment_date, "12:00:00") ?? inv.created_at, { detail: inv.id });
+        push("Pay", `Payment ${p.status.toLowerCase()}${p.payment_date ? ` for ${fmtShort(p.payment_date)}` : ""} · ${money(p.amount)}`, at(p.payment_date, "12:00:00") ?? inv.created_at, { detail: inv.id, actor: inv.vendor });
       }
     }
   }
 
   if (data.inspection) {
     const i = data.inspection;
-    push("Insp", `Inspection booked${i.inspector ? ` with ${i.inspector}` : ""}`, i.created_at, { detail: i.partner_name || i.aql || undefined });
+    push("Insp", `Inspection booked${i.inspector ? ` with ${i.inspector}` : ""}`, i.created_at, { detail: i.partner_name || i.aql || undefined, actor: i.inspector || i.partner_name || undefined });
     if (i.completed_date && i.result && i.result !== "pending") {
       push("Insp", `Inspection ${i.result}`, at(i.completed_date, "12:00:00"), {
         detail: `${i.defects_critical ?? 0} critical · ${i.defects_minor ?? 0} minor`,
         tone: i.result === "pass" ? "success" : i.result === "fail" ? "danger" : undefined,
         icon: i.result === "fail" ? "alert" : i.result === "pass" ? "check" : undefined,
+        actor: i.inspector || undefined,
       });
     }
   }
@@ -97,7 +99,7 @@ export function deriveOrderActivity(orderId: string, data: { placedOn: string | 
   for (const s of data.shipments) {
     const route = s.origin && s.destination ? `${s.origin} → ${s.destination}` : null;
     const when = at(s.etd, "10:00:00") ?? s.created_at ?? null;
-    push("Ship", `Shipment ${s.id} — ${s.stage}`, when, { detail: [s.mode, route, s.eta ? `ETA ${fmtShort(s.eta)}` : null].filter(Boolean).join(" · ") || undefined });
+    push("Ship", `Shipment ${s.id} — ${s.stage}`, when, { detail: [s.mode, route, s.eta ? `ETA ${fmtShort(s.eta)}` : null].filter(Boolean).join(" · ") || undefined, actor: s.forwarder || undefined });
   }
 
   return ev.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
