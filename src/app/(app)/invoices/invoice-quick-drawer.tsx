@@ -66,7 +66,7 @@ export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, o
           </div>
 
           {/* Payment terms (shared card) */}
-          <PaymentTermsCard invoiceId={i.id} vendor={i.vendor} total={i.total ?? 0} paid={i.paid ?? 0} cfg={termCfg(i)} />
+          <PaymentTermsCard vendor={i.vendor} total={i.total ?? 0} paid={i.paid ?? 0} cfg={termCfg(i)} />
 
           {/* Invoice file */}
           {i.document_url && (

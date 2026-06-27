@@ -366,12 +366,12 @@ function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices
         invoice={peek}
         onClose={() => setPeek(null)}
         onRecord={() => peek && setPayFor(peek)}
-        onEdit={() => { if (peek) { setEditing(peek); setPeek(null); } }}
+        onEdit={() => { if (peek) setEditing(peek); }}
         onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }}
       />
       {payFor && <RecordPaymentModal invoice={payFor} invoices={invoices} onClose={() => setPayFor(null)} />}
-      {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
-      {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
+      {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
+      {editing && <InvoiceModal title={`Edit ${editing.id}`} invoice={editing} orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setEditing(null)} onSubmit={(fd) => updateInvoice(editing.id, fd)} />}
     </div>
   );
 }
