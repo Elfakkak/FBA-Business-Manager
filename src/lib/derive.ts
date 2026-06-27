@@ -335,10 +335,10 @@ export type PayTermType = "TT" | "LC" | "OA" | "DP" | "DA";
 export type PayTermCfg = { type: PayTermType; depositPct?: number | null; netDays?: number | null };
 export const PAYTERM_TYPES: { key: PayTermType; label: string; name: string; blurb: string; hasDeposit: boolean }[] = [
   { key: "TT", label: "T/T", name: "Telegraphic Transfer (bank wire)", blurb: "A direct bank wire, normally split into a deposit to start production and a balance before the goods ship. The most common term for China factories — fast, but unsecured, so trust matters.", hasDeposit: true },
-  { key: "LC", label: "L/C", name: "Letter of Credit", blurb: "Your bank guarantees payment to the supplier once they present shipping documents that match the L/C exactly. Safest for large or first-time orders, but slower and carries bank fees.", hasDeposit: false },
+  { key: "LC", label: "L/C", name: "Letter of Credit", blurb: "Your bank guarantees payment to the supplier once they present shipping documents that match the L/C exactly. Safest for large or first-time orders, but slower and carries bank fees.", hasDeposit: true },
   { key: "OA", label: "O/A", name: "Open Account", blurb: "You receive the goods first and pay later — net 30/60/90 days after shipment. Best cash flow for you; only offered by suppliers who already trust you.", hasDeposit: false },
-  { key: "DP", label: "D/P", name: "Documents against Payment", blurb: "The bank releases the shipping documents (which you need to collect the goods) only after you pay in full. A middle ground — safer than T/T balance, cheaper than an L/C.", hasDeposit: false },
-  { key: "DA", label: "D/A", name: "Documents against Acceptance", blurb: "You get the documents by accepting (signing) a draft to pay on a future date. Effectively short-term credit from the supplier, secured by your accepted draft.", hasDeposit: false },
+  { key: "DP", label: "D/P", name: "Documents against Payment", blurb: "The bank releases the shipping documents (which you need to collect the goods) only after you pay. Often a deposit to start production, then the balance to release the documents.", hasDeposit: true },
+  { key: "DA", label: "D/A", name: "Documents against Acceptance", blurb: "You get the documents by accepting (signing) a draft to pay on a future date. Often a deposit up front, then the balance payable at draft maturity.", hasDeposit: true },
 ];
 export const PAYTERM_BY_KEY: Record<string, (typeof PAYTERM_TYPES)[number]> = Object.fromEntries(PAYTERM_TYPES.map((t) => [t.key, t]));
 export const PAYTERM_TT_PRESETS = [30, 50, 0, 100];
@@ -350,21 +350,30 @@ export function payTermSchedule(cfg: PayTermCfg | null | undefined, total: numbe
   total = Number(total) || 0;
   paid = Number(paid) || 0;
   const type = cfg?.type ?? "TT";
+  const dep = Math.max(0, Math.min(100, Number(cfg?.depositPct) || 0));
+  // Each term's trigger for the balance / single full payment.
+  const balWhen: Record<string, string> = {
+    TT: "Before goods ship",
+    DP: "To release shipping documents",
+    DA: "Payable at draft maturity",
+    LC: "On compliant document presentation",
+  };
+  const fullLabel: Record<string, string> = { TT: "Full payment", DP: "Full payment", DA: "Accepted draft", LC: "L/C settlement" };
   let steps: { label: string; when: string; pct: number; amount: number }[] = [];
-  if (type === "TT") {
-    const dep = Math.max(0, Math.min(100, Number(cfg?.depositPct) || 0));
-    if (dep > 0 && dep < 100) steps = [
-      { label: "Deposit", when: "To start production", pct: dep, amount: Math.round(total * dep) / 100 },
-      { label: "Balance", when: "Before goods ship", pct: 100 - dep, amount: Math.round(total * (100 - dep)) / 100 },
-    ];
-    else if (dep >= 100) steps = [{ label: "Full payment", when: "Upfront, before production", pct: 100, amount: total }];
-    else steps = [{ label: "Full payment", when: "Before goods ship", pct: 100, amount: total }];
-  } else if (type === "OA") {
+  if (type === "OA") {
     const nd = Number(cfg?.netDays) || 30;
     steps = [{ label: "Full payment", when: `Net ${nd} days after shipment`, pct: 100, amount: total }];
-  } else if (type === "LC") steps = [{ label: "L/C settlement", when: "On compliant document presentation", pct: 100, amount: total }];
-  else if (type === "DP") steps = [{ label: "Full payment", when: "To release shipping documents", pct: 100, amount: total }];
-  else if (type === "DA") steps = [{ label: "Accepted draft", when: "Payable at draft maturity", pct: 100, amount: total }];
+  } else if (dep >= 100) {
+    steps = [{ label: "Full payment", when: "Upfront, before production", pct: 100, amount: total }];
+  } else if (dep > 0) {
+    // Deposit to start production, then the balance on the term's trigger — works for T/T, D/P, D/A, L/C.
+    steps = [
+      { label: "Deposit", when: "To start production", pct: dep, amount: Math.round(total * dep) / 100 },
+      { label: "Balance", when: balWhen[type] ?? "Before goods ship", pct: 100 - dep, amount: Math.round(total * (100 - dep)) / 100 },
+    ];
+  } else {
+    steps = [{ label: fullLabel[type] ?? "Full payment", when: balWhen[type] ?? "Before goods ship", pct: 100, amount: total }];
+  }
   let remaining = paid;
   return steps.map((s) => {
     const covered = Math.min(s.amount, Math.max(0, remaining));
@@ -376,8 +385,10 @@ export function payTermSchedule(cfg: PayTermCfg | null | undefined, total: numbe
 export function payTermSummary(cfg: PayTermCfg | null | undefined): string {
   const t = PAYTERM_BY_KEY[cfg?.type ?? "TT"];
   if (!t) return "—";
-  if (t.key === "TT") { const d = Number(cfg?.depositPct) || 0; return d <= 0 ? "T/T · balance before ship" : d >= 100 ? "T/T · 100% upfront" : `T/T · ${d} / ${100 - d}`; }
   if (t.key === "OA") return `O/A · net ${Number(cfg?.netDays) || 30}`;
+  const d = Number(cfg?.depositPct) || 0;
+  if (t.hasDeposit && d >= 100) return `${t.label} · 100% upfront`;
+  if (t.hasDeposit && d > 0) return `${t.label} · ${d} / ${100 - d}`;
   return `${t.label} · ${t.name}`;
 }
 

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { num, money, type InvoiceRow, type InvoiceLineRow, INVOICE_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, PAYTERM_TYPES } from "@/lib/derive";
+import { num, money, type InvoiceRow, type InvoiceLineRow, INVOICE_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, PAYTERM_TYPES, PAYTERM_BY_KEY } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { InvoiceQuickDrawer } from "./invoice-quick-drawer";
@@ -273,8 +273,8 @@ export function RecordPaymentModal({ invoice, invoices, onClose }: { invoice: In
   );
 }
 
-export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmit }: {
-  title: string; invoice?: InvRow; orders: { id: string; title: string }[]; vendors: VendorOpt[];
+export function InvoiceModal({ title, invoice, orders, vendors, lockedOrderId, onClose, onSubmit }: {
+  title: string; invoice?: InvRow; orders: { id: string; title: string }[]; vendors: VendorOpt[]; lockedOrderId?: string;
   onClose: () => void; onSubmit: (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
@@ -285,7 +285,8 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
   const [vendor, setVendor] = useState<string>(i?.vendor ?? "");
   // Type is DERIVED from the chosen vendor's record (supplier/partner), not picked.
   const vType = vendorType.get(vendor) ?? i?.vendor_type ?? "Supplier";
-  const [orderId, setOrderId] = useState<string>(i?.order_id ?? "");
+  const [orderId, setOrderId] = useState<string>(i?.order_id ?? lockedOrderId ?? "");
+  const lockedOrderTitle = lockedOrderId ? (orders.find((o) => o.id === lockedOrderId)?.title ?? null) : null;
   // include the invoice's current vendor even if it's not in the suppliers/partners list
   const vendorOpts = [...new Set([...(i?.vendor ? [i.vendor] : []), ...vendors.map((v) => v.name)])].map((v) => ({ value: v, label: v }));
   const [termType, setTermType] = useState<string>(i?.term_type ?? "TT");
@@ -308,16 +309,27 @@ export function InvoiceModal({ title, invoice, orders, vendors, onClose, onSubmi
             </div>
             <input type="hidden" name="vendor_type" value={vType} />
           </Field>
-          <Field label="Order"><Select name="order_id" value={orderId} onChange={setOrderId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>
+          {lockedOrderId
+            ? <Field label="Order">
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="font-mono font-medium">{lockedOrderId}</span>
+                  {lockedOrderTitle && <span className="truncate text-[11px] text-muted-foreground">· {lockedOrderTitle}</span>}
+                </div>
+                <input type="hidden" name="order_id" value={lockedOrderId} />
+              </Field>
+            : <Field label="Order"><Select name="order_id" value={orderId} onChange={setOrderId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} /></Field>}
           <Field label="Total (USD)"><input name="total" type="number" step="0.01" required defaultValue={i?.total ?? ""} className={inputCls} /></Field>
           <Field label="Issued"><input name="issued" type="date" defaultValue={i?.issued ?? ""} className={inputCls} /></Field>
-          <Field label="Due"><input name="due" type="date" defaultValue={i?.due ?? ""} className={inputCls} /></Field>
+          <Field label="Due (optional)">
+            <input name="due" type="date" defaultValue={i?.due ?? ""} className={inputCls} />
+            <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">Most supplier terms pay on a milestone (deposit / before ship / on documents) — see the schedule. Set a date only for O/A net‑days or a hard deadline.</p>
+          </Field>
           {!i && <Field label="Already paid (USD)"><input name="paid" type="number" step="0.01" defaultValue="0" className={inputCls} /></Field>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Payment term"><Select name="term_type" value={termType} onChange={setTermType} options={PAYTERM_TYPES.map((t) => ({ value: t.key, label: `${t.label} — ${t.name}` }))} /></Field>
-          {termType === "TT"
-            ? <Field label="Deposit %"><input name="term_deposit_pct" type="number" min={0} max={100} value={deposit} onChange={(e) => setDeposit(Number(e.target.value) || 0)} className={inputCls} /></Field>
+          {PAYTERM_BY_KEY[termType]?.hasDeposit
+            ? <Field label="Deposit %"><input name="term_deposit_pct" type="number" min={0} max={100} value={deposit} onChange={(e) => setDeposit(Number(e.target.value) || 0)} className={inputCls} /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">e.g. 30 = pay 30% deposit to start, 70% balance later. 0 = pay in full at the trigger.</p></Field>
             : termType === "OA"
             ? <Field label="Net days"><input name="term_net_days" type="number" min={0} defaultValue={i?.term_net_days ?? 30} className={inputCls} /></Field>
             : <span />}

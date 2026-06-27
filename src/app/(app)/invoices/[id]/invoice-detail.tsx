@@ -144,7 +144,7 @@ export function InvoiceDetailPage({ row: i, orders, vendors, orderLines, chargeT
 
         <div className="flex flex-col gap-4">
           {/* Payment terms + schedule */}
-          <PaymentTermsCard invoiceId={i.id} vendor={i.vendor} total={i.total ?? 0} paid={i.paid ?? 0} cfg={termCfg(i)} />
+          <PaymentTermsCard vendor={i.vendor} total={i.total ?? 0} paid={i.paid ?? 0} cfg={termCfg(i)} />
 
           {/* Dates & terms */}
           <Card className="p-5">
