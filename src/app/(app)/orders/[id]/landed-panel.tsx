@@ -92,7 +92,7 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
 
       {/* Cost buckets */}
       <Card className="p-5">
-        <SectionTitle icon={Receipt} tone="brand" strong title="Cost buckets" sub="Classified by charge type from this order's costs · allocated across SKUs"
+        <SectionTitle icon={Receipt} tone="brand" strong title="Cost buckets" sub="Classified by service charge from this order's costs · allocated across SKUs"
           action={<button type="button" onClick={() => setAdjust(true)} disabled={locked} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-40"><Pencil className="h-3 w-3" /> Adjust</button>} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-lg border bg-background/40 p-3">

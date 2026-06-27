@@ -31,12 +31,12 @@ export function ChargeTypesView({ rows }: { rows: ChargeType[] }) {
 
   return (
     <div className="space-y-6">
-      <PageHead kicker="Catalog" title="Charge types"
+      <PageHead kicker="Catalog" title="Service charges"
         sub="Your vocabulary of non-product costs — agent fees, freight, packaging, inspection, duties. Tag invoice service lines with these so spend rolls up by category."
-        actions={<button onClick={() => setModal("new")} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New charge type</button>} />
+        actions={<button onClick={() => setModal("new")} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New service charge</button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Charge types" value={num(active.length)} sub="active in the catalog" icon={Tags} />
+        <Kpi label="Service charges" value={num(active.length)} sub="active in the catalog" icon={Tags} />
         <Kpi label="Billed by" value={num(ownersUsed)} sub="vendor roles" icon={Users} />
         <Kpi label="Tracked spend" value="—" sub="needs invoice line tagging" icon={Tags} tone="muted" />
         <Kpi label="Archived" value={num(archivedCount)} sub="hidden from pickers" icon={Archive} tone={archivedCount ? "warning" : undefined} />
@@ -47,10 +47,10 @@ export function ChargeTypesView({ rows }: { rows: ChargeType[] }) {
       )}
 
       {groups.length === 0 ? (
-        <Card className="p-10 text-center text-sm text-muted-foreground">No charge types yet — add one to start your catalog.</Card>
+        <Card className="p-10 text-center text-sm text-muted-foreground">No service charges yet — add one to start your catalog.</Card>
       ) : groups.map((g) => (
         <Card key={g.owner} className="overflow-hidden p-0">
-          <div className="flex items-center gap-2 border-b px-5 py-3"><span className="vy-kicker">Billed by</span><Badge tone={OWNER_TONE[g.owner] ?? "muted"}>{g.owner}</Badge><span className="text-[11px] text-muted-foreground">{g.items.length} type{g.items.length === 1 ? "" : "s"}</span></div>
+          <div className="flex items-center gap-2 border-b px-5 py-3"><span className="vy-kicker">Billed by</span><Badge tone={OWNER_TONE[g.owner] ?? "muted"}>{g.owner}</Badge><span className="text-[11px] text-muted-foreground">{g.items.length} charge{g.items.length === 1 ? "" : "s"}</span></div>
           <ul className="divide-y">
             {g.items.map((r) => (
               <li key={r.id} className={cn("flex items-center gap-3 px-5 py-3", r.archived && "opacity-55")}>
@@ -81,7 +81,7 @@ function ChargeTypeModal({ ct, onClose }: { ct?: ChargeType; onClose: () => void
     start(async () => { const r = ct ? await updateChargeType(ct.id, fd) : await createChargeType(fd); if (!r.ok) { setErr(r.error); return; } onClose(); router.refresh(); });
   }
   return (
-    <Modal open onClose={onClose} title={ct ? "Edit charge type" : "New charge type"}>
+    <Modal open onClose={onClose} title={ct ? "Edit service charge" : "New service charge"}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="Label"><input name="label" required autoFocus defaultValue={ct?.label ?? ""} className={inputCls} placeholder="e.g. Inland trucking" /></Field>
         <Field label="Billed by"><Select name="owner" value={owner} onChange={setOwner} options={OWNERS.map((o) => ({ value: o, label: o === "—" ? "— (unassigned)" : o }))} /></Field>

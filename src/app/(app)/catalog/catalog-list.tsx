@@ -159,17 +159,22 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
         </div>
       </Card>
 
-      {sel.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 px-4 py-2.5 text-sm">
-          <span className="font-semibold">{sel.size} selected</span>
-          <span className="text-[12px] text-muted-foreground">Bulk lifecycle — archive soft-hides them but keeps history.</span>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <button type="button" onClick={() => bulkApply("archived")} className="vy-btn vy-btn--outline vy-btn--sm">Archive</button>
-            <button type="button" onClick={() => bulkApply("active")} className="vy-btn vy-btn--ghost vy-btn--sm">Activate</button>
-            <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+      {sel.size > 0 && (() => {
+        const selItems = families.filter((f) => sel.has(f.id));
+        const canArchive = selItems.some((f) => f.status !== "archived");
+        const canActivate = selItems.some((f) => f.status !== "active");
+        return (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 px-4 py-2.5 text-sm">
+            <span className="font-semibold">{sel.size} selected</span>
+            <span className="text-[12px] text-muted-foreground">Bulk lifecycle — archive soft-hides them but keeps history.</span>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <button type="button" disabled={!canArchive} onClick={() => bulkApply("archived")} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
+              <button type="button" disabled={!canActivate} onClick={() => bulkApply("active")} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Activate</button>
+              <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <Card className="overflow-hidden">
         <CardHeader title={`${sorted.length} products`} caption="Click a row for a quick look · the name opens the product" />
@@ -184,13 +189,12 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                 <SortableTh label="Inbound" k="inbound" right sort={sort} onSort={toggleSort} />
                 <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Last cost</th>
                 <SortableTh label="Margin" k="avgMargin" right sort={sort} onSort={toggleSort} />
-                <th className="whitespace-nowrap px-3 py-2 font-medium">Health</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y">
               {pageRows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No products match your filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">No products match your filters.</td></tr>
               ) : pageRows.map((f) => {
                 const open = !!expanded[f.id];
                 return (
@@ -214,6 +218,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <Link href={`/catalog/${f.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-[240px] truncate font-medium hover:text-primary" title={f.parent}>{f.parent}{f.color ? ` · ${f.color}` : ""}</Link>
+                            <Badge tone={FAMILY_HEALTH_TONE[f.health]}>{f.health}</Badge>
                             {f.status !== "active" && <Badge tone={STATUS_TONE[f.status] ?? "muted"}>{f.status}</Badge>}
                           </div>
                           {f.supplier && <div className="text-[11px] text-muted-foreground">{f.supplier}{f.lastOrdered ? ` · last ordered ${f.lastOrdered}` : ""}</div>}
@@ -226,20 +231,21 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                     <td className={cn("tabular px-3 py-2.5 text-right font-mono", f.inbound > 0 ? "text-info" : "text-muted-foreground")}>{f.inbound > 0 ? num(f.inbound) : "—"}</td>
                     <td className="tabular px-3 py-2.5 text-right font-mono text-muted-foreground">{f.costLabel}</td>
                     <td className="px-3 py-2.5 text-right">{f.avgMargin != null ? <Badge tone={marginTone(f.avgMargin)}>{f.avgMargin}%</Badge> : <span className="text-[11px] text-muted-foreground">—</span>}</td>
-                    <td className="px-3 py-2.5"><Badge tone={FAMILY_HEALTH_TONE[f.health]}>{f.health}</Badge></td>
                     <td className="px-3 py-2.5 text-right"><ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" /></td>
                   </tr>
                   {open && f.skus.map((sk) => (
                     <tr key={sk.sku} className="bg-muted/20 text-[12px]">
                       <td className="py-1.5 pl-14 pr-3">
-                        <Link href={`/inventory?q=${encodeURIComponent(sk.sku)}`} className="font-mono hover:text-primary">{sk.sku}</Link>
-                        {sk.asin && <span className="ml-2 font-mono text-[10px] text-muted-foreground">ASIN {sk.asin}</span>}
+                        <span className="flex items-center gap-1.5">
+                          <Link href={`/inventory?q=${encodeURIComponent(sk.sku)}`} className="font-mono hover:text-primary">{sk.sku}</Link>
+                          <Badge tone={VARIANT_STATUS_TONE[sk.status] ?? "muted"}>{sk.status}</Badge>
+                          {sk.asin && <span className="font-mono text-[10px] text-muted-foreground">ASIN {sk.asin}</span>}
+                        </span>
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">variant</td>
                       <td />
                       <td className={cn("tabular px-3 py-1.5 text-right font-mono", sk.stock <= 40 && "text-warning")}>{num(sk.stock)}</td>
                       <td colSpan={3} />
-                      <td className="px-3 py-1.5"><Badge tone={VARIANT_STATUS_TONE[sk.status] ?? "muted"}>{sk.status}</Badge></td>
                       <td />
                     </tr>
                   ))}
@@ -281,6 +287,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={FAMILY_HEALTH_TONE[peek.health]}>{peek.health}</Badge>
+              {(() => { const linked = peek.skus.filter((s) => s.asin).length; return <Badge tone={linked === peek.skuCount && peek.skuCount > 0 ? "success" : "warning"}>{linked} / {peek.skuCount} linked</Badge>; })()}
               {peek.avgMargin != null && <Badge tone={marginTone(peek.avgMargin)}>{peek.avgMargin}% margin</Badge>}
             </div>
             <div className="grid grid-cols-3 gap-2">

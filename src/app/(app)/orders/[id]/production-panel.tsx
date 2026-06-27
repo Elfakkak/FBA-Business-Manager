@@ -720,7 +720,7 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
                 <Field label="Line type"><Select name="line_type" value={lineType} onChange={setLineType} options={PROD_LINE_TYPES.map((t) => ({ value: t, label: t }))} /></Field>
                 <Field label="Section"><Select name="section" value={section} onChange={setSection} options={PROD_SECTIONS.map((s) => ({ value: s, label: s }))} /></Field>
                 <Field label="Qty"><input name="qty" type="number" step="0.01" defaultValue="1" className={inputCls} /></Field>
-                <Field label="Charge type"><Select name="charge_type_id" value={chargeTypeId} onChange={setChargeTypeId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...chargeTypes.map((c) => ({ value: c.id, label: c.label, sub: c.owner !== "—" ? c.owner : undefined }))]} /></Field>
+                <Field label="Service charge"><Select name="charge_type_id" value={chargeTypeId} onChange={setChargeTypeId} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...chargeTypes.map((c) => ({ value: c.id, label: c.label, sub: c.owner !== "—" ? c.owner : undefined }))]} /></Field>
               </div>
               <Field label="Notes"><input name="notes" className={inputCls} placeholder="Additional notes…" /></Field>
             </div>

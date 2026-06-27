@@ -82,18 +82,23 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
         </div>
       </Card>
 
-      {sel.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-4 py-2.5 text-sm">
-          <span className="font-semibold">{sel.size} selected</span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Select value="" onChange={(v) => v && runBulk(() => bulkSetOrderStatus([...sel], v))} placeholder="Set status…" className="w-44"
-              options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} disabled={bulkPending} />
-            <button type="button" disabled={bulkPending} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm">Archive</button>
-            <button type="button" disabled={bulkPending} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm">Unarchive</button>
-            <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+      {sel.size > 0 && (() => {
+        const selItems = orders.filter((o) => sel.has(o.id));
+        const canArchive = selItems.some((o) => !o.archived);
+        const canUnarchive = selItems.some((o) => o.archived);
+        return (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-4 py-2.5 text-sm">
+            <span className="font-semibold">{sel.size} selected</span>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Select value="" onChange={(v) => v && runBulk(() => bulkSetOrderStatus([...sel], v))} placeholder="Set status…" className="w-44"
+                options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} disabled={bulkPending} />
+              <button type="button" disabled={bulkPending || !canArchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
+              <button type="button" disabled={bulkPending || !canUnarchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
+              <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <Card className="overflow-hidden">
         <CardHeader title={`${filtered.length} orders`} caption="Total / paid derived from invoices" />

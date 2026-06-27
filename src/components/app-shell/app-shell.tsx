@@ -30,7 +30,7 @@ const NAV: Group[] = [
       { label: "Inventory", href: "/inventory", section: "catalog", icon: Warehouse, ready: true },
       { label: "Performance", href: "/performance", section: "performance", icon: TrendingUp },
       { label: "Packaging", href: "/packaging", section: "packaging", icon: Boxes, ready: true },
-      { label: "Charge types", href: "/charge-types", section: "catalog", icon: Tags, ready: true },
+      { label: "Service charges", href: "/charge-types", section: "catalog", icon: Tags, ready: true },
       { label: "FBA calculator", href: "/fba-calculator", section: "catalog", icon: Calculator, ready: true },
     ],
   },
