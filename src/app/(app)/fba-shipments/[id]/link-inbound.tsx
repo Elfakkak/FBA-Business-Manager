@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/primitives";
+import { Card, Badge } from "@/components/ui/primitives";
 import { Select } from "@/components/ui/select";
 import { linkInbound } from "../actions";
 import { Link2, Check } from "lucide-react";
@@ -41,9 +41,10 @@ export function LinkInboundCard({ inboundId, shipmentId, orderId, shipments, ord
         </label>
         <label className="block"><span className="vy-kicker mb-1 block">Order</span>
           {ship
-            ? <div className="flex h-[38px] items-center gap-2 rounded-md border bg-muted/40 px-3 text-sm">
+            ? <div className="flex h-[38px] items-center gap-2 rounded-md border border-dashed bg-muted/20 px-3 text-sm">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 {shipOrder ? <span className="font-mono font-medium">{shipOrder}</span> : <span className="text-muted-foreground">Shipment has no order</span>}
-                <span className="text-[11px] text-muted-foreground">· from the shipment</span>
+                <Badge tone="muted" className="ml-auto">auto · from shipment</Badge>
               </div>
             : <Select value={order} onChange={setOrder} placeholder="— none —" options={[{ value: "", label: "— none —" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} />}
         </label>

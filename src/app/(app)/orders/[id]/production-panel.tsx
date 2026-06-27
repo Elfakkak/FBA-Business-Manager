@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useInlineEditor } from "@/lib/use-inline-editor";
 import {
   money, num, productionLanded, costUsd, PROD_SECTIONS, PROD_LINE_TYPES,
-  ORDER_STATUS_LABEL, type OrderRow, type OrderCostRow,
+  ORDER_STATUS_LABEL, type OrderRow, type OrderCostRow, type CostCheck,
 } from "@/lib/derive";
 import { addOrderLines, updateOrderLine, deleteOrderLine, addOrderCost, updateOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
 import {
@@ -31,9 +31,9 @@ const SECTION_TONE: Record<string, string> = { Production: "brand", Shipping: "i
 type PkgOnHand = { id: string; name: string; kind: string; unitCost: number; onHand: number };
 type OrderFile = { slot: string; name: string | null; url: string };
 
-export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName, orderFiles, packagingOnHand }: {
+export function ProductionSection({ order, lines, costs, variants, chargeTypes, vendors, companyName, orderFiles, packagingOnHand, costCheck }: {
   order: OrderRow; lines: ProdLine[]; costs: OrderCostRow[]; variants: CatalogVariant[]; chargeTypes: ChargeTypeOpt[]; vendors: VendorOpt[]; companyName: string;
-  orderFiles: OrderFile[]; packagingOnHand: PkgOnHand[];
+  orderFiles: OrderFile[]; packagingOnHand: PkgOnHand[]; costCheck: CostCheck;
 }) {
   const [showPO, setShowPO] = useState(false);
   const roll = useMemo(() => productionLanded(lines, costs), [lines, costs]);
@@ -91,7 +91,7 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
       <div className="vy-kicker text-[11px]">Scope &amp; cost</div>
 
       {/* Production lines */}
-      <ProductionLines order={order} groups={groups} landedById={landedById} totalUnits={roll.totalUnits} totalGoods={roll.totalGoods} variants={variants} />
+      <ProductionLines order={order} groups={groups} landedById={landedById} totalUnits={roll.totalUnits} totalGoods={roll.totalGoods} variants={variants} costCheck={costCheck} />
 
       {/* Non-product costs */}
       <NonProductCosts order={order} costs={costs} chargeTypes={chargeTypes} vendors={vendors} goodsTotal={roll.totalGoods} />
@@ -314,9 +314,9 @@ function GeneratePOModal({ order, lines, costs, companyName, onClose }: {
   );
 }
 
-function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, variants }: {
+function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, variants, costCheck }: {
   order: OrderRow; groups: { name: string; lines: ProdLine[] }[];
-  landedById: Map<string, { line: number; landedUnit: number }>; totalUnits: number; totalGoods: number; variants: CatalogVariant[];
+  landedById: Map<string, { line: number; landedUnit: number }>; totalUnits: number; totalGoods: number; variants: CatalogVariant[]; costCheck: CostCheck;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -365,7 +365,7 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
                       <td className="px-5 py-2.5 font-mono text-[12px] font-semibold">{l.sku}</td>
                       <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "qty")} onChange={(v) => ed.set(l.id, "qty", v)} mode="numeric" /></div> : <span className="tabular">{num(l.qty)}</span>}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cny_ref")} onChange={(v) => ed.set(l.id, "unit_cny_ref", v)} placeholder="¥" /></div> : <span className="tabular">{l.unit_cny_ref != null ? `¥${Number(l.unit_cny_ref).toFixed(2)}` : "—"}</span>}</td>
-                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cost")} onChange={(v) => ed.set(l.id, "unit_cost", v)} placeholder="$" /></div> : <span className="tabular">{money(l.unit_cost)}</span>}</td>
+                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cost")} onChange={(v) => ed.set(l.id, "unit_cost", v)} placeholder="$" /></div> : (() => { const cc = l.sku ? costCheck.bySku.get(l.sku) : undefined; const diff = cc?.invUnit != null ? cc.invUnit - (Number(l.unit_cost) || 0) : null; return <div><span className="tabular">{money(l.unit_cost)}</span>{cc?.invUnit != null && <div className={cn("text-[10px]", diff != null && Math.abs(diff) > 0.01 ? "text-warning" : "text-success")} title="Invoiced unit price (actual)">inv {money(cc.invUnit)}{diff != null && Math.abs(diff) > 0.01 ? ` (${diff > 0 ? "+" : ""}${money(diff)})` : " ✓"}</div>}</div>; })()}</td>
                       <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(line)}</td>
                       <td className="tabular px-3 py-2.5 text-right font-mono text-info">{!ed.on && d ? `${money(d.landedUnit)} est` : "—"}</td>
                       <td className="px-3 py-2.5 text-right">{!ed.on && <button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>}</td>

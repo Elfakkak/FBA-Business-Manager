@@ -264,6 +264,49 @@ const LINE_KIND_ORDER: Record<string, number> = { goods: 0, service: 1, discount
 export function sortInvoiceLines<T extends Pick<InvoiceLineRow, "kind" | "position">>(lines: T[]): T[] {
   return [...lines].sort((a, b) => (LINE_KIND_ORDER[a.kind] ?? 1) - (LINE_KIND_ORDER[b.kind] ?? 1) || (a.position ?? 0) - (b.position ?? 0));
 }
+// PO (planned) vs invoiced (actual) goods cost, per SKU + order roll-up. The PO
+// price comes from the order lines (what you intended to pay to place the order);
+// the actual comes from the supplier invoices' goods lines (billed). A mismatch
+// beyond a small tolerance is surfaced as a warning (Home), a per-line hint
+// (Production) and the per-SKU detail (Invoice).
+export type CostCheckSku = { sku: string; poUnit: number | null; invUnit: number | null; poTotal: number; invTotal: number; variance: number };
+export type CostCheck = { poGoods: number; invGoods: number; variance: number; hasInvoiceGoods: boolean; mismatch: boolean; perSku: CostCheckSku[]; bySku: Map<string, CostCheckSku> };
+export function poVsInvoiced(
+  lines: { sku: string | null; qty: number; unit_cost: number | null }[],
+  invoices: { lines?: InvoiceLineRow[] }[],
+): CostCheck {
+  const po = new Map<string, { qty: number; total: number }>();
+  for (const l of lines) {
+    if (!l.sku) continue;
+    const cur = po.get(l.sku) ?? { qty: 0, total: 0 };
+    cur.qty += l.qty || 0; cur.total += (l.qty || 0) * (Number(l.unit_cost) || 0);
+    po.set(l.sku, cur);
+  }
+  const inv = new Map<string, { qty: number; total: number }>();
+  for (const iv of invoices) for (const ln of iv.lines ?? []) {
+    if (ln.kind !== "goods" || !ln.sku) continue;
+    const cur = inv.get(ln.sku) ?? { qty: 0, total: 0 };
+    cur.qty += Number(ln.qty) || 0; cur.total += Number(ln.billed) || 0;
+    inv.set(ln.sku, cur);
+  }
+  const skus = [...new Set([...po.keys(), ...inv.keys()])];
+  const perSku: CostCheckSku[] = skus.map((sku) => {
+    const p = po.get(sku); const v = inv.get(sku);
+    return {
+      sku,
+      poUnit: p && p.qty > 0 ? Math.round((p.total / p.qty) * 100) / 100 : null,
+      invUnit: v && v.qty > 0 ? Math.round((v.total / v.qty) * 100) / 100 : null,
+      poTotal: p?.total ?? 0, invTotal: v?.total ?? 0, variance: (v?.total ?? 0) - (p?.total ?? 0),
+    };
+  });
+  const poGoods = [...po.values()].reduce((s, x) => s + x.total, 0);
+  const invGoods = [...inv.values()].reduce((s, x) => s + x.total, 0);
+  const hasInvoiceGoods = inv.size > 0 && invGoods > 0;
+  const variance = invGoods - poGoods;
+  const mismatch = hasInvoiceGoods && Math.abs(variance) > Math.max(1, poGoods * 0.005);
+  return { poGoods, invGoods, variance, hasInvoiceGoods, mismatch, perSku, bySku: new Map(perSku.map((s) => [s.sku, s])) };
+}
+
 // Roll up itemized lines: goods (per-SKU) vs services vs discounts, plus
 // billed-vs-ordered variance for goods (when lines link back to order_lines).
 export function invoiceLinesRollup(lines: InvoiceLineRow[]) {
