@@ -120,6 +120,8 @@ export function FbaCalculator({ variants, seed }: { variants: CalcVariant[]; see
 
   const verdict = fcVerdict(m.net, m.marginPct, m.roiPct);
   const vt = verdict.tone;
+  // `muted` has no readable text shade — use muted-fg wherever the tone colors TEXT.
+  const vtc = vt === "muted" ? "muted-fg" : vt;
 
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))" }}>
@@ -217,7 +219,7 @@ export function FbaCalculator({ variants, seed }: { variants: CalcVariant[]; see
             <span className="vy-kicker">Net profit / unit{skuLabel ? ` · ${skuLabel}` : ""}</span>
             <Badge tone={vt}>{verdict.label}</Badge>
           </div>
-          <div className="mt-1 font-mono text-[40px] font-extrabold leading-none" style={{ color: `hsl(var(--${vt}))` }}>{m.marginPct == null ? "—" : fcMoney(m.net)}</div>
+          <div className="mt-1 font-mono text-[40px] font-extrabold leading-none" style={{ color: `hsl(var(--${vtc}))` }}>{m.marginPct == null ? "—" : fcMoney(m.net)}</div>
           <div className="mt-3.5 flex flex-wrap gap-[22px]">
             <Metric label="Margin" value={m.marginPct == null ? "—" : `${m.marginPct}%`} />
             <Metric label="ROI" value={m.roiPct == null ? "—" : `${m.roiPct}%`} />
@@ -232,7 +234,7 @@ export function FbaCalculator({ variants, seed }: { variants: CalcVariant[]; see
           <Row label="Referral fee" sub={`${Math.round(m.ref * 1000) / 10}%`} value={m.referralFee} minus />
           <Row label="FBA fulfilment" sub={m.hasDims ? m.tier : undefined} value={m.fbaFee} minus />
           <Row label="Storage" sub={`${months} mo${peak ? " · Q4" : ""}`} value={m.storage} minus />
-          <Row label="Net per unit" value={m.net} strong tone={vt} />
+          <Row label="Net per unit" value={m.net} strong tone={vtc} />
         </Card>
 
         <Card className="px-5 pb-4 pt-3.5">
@@ -246,7 +248,7 @@ export function FbaCalculator({ variants, seed }: { variants: CalcVariant[]; see
           <div className="grid grid-cols-3 gap-2.5">
             <Box k="Cash in goods" v={fcMoney(m.totalLanded)} />
             <Box k="Revenue" v={fcMoney(m.totalRevenue)} />
-            <Box k="Projected profit" v={fcMoney(m.totalProfit)} tone={vt} />
+            <Box k="Projected profit" v={fcMoney(m.totalProfit)} tone={vtc} />
           </div>
         </Card>
 
