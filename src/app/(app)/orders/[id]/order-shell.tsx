@@ -19,9 +19,9 @@ import type { Database } from "@/lib/database.types";
 
 type Inspection = Database["public"]["Tables"]["order_inspections"]["Row"];
 import {
-  money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
+  money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds, poVsInvoiced,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
-  type OrderRow, type PayTermCfg, type OrderCostRow,
+  type OrderRow, type PayTermCfg, type OrderCostRow, type CostCheck,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import {
@@ -102,6 +102,8 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   const [pending, start] = useTransition();
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
   const units = lines.reduce((s, l) => s + (l.qty ?? 0), 0);
+  // PO (planned) vs invoiced (actual) goods cost — surfaced on Home + Production.
+  const costCheck = poVsInvoiced(lines, invoices);
   const advance = (key: string) => start(async () => { await setOrderStatus(order.id, key); router.refresh(); });
 
   return (
@@ -131,14 +133,14 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
 
       <div key={tab} className="vy-page-in">
       {tab === "overview" ? (
-        <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} />
+        <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} costCheck={costCheck} />
       ) : tab === "invoices" ? (
         <InvoicesPanel order={order} invoices={invoices} vendors={vendors} lines={lines} chargeTypes={chargeTypes} />
       ) : tab === "shipping" ? (
         <ShippingPanel order={order} shipments={shipments} inbounds={inbounds} packLines={packLines} shipFiles={shipFiles} tracking={shipTracking} ordered={ordered} forwarders={forwarders} freightInvoice={freightInvoice} unlinkedInbounds={unlinkedInbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
-          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} />
+          <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} costCheck={costCheck} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
       ) : tab === "landed" ? (
@@ -155,9 +157,9 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   );
 }
 
-function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, onEdit, pending }: {
+function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, onEdit, pending, costCheck }: {
   order: OrderRow; rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
-  units: number; skuCount: number; curIdx: number; onJump: (k: string) => void; onAdvance: (k: string) => void; onEdit: () => void; pending: boolean;
+  units: number; skuCount: number; curIdx: number; onJump: (k: string) => void; onAdvance: (k: string) => void; onEdit: () => void; pending: boolean; costCheck: CostCheck;
 }) {
   const needs = orderNeeds({ status: order.status, balance: rollup.balance, paidPct: rollup.paidPct, units, supplier: order.supplier });
   const top = needs[0];
@@ -214,6 +216,19 @@ function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, o
         <Kpi label="Units" value={num(units)} sub="Ordered scope" icon={Boxes} />
         <Kpi label="FBA ETA" value={order.fba_eta ?? "—"} sub="Estimated arrival" icon={Truck} source="amazon" />
       </KpiStrip>
+
+      {/* PO vs invoiced cost check — warns when the supplier billed differs from the PO */}
+      {costCheck.mismatch ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-sm" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>
+          <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
+          <span><span className="font-semibold">PO price ≠ invoiced price.</span><span className="text-muted-foreground"> Planned {money(costCheck.poGoods)} vs invoiced {money(costCheck.invGoods)} (<span className={costCheck.variance > 0 ? "text-danger" : "text-success"}>{costCheck.variance > 0 ? "+" : ""}{money(costCheck.variance)}</span>). Reconcile so the PO matches the bill.</span></span>
+          <button onClick={() => onJump("invoices")} className="vy-btn vy-btn--outline vy-btn--sm ml-auto">Review invoices</button>
+        </div>
+      ) : costCheck.hasInvoiceGoods ? (
+        <div className="flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[12px]" style={{ background: "hsl(var(--success) / 0.06)", borderColor: "hsl(var(--success) / 0.25)" }}>
+          <Check className="h-3.5 w-3.5 shrink-0 text-success" /><span className="text-muted-foreground"><span className="font-medium text-foreground">PO matches invoiced</span> — planned {money(costCheck.poGoods)} = invoiced {money(costCheck.invGoods)}.</span>
+        </div>
+      ) : null}
 
       {/* Order journey */}
       <Card className="p-5">
