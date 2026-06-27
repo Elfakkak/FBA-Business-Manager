@@ -9,16 +9,22 @@ export function Modal({
   open,
   onClose,
   title,
+  subtitle,
   size = "default",
+  footer,
+  unpadded,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
-  size?: "default" | "lg" | "xl";
+  subtitle?: React.ReactNode;
+  size?: "default" | "lg" | "xl" | "2xl";
+  footer?: React.ReactNode;
+  unpadded?: boolean;
   children: React.ReactNode;
 }) {
-  const maxW = size === "xl" ? "max-w-4xl" : size === "lg" ? "max-w-2xl" : "max-w-lg";
+  const maxW = size === "2xl" ? "max-w-[1120px]" : size === "xl" ? "max-w-4xl" : size === "lg" ? "max-w-2xl" : "max-w-lg";
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -36,18 +42,22 @@ export function Modal({
   // become the containing block for our position:fixed overlay.
   return createPortal(
     <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
       {/* Solid (non-translucent) panel, capped height with internal scroll so
           the header + footer buttons never clip off-screen. */}
       <div
         className={cn("relative flex w-full flex-col overflow-hidden rounded-xl border", maxW)}
-        style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)", maxHeight: "90vh" }}
+        style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)", maxHeight: unpadded ? "82vh" : "90vh" }}
       >
-        <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
-          <h2 className="font-medium">{title}</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent" aria-label="Close"><X className="h-4 w-4" /></button>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold leading-tight">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="mt-0.5 rounded-md p-1 text-muted-foreground hover:bg-accent" aria-label="Close"><X className="h-4 w-4" /></button>
         </div>
-        <div className="overflow-y-auto p-5">{children}</div>
+        <div className={unpadded ? "flex min-h-0 flex-1 flex-col" : "overflow-y-auto p-5"}>{children}</div>
+        {footer && <div className="shrink-0 border-t px-5 py-3">{footer}</div>}
       </div>
     </div>,
     document.body

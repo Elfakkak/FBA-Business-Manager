@@ -15,7 +15,7 @@ import {
 } from "@/lib/derive";
 import { addOrderLines, updateOrderLine, deleteOrderLine, addOrderCost, updateOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
 import {
-  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check,
+  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check, AlertTriangle, X,
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
@@ -377,57 +377,84 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
         </div>
       )}
       <p className="px-5 py-3 text-[11px] text-muted-foreground">Prices are last‑known references seeded from the catalog (editable) — the <span className="font-medium">actual</span> price is recorded on the invoice. Line $ = qty × unit $ invoice. Est landed/u spreads non‑product costs over units (duties excluded — estimate).</p>
-      {adding && <AddSkuModal orderId={order.id} variants={variants} onClose={() => setAdding(false)} />}
+      {adding && <AddSkuModal orderId={order.id} variants={variants} inOrderSkus={new Set(allLines.map((l) => l.sku).filter((s): s is string => !!s))} onClose={() => setAdding(false)} />}
     </Card>
   );
 }
 
-const SKU_FILTERS = ["All", "Reorder needed", "Missing cost", "Missing image"];
+const SKU_FILTERS = ["All", "Reorder needed", "Missing cost", "Missing image", "Recently ordered"];
 type SkuPick = { qty: number; unit_cost: number | null; unit_cny: number | null };
 const skuStatusTone = (s: string | null): "success" | "warning" | "muted" => (!s ? "muted" : /ready/i.test(s) ? "success" : "warning");
 const rmb = (v: number | null) => (v == null ? "—" : `¥${Number(v).toFixed(2)}`);
+const decOrNull = (s: string) => { const t = s.replace(",", ".").trim(); if (t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
 
-// One catalog variant row inside an expanded family card.
-function SkuRow({ v, on, onToggle }: { v: CatalogVariant; on: boolean; onToggle: () => void }) {
+// One catalog variant row inside an expanded family card — a compact CSS grid.
+function SkuRow({ v, on, inOrder, showCny, onToggle }: { v: CatalogVariant; on: boolean; inOrder: boolean; showCny: boolean; onToggle: () => void }) {
+  const missingImg = !v.has_image;
+  const cols = showCny ? "grid-cols-[24px_36px_140px_minmax(0,1fr)_auto_auto_auto_auto]" : "grid-cols-[24px_36px_140px_minmax(0,1fr)_auto_auto_auto]";
   return (
-    <label className={cn("flex cursor-pointer items-center gap-3 px-4 py-3", on ? "border-l-2 border-primary bg-primary/5" : "hover:bg-accent/40")}>
-      <input type="checkbox" checked={on} onChange={onToggle} className="h-4 w-4 shrink-0 accent-primary" />
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Package className="h-4 w-4" /></span>
-      <span className={cn("w-44 shrink-0 wrap-break-word font-mono text-[12px] font-semibold leading-tight", on && "text-primary")}>{v.sku}</span>
-      <span className="min-w-0 flex-1 truncate text-[13px]">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
-      {v.fba_stock != null && <span className="hidden shrink-0 text-[12px] text-muted-foreground md:block">{num(v.fba_stock)} FBA</span>}
-      <span className="shrink-0 font-mono text-[13px] font-semibold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
-      <span className="hidden shrink-0 font-mono text-[12px] text-muted-foreground md:block">{rmb(v.last_cost_rmb)}</span>
-      <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>
-    </label>
-  );
-}
-
-// A collapsible product-family card with its variant rows (catalog browser).
-function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, onToggleOpen, onSelectAll, onToggleVariant }: {
-  fam: string; vs: CatalogVariant[]; isOpen: boolean; selCount: number; sel: Map<string, SkuPick>;
-  onToggleOpen: () => void; onSelectAll: () => void; onToggleVariant: (v: CatalogVariant) => void;
-}) {
-  const allSel = selCount === vs.length && vs.length > 0;
-  const lastOrdered = vs[0]?.familyLastOrdered;
-  return (
-    <div className="space-y-2">
-      <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3.5", selCount > 0 && "border-l-[3px] border-l-primary")}>
-        <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
-          <div className="flex flex-wrap items-center gap-2"><span className="font-semibold leading-snug">{fam}</span>{selCount > 0 && <span className="text-[12px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
-          <div className="mt-0.5 text-[12px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` — · last ordered ${lastOrdered}` : ""}</div>
-          <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
-        </button>
-        {isOpen && <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--outline vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>}
-        <button type="button" onClick={onToggleOpen} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
-      </div>
-      {isOpen && <div className="divide-y overflow-hidden rounded-xl border">{vs.map((v) => <SkuRow key={v.id} v={v} on={sel.has(v.id)} onToggle={() => onToggleVariant(v)} />)}</div>}
+    <div
+      onClick={inOrder ? undefined : onToggle}
+      className={cn("grid items-center gap-2.5 px-3 py-2.5 text-[11.5px]", cols,
+        inOrder ? "cursor-not-allowed bg-muted/40 opacity-55" : "cursor-pointer hover:bg-accent/40",
+        on && !inOrder && "border-l-[3px] border-l-primary bg-primary/10")}
+    >
+      <input type="checkbox" checked={on || inOrder} disabled={inOrder} onChange={onToggle} onClick={(e) => e.stopPropagation()} className="h-[17px] w-[17px] accent-primary" />
+      <span className={cn("grid h-9 w-9 place-items-center rounded-md border", missingImg ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-accent text-muted-foreground")}>{missingImg ? <AlertTriangle className="h-4 w-4" /> : <Package className="h-4 w-4" />}</span>
+      <span className={cn("truncate font-mono text-[10.5px] font-bold", on && !inOrder && "text-primary")}>{v.sku}</span>
+      <span className="min-w-0 truncate font-medium">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
+      <span className="text-right text-[10.5px] text-muted-foreground">{v.fba_stock != null ? `${num(v.fba_stock)} FBA` : "—"}</span>
+      <span className="text-right font-mono font-bold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
+      {showCny && <span className="text-right font-mono text-[10.5px] text-muted-foreground">{rmb(v.last_cost_rmb)}</span>}
+      <span className="justify-self-end">{inOrder ? <Badge tone="muted">In order</Badge> : <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>}</span>
     </div>
   );
 }
 
-// Multi-select catalog browser — collapsible family cards, per-line qty/price review.
-function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants: CatalogVariant[]; onClose: () => void }) {
+// A collapsible product-family card with its variant rows (catalog browser).
+function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, inOrderSkus, showCny, onToggleOpen, onSelectAll, onToggleVariant }: {
+  fam: string; vs: CatalogVariant[]; isOpen: boolean; selCount: number; sel: Map<string, SkuPick>; inOrderSkus: Set<string>; showCny: boolean;
+  onToggleOpen: () => void; onSelectAll: () => void; onToggleVariant: (v: CatalogVariant) => void;
+}) {
+  const hasSel = selCount > 0;
+  const allSel = selCount === vs.length && vs.length > 0;
+  const lastOrdered = vs[0]?.familyLastOrdered;
+  return (
+    <div className="space-y-2">
+      <div className={cn("flex items-start gap-3 rounded-lg border border-l-[3px] px-3.5 py-3", hasSel ? "border-primary/50 border-l-primary" : "border-l-border")}>
+        <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
+          <div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-semibold leading-snug">{fam}</span>{hasSel && <span className="text-[11px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
+          <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
+        </button>
+        {isOpen && vs.length > 1 && <button type="button" onClick={onSelectAll} className="vy-btn vy-btn--ghost vy-btn--sm shrink-0">{allSel ? "Deselect all" : "Select all"}</button>}
+        <button type="button" onClick={onToggleOpen} className="vy-icon-btn shrink-0" aria-label="Toggle"><ChevronRight className={cn("h-4 w-4 transition", isOpen && "rotate-90")} /></button>
+      </div>
+      {isOpen && <div className="divide-y overflow-hidden rounded-lg border">{vs.map((v) => <SkuRow key={v.id} v={v} on={sel.has(v.id)} inOrder={!!v.sku && inOrderSkus.has(v.sku)} showCny={showCny} onToggle={() => onToggleVariant(v)} />)}</div>}
+    </div>
+  );
+}
+
+// Empty state for the Selected-lines panel — communicates the no-side-effects guarantee.
+function EmptySelected() {
+  return (
+    <div className="flex flex-col items-center gap-3 py-8 text-center">
+      <span className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground"><Package className="h-5 w-5" /></span>
+      <div><div className="text-[13px] font-semibold">No SKUs selected</div><p className="mt-0.5 max-w-[28ch] text-[11px] text-muted-foreground">Tick variants on the left — only selected rows become order lines.</p></div>
+      <div className="w-full rounded-lg border bg-card p-3 text-left text-[11px]">
+        <div className="font-semibold text-foreground">This action creates:</div>
+        <div className="mt-1 flex items-center gap-1.5 text-success"><Check className="h-3.5 w-3.5 shrink-0" /> Order line items</div>
+        <div className="mt-2.5 font-semibold text-foreground">Does not create:</div>
+        {["Invoices", "Shipments", "Catalog products"].map((t) => (
+          <div key={t} className="mt-1 flex items-center gap-1.5 text-muted-foreground"><X className="h-3.5 w-3.5 shrink-0" /> {t}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Multi-select catalog browser — split-pane: catalog (68%) + selected lines (32%).
+function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: string; variants: CatalogVariant[]; inOrderSkus: Set<string>; onClose: () => void }) {
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -442,6 +469,7 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
     if (filter === "Reorder needed") return v.reorder_point != null && (v.fba_stock ?? 0) <= v.reorder_point;
     if (filter === "Missing cost") return v.last_cost_usd == null;
     if (filter === "Missing image") return !v.has_image;
+    if (filter === "Recently ordered") return !!v.familyLastOrdered;
     return true;
   };
   const n = q.trim().toLowerCase();
@@ -456,12 +484,13 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
   const toggle = (v: CatalogVariant) => setSel((m) => { const c = new Map(m); if (c.has(v.id)) c.delete(v.id); else c.set(v.id, mkPick(v)); return c; });
   const setField = (id: string, patch: Partial<SkuPick>) => setSel((m) => { const cur = m.get(id); if (!cur) return m; return new Map(m).set(id, { ...cur, ...patch }); });
   const toggleOpen = (fam: string) => setOpen((s) => { const c = new Set(s); if (c.has(fam)) c.delete(fam); else c.add(fam); return c; });
-  const setFamily = (vs: CatalogVariant[], on: boolean) => setSel((m) => { const c = new Map(m); for (const v of vs) { if (on) { if (!c.has(v.id)) c.set(v.id, mkPick(v)); } else c.delete(v.id); } return c; });
+  const setFamily = (vs: CatalogVariant[], on: boolean) => setSel((m) => { const c = new Map(m); for (const v of vs) { if (v.sku && inOrderSkus.has(v.sku)) continue; if (on) { if (!c.has(v.id)) c.set(v.id, mkPick(v)); } else c.delete(v.id); } return c; });
 
   const selected = [...sel.entries()].map(([id, p]) => ({ v: byId.get(id), p })).filter((x): x is { v: CatalogVariant; p: SkuPick } => !!x.v);
   const totalUnits = selected.reduce((s, x) => s + x.p.qty, 0);
   const subtotal = selected.reduce((s, x) => s + x.p.qty * (x.p.unit_cost ?? 0), 0);
   const needsReview = selected.some((x) => !x.v.has_image || x.p.unit_cost == null || skuStatusTone(x.v.status) === "warning");
+  const canSubmit = selected.length > 0 && selected.every((x) => x.p.qty > 0 && (x.p.unit_cost ?? 0) > 0);
 
   function submit() {
     setErr(null);
@@ -471,67 +500,70 @@ function AddSkuModal({ orderId, variants, onClose }: { orderId: string; variants
   }
 
   return (
-    <Modal open onClose={onClose} title="Add SKUs" size="xl">
-      <div className="space-y-3">
-        <p className="-mt-1 text-[12px] text-muted-foreground">Select existing catalog variants for this production order. Only ticked rows become order lines.</p>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, title, family…" className={inputCls} />
-        <div className="flex flex-wrap gap-1.5">{SKU_FILTERS.map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn("vy-chip", filter === f && "is-active")}>{f}</button>)}</div>
-
-        <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
-          {/* catalog list — collapsible family cards */}
-          <div className="max-h-[54vh] space-y-2.5 overflow-y-auto pr-1">
+    <Modal open onClose={onClose} title="Add SKUs" subtitle="Select existing catalog variants for this production order." size="2xl" unpadded
+      footer={<div className="flex flex-wrap items-center gap-3">
+        <div className="text-[12px] text-muted-foreground">{selected.length} SKUs · {num(totalUnits)} units · <span className="font-mono font-semibold text-foreground">{money(subtotal)}</span> subtotal</div>
+        <div className="ml-auto flex gap-2">
+          <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
+          <PrimaryButton type="button" onClick={submit} disabled={pending || !canSubmit}>{pending ? "Adding…" : "Add selected lines"}</PrimaryButton>
+        </div>
+      </div>}
+    >
+      <div className="flex min-h-0 flex-1">
+        {/* LEFT — catalog (68%) */}
+        <div className="flex min-h-0 flex-[0_0_68%] flex-col border-r bg-background">
+          <div className="shrink-0 space-y-2.5 border-b p-4">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, title, ASIN, family, supplier" className={inputCls} />
+            <div className="flex flex-wrap gap-1.5">{SKU_FILTERS.map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn("vy-chip", filter === f && "is-active")}>{f}</button>)}</div>
+            <div className="rounded-lg px-3 py-2 text-[11px] text-muted-foreground" style={{ background: "hsl(var(--accent))" }}>Add SKUs creates order lines only. Catalog products, invoices, payments, shipments, and service charges stay in their own sections.</div>
+          </div>
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-4">
             {groups.map(([fam, vs]) => {
               const selCount = vs.filter((v) => sel.has(v.id)).length;
               return (
-                <SkuFamilyCard key={fam} fam={fam} vs={vs} isOpen={!!n || open.has(fam)} selCount={selCount} sel={sel}
+                <SkuFamilyCard key={fam} fam={fam} vs={vs} isOpen={!!n || open.has(fam)} selCount={selCount} sel={sel} inOrderSkus={inOrderSkus} showCny={showCny}
                   onToggleOpen={() => toggleOpen(fam)} onSelectAll={() => setFamily(vs, selCount !== vs.length)} onToggleVariant={toggle} />
               );
             })}
             {filtered.length === 0 && <div className="rounded-lg border px-3 py-8 text-center text-[12px] text-muted-foreground">No variants match. Add new ones in Products.</div>}
           </div>
+        </div>
 
-          {/* selected lines — review qty + pricing */}
-          <div className="rounded-xl border bg-accent/30 p-3">
-            <div className="mb-1.5 flex items-start justify-between gap-2">
-              <div><div className="font-semibold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>
-              {selected.length > 0 && <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" checked={showCny} onChange={(e) => setShowCny(e.target.checked)} className="h-3.5 w-3.5 accent-primary" /> ¥ ref</label>}
+        {/* RIGHT — selected lines (32%), always visible */}
+        <div className="flex min-h-0 flex-[0_0_32%] flex-col" style={{ background: "hsl(var(--accent))" }}>
+          <div className="shrink-0 border-b px-4 py-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div><div className="text-[14px] font-bold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" checked={showCny} onChange={(e) => setShowCny(e.target.checked)} className="h-3.5 w-3.5 accent-primary" /> ¥ ref</label>
             </div>
-            {needsReview && <div className="mb-2 rounded-md border px-2.5 py-1.5 text-[11px] text-warning" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>Needs review: missing images, titles, or costs</div>}
-            {selected.length === 0 ? (
-              <p className="py-10 text-center text-[12px] text-muted-foreground">No SKUs selected. Tick variants on the left — only selected rows become order lines.</p>
-            ) : (
-              <div className="max-h-[44vh] space-y-2 overflow-y-auto pr-0.5">
+            {needsReview && <div className="mt-2 rounded-md border px-2.5 py-1.5 text-[11px] text-warning" style={{ background: "hsl(var(--warning) / 0.08)", borderColor: "hsl(var(--warning) / 0.3)" }}>Needs review: missing images, titles, or costs</div>}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {selected.length === 0 ? <EmptySelected /> : (
+              <div className="space-y-2.5">
                 {selected.map(({ v, p }) => (
-                  <div key={v.id} className="rounded-lg border bg-card p-2.5">
-                    <div className="flex items-start gap-2">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-muted text-muted-foreground"><Package className="h-3.5 w-3.5" /></span>
+                  <div key={v.id} className="rounded-lg border bg-card p-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-accent text-muted-foreground"><Package className="h-4 w-4" /></span>
                       <div className="min-w-0 flex-1">
                         <div className="font-mono text-[12px] font-semibold">{v.sku}</div>
                         <div className="text-[11px] text-muted-foreground">{[v.familyName, v.name, v.pack].filter(Boolean).join(" · ")}</div>
-                        {skuStatusTone(v.status) === "warning" && <div className="text-[10px] text-warning">{v.status}</div>}
+                        {skuStatusTone(v.status) === "warning" && <div className="mt-0.5 text-[10px] text-warning">{v.status}</div>}
                       </div>
                       <button type="button" onClick={() => toggle(v)} className="vy-icon-btn shrink-0" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <label className="block"><span className="vy-kicker">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(Number(e.target.value)) || 0) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
-                      <label className="block"><span className="vy-kicker">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
+                      <label className="block"><span className="vy-kicker">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(decOrNull(e.target.value) ?? 0)) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                      <label className="block"><span className="vy-kicker">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: decOrNull(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
                     </div>
-                    {showCny && <label className="mt-2 block"><span className="vy-kicker">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: e.target.value === "" ? null : Number(e.target.value) })} placeholder="note only" className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
-                    <div className="mt-2 flex items-center justify-between border-t pt-1.5 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
+                    {showCny && <label className="mt-2 block"><span className="vy-kicker">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: decOrNull(e.target.value) })} placeholder="note only" className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
+                    <div className="mt-2.5 flex items-center justify-between border-t pt-2 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
-
-        {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
-        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-          <div className="text-[12px] text-muted-foreground">{selected.length} SKUs · {num(totalUnits)} units · <span className="font-mono font-semibold text-foreground">{money(subtotal)}</span> subtotal</div>
-          <div className="ml-auto flex gap-2">
-            <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
-            <PrimaryButton type="button" onClick={submit} disabled={pending || selected.length === 0}>{pending ? "Adding…" : "Add selected lines"}</PrimaryButton>
-          </div>
+          {err && <div className="shrink-0 border-t px-4 py-2 text-[12px] text-danger">{err}</div>}
         </div>
       </div>
     </Modal>
