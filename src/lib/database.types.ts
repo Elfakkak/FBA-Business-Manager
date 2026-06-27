@@ -1235,6 +1235,7 @@ export type Database = {
       }
       packaging_items: {
         Row: {
+          archived: boolean
           created_at: string
           design_url: string | null
           family_id: string | null
@@ -1248,6 +1249,7 @@ export type Database = {
           variant_ids: string[]
         }
         Insert: {
+          archived?: boolean
           created_at?: string
           design_url?: string | null
           family_id?: string | null
@@ -1261,6 +1263,7 @@ export type Database = {
           variant_ids?: string[]
         }
         Update: {
+          archived?: boolean
           created_at?: string
           design_url?: string | null
           family_id?: string | null

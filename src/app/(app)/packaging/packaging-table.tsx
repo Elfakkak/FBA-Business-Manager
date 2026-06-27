@@ -9,7 +9,7 @@ import { Field, inputCls, PrimaryButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { money, num, type PackagingItem, type PackagingMove } from "@/lib/derive";
-import { updatePackaging, savePackagingDesign, setPackagingSkus } from "./actions";
+import { updatePackaging, savePackagingDesign, setPackagingSkus, bulkSetPackagingArchived } from "./actions";
 import { ReceiveButton } from "./packaging-actions";
 import { cn } from "@/lib/utils";
 import { Boxes, ImagePlus, ExternalLink, Loader2, X } from "lucide-react";
@@ -21,12 +21,41 @@ export type PkgRow = { item: PackagingItem; onHand: number; unit: number; value:
 
 export function PackagingTable({ rows, moves, products, variants }: { rows: PkgRow[]; moves: PackagingMove[]; products: { id: string; parent: string }[]; variants: VariantOpt[] }) {
   const [peek, setPeek] = useState<PkgRow | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
+  const [bulkPending, startBulk] = useTransition();
+  const router = useRouter();
+  const toggleSel = (id: string) => setSel((s) => { const c = new Set(s); if (c.has(id)) c.delete(id); else c.add(id); return c; });
+  const runBulk = (fn: () => Promise<unknown>) => startBulk(async () => { await fn(); setSel(new Set()); router.refresh(); });
+  const visible = rows.filter((r) => showArchived || !r.item.archived);
+  const allSelected = visible.length > 0 && visible.every((r) => sel.has(r.item.id));
+  const toggleAll = () => setSel((s) => { const c = new Set(s); if (allSelected) visible.forEach((r) => c.delete(r.item.id)); else visible.forEach((r) => c.add(r.item.id)); return c; });
+  const archivedCount = rows.filter((r) => r.item.archived).length;
+  const selItems = rows.filter((r) => sel.has(r.item.id));
+  const canArchive = selItems.some((r) => !r.item.archived);
+  const canUnarchive = selItems.some((r) => r.item.archived);
+
   return (
+    <div className="space-y-3">
+      {(archivedCount > 0 || sel.size > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {archivedCount > 0 && <button onClick={() => setShowArchived((v) => !v)} className={cn("vy-chip", showArchived && "is-active")}>{showArchived ? "Hide" : "Show"} archived ({archivedCount})</button>}
+          {sel.size > 0 && (
+            <div className="ml-auto flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-3 py-1.5 text-sm">
+              <span className="font-semibold">{sel.size} selected</span>
+              <button type="button" disabled={bulkPending || !canArchive} onClick={() => runBulk(() => bulkSetPackagingArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
+              <button type="button" disabled={bulkPending || !canUnarchive} onClick={() => runBulk(() => bulkSetPackagingArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
+              <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+            </div>
+          )}
+        </div>
+      )}
     <Card className="overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+              <th className="w-9 py-2 pl-4 pr-1"><input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>
               <th className="px-4 py-2 font-medium">Packaging</th>
               <th className="px-4 py-2 font-medium">Size</th>
               <th className="px-4 py-2 font-medium">For product</th>
@@ -38,16 +67,19 @@ export function PackagingTable({ rows, moves, products, variants }: { rows: PkgR
             </tr>
           </thead>
           <tbody className="divide-y">
-            {rows.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No packaging yet.</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.item.id} onClick={() => setPeek(r)} className="cursor-pointer hover:bg-accent/40">
+            {visible.length === 0 ? (
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No packaging yet.</td></tr>
+            ) : visible.map((r) => (
+              <tr key={r.item.id} onClick={() => setPeek(r)} className={cn("cursor-pointer hover:bg-accent/40", r.item.archived && "opacity-60")}>
+                <td className="py-2.5 pl-4 pr-1" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={sel.has(r.item.id)} onChange={() => toggleSel(r.item.id)} className="h-4 w-4 accent-primary" aria-label={`Select ${r.item.name}`} />
+                </td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
                     <span className="relative inline-grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md border bg-info/10 text-info">
                       {r.item.design_url ? <Image src={r.item.design_url} alt="" fill sizes="36px" className="object-cover" /> : <Boxes className="h-4 w-4" />}
                     </span>
-                    <div><div className="font-medium">{r.item.name}</div><div className="text-[11px] text-muted-foreground">{r.item.kind}</div></div>
+                    <div><div className="font-medium">{r.item.name}{r.item.archived && <span className="ml-1.5 rounded bg-muted px-1 py-px text-[9px] uppercase tracking-wide">archived</span>}</div><div className="text-[11px] text-muted-foreground">{r.item.kind}</div></div>
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{r.item.size || "—"}</td>
@@ -67,6 +99,7 @@ export function PackagingTable({ rows, moves, products, variants }: { rows: PkgR
         {peek && <PackagingDetail key={peek.item.id} row={peek} moves={moves.filter((m) => m.item_id === peek.item.id)} products={products} variants={variants} onDone={() => setPeek(null)} />}
       </Drawer>
     </Card>
+    </div>
   );
 }
 
