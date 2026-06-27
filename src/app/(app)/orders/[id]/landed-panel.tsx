@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, KpiStrip, SectionHeader, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { money, num, productionLanded, costUsd, type OrderRow, type OrderCostRow } from "@/lib/derive";
+import { money, num, productionLanded, costUsd, FBA_INBOUND_FEE_PER_UNIT, type OrderRow, type OrderCostRow } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { lockLandedCost, unlockLandedCost, saveVariantSalePrice, saveLandedBuckets, type BucketEdit } from "../actions";
 import { PackageCheck, Lock, Unlock, DollarSign, Boxes, Layers, Check, Receipt, Pencil } from "lucide-react";
@@ -17,7 +17,7 @@ type VariantLite = { sku: string; sale_price: number | null };
 const fmt3 = (n: number) => "$" + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const isDutiesCost = (c: OrderCostRow) => c.line_type === "duties" || /dut(y|ies)|customs/i.test(c.description ?? "");
 
-type Bucket = { id: string | null; label: string; amount: number; basis: string; source: string; isDuties: boolean };
+type Bucket = { id: string | null; label: string; amount: number; basis: string; source: string; isDuties: boolean; auto?: boolean };
 
 export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow; lines: LandedLine[]; costs: OrderCostRow[]; variants: VariantLite[] }) {
   const router = useRouter();
@@ -25,7 +25,10 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
   const [adjust, setAdjust] = useState(false);
   const locked = order.status === "closed";
 
-  const roll = useMemo(() => productionLanded(lines, costs), [lines, costs]);
+  // Amazon FBA inbound fees (placement/prep/labeling) — per-unit, folded into landed cost.
+  const orderUnits = useMemo(() => lines.reduce((s, l) => s + (l.qty || 0), 0), [lines]);
+  const fbaInboundFee = Math.round(orderUnits * FBA_INBOUND_FEE_PER_UNIT * 100) / 100;
+  const roll = useMemo(() => productionLanded(lines, costs, fbaInboundFee), [lines, costs, fbaInboundFee]);
   const inv = useMemo(() => costs.filter((c) => c.treatment !== "period"), [costs]); // inventoriable → roll into landed
   const avgLanded = roll.totalUnits > 0 ? roll.totalLanded / roll.totalUnits : 0;
   const nonGoods = roll.totalLanded - roll.totalGoods;
@@ -39,6 +42,7 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
       id: c.id, label: c.description || "Cost", amount: costUsd(c), basis: c.basis,
       source: c.vendor || (costUsd(c) > 0 ? "Entered in Production" : "pending"), isDuties: false,
     }));
+    if (fbaInboundFee > 0.005) b.push({ id: null, label: "FBA inbound fees (Amazon)", amount: fbaInboundFee, basis: "units", source: "Amazon · FBA inbound (est.)", isDuties: false, auto: true });
     b.push(dutiesCost
       ? { id: dutiesCost.id, label: "Duties & customs", amount: costUsd(dutiesCost), basis: dutiesCost.basis, source: costUsd(dutiesCost) > 0 ? "Entered" : "pending", isDuties: true }
       : { id: null, label: "Duties & customs", amount: 0, basis: "value", source: "To be entered", isDuties: true });
@@ -105,7 +109,7 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
               <div className="vy-kicker truncate">{b.label}</div>
               <div className={cn("mt-0.5 font-mono text-base font-bold", b.amount === 0 && "text-warning")}>{money(b.amount)}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                <Badge tone={b.isDuties && b.amount === 0 ? "warning" : "muted"}>Manual</Badge>
+                {b.auto ? <Badge tone="info">Auto</Badge> : <Badge tone={b.isDuties && b.amount === 0 ? "warning" : "muted"}>Manual</Badge>}
                 <Badge tone="muted">{b.basis === "units" ? "By units" : "By value"}</Badge>
                 <span>{b.amount === 0 ? "pending" : b.source}</span>
               </div>
@@ -167,7 +171,7 @@ export function LandedPanel({ order, lines, costs, variants }: { order: OrderRow
       {/* Did it make money? */}
       <ProfitCard order={order} roll={roll} variants={variants} />
 
-      {adjust && <AdjustModal orderId={order.id} buckets={buckets} onClose={() => setAdjust(false)} onSaved={() => { setAdjust(false); router.refresh(); }} />}
+      {adjust && <AdjustModal orderId={order.id} buckets={buckets.filter((b) => !b.auto)} onClose={() => setAdjust(false)} onSaved={() => { setAdjust(false); router.refresh(); }} />}
     </div>
   );
 }

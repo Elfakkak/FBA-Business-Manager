@@ -364,16 +364,21 @@ export function costUsd(c: { amount: number | null }): number {
 // (period expenses stay out of COGS) over the goods lines by each cost's basis
 // (per-unit or by line value), then landed = (line + allocated)/qty. Costs are
 // normalized to USD. Duties are out of scope here, so it's an estimate ("est").
-export function productionLanded(lines: ProdLine[], costs: ProdCost[]) {
+// Amazon inbound placement/prep/labeling — per-unit, folded into landed cost (2026 est.).
+export const FBA_INBOUND_FEE_PER_UNIT = 0.17;
+
+// `extraUnitsCost` = a total cost allocated purely by units (e.g. the Amazon FBA
+// inbound-fees bucket), on top of the order's inventoriable cost pool.
+export function productionLanded(lines: ProdLine[], costs: ProdCost[], extraUnitsCost = 0) {
   const num = (v: number | null | undefined) => Number(v) || 0;
   const inv = costs.filter((c) => c.treatment !== "period");
   const totalUnits = lines.reduce((s, l) => s + num(l.qty), 0);
   const totalGoods = lines.reduce((s, l) => s + num(l.qty) * num(l.unit_cost), 0);
-  const costPool = inv.reduce((s, c) => s + costUsd(c), 0);
+  const costPool = inv.reduce((s, c) => s + costUsd(c), 0) + extraUnitsCost;
   const withLanded = lines.map((l) => {
     const qty = num(l.qty);
     const line = qty * num(l.unit_cost);
-    let alloc = 0;
+    let alloc = totalUnits ? (extraUnitsCost * qty) / totalUnits : 0;
     for (const c of inv) {
       const amt = costUsd(c);
       // value-basis falls back to per-unit when goods aren't priced yet, so the
