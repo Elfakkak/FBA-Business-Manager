@@ -292,6 +292,76 @@ export async function saveLandedBuckets(orderId: string, items: BucketEdit[]): P
   return { ok: true };
 }
 
+// ---- Inspection ---------------------------------------------------------------
+type InspectionPatch = Database["public"]["Tables"]["order_inspections"]["Update"];
+
+async function upsertInspection(orderId: string, patch: InspectionPatch): Promise<Result> {
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("order_inspections").select("order_id").eq("order_id", orderId).maybeSingle();
+  const body = { ...patch, updated_at: new Date().toISOString() };
+  const { error } = existing
+    ? await supabase.from("order_inspections").update(body).eq("order_id", orderId)
+    : await supabase.from("order_inspections").insert({ order_id: orderId, ...body });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+// Advance the order forward only (never backward) — used when inspection clears.
+async function advanceOrderForward(orderId: string, target: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: o } = await supabase.from("orders").select("status").eq("id", orderId).maybeSingle();
+  if (!o) return;
+  const idx = (k: string) => ORDER_PIPELINE.findIndex((s) => s.key === k);
+  if (idx(target) > idx(o.status)) {
+    await supabase.from("orders").update({ status: target as OrderStatus }).eq("id", orderId);
+    revalidatePath("/orders");
+  }
+}
+
+export async function toggleInspectionRequired(orderId: string, required: boolean): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("orders").update({ inspection_required: required }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/orders/${orderId}`); revalidatePath("/orders");
+  return { ok: true };
+}
+
+export async function scheduleInspection(orderId: string, f: { inspector: string; scheduled_date: string; visit_type: string; aql: string; factory_contact?: string | null }): Promise<Result> {
+  if (!f.inspector?.trim() || !f.scheduled_date?.trim()) return { ok: false, error: "Inspector and date are required." };
+  return upsertInspection(orderId, { inspector: f.inspector.trim(), scheduled_date: f.scheduled_date.trim(), visit_type: f.visit_type, aql: f.aql, factory_contact: f.factory_contact?.trim() || null, status: "scheduled" });
+}
+
+export async function saveInspectionReport(orderId: string, url: string, name: string): Promise<Result> {
+  return upsertInspection(orderId, { report_url: url, report_name: name, report_accepted: false });
+}
+
+export async function acceptInspectionReport(orderId: string): Promise<Result> {
+  const r = await upsertInspection(orderId, { report_accepted: true });
+  if (!r.ok) return r;
+  const supabase = await createClient();
+  const { data: insp } = await supabase.from("order_inspections").select("result").eq("order_id", orderId).maybeSingle();
+  if (insp?.result === "pass") await advanceOrderForward(orderId, "transit");
+  return { ok: true };
+}
+
+export async function saveInspectionFolderLink(orderId: string, url: string): Promise<Result> {
+  return upsertInspection(orderId, { folder_link: url.trim() || null });
+}
+
+export async function setInspectionResult(orderId: string, result: string, defects?: { critical?: number | null; major?: number | null; minor?: number | null }): Promise<Result> {
+  const patch: InspectionPatch = { result, status: "completed", completed_date: new Date().toISOString().slice(0, 10) };
+  if (defects) { patch.defects_critical = defects.critical ?? null; patch.defects_major = defects.major ?? null; patch.defects_minor = defects.minor ?? null; }
+  const r = await upsertInspection(orderId, patch);
+  if (!r.ok) return r;
+  if (result === "pass") {
+    const supabase = await createClient();
+    const { data: insp } = await supabase.from("order_inspections").select("report_accepted").eq("order_id", orderId).maybeSingle();
+    if (insp?.report_accepted) await advanceOrderForward(orderId, "transit");
+  }
+  return { ok: true };
+}
+
 export async function setOrderStatus(id: string, status: string): Promise<Result> {
   if (!isValidStatus(status)) return { ok: false, error: "Invalid status." };
   const supabase = await createClient();
