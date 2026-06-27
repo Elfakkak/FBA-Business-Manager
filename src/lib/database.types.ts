@@ -1164,6 +1164,7 @@ export type Database = {
       orders: {
         Row: {
           agent: string | null
+          archived: boolean
           created_at: string
           fba_eta: string | null
           id: string
@@ -1181,6 +1182,7 @@ export type Database = {
         }
         Insert: {
           agent?: string | null
+          archived?: boolean
           created_at?: string
           fba_eta?: string | null
           id: string
@@ -1198,6 +1200,7 @@ export type Database = {
         }
         Update: {
           agent?: string | null
+          archived?: boolean
           created_at?: string
           fba_eta?: string | null
           id?: string

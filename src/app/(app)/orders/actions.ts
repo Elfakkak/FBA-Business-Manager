@@ -376,3 +376,22 @@ export async function setOrderStatus(id: string, status: string): Promise<Result
   revalidatePath(`/orders/${id}`);
   return { ok: true };
 }
+
+export async function bulkSetOrderStatus(ids: string[], status: string): Promise<Result> {
+  if (!ids.length) return { ok: true };
+  if (!isValidStatus(status)) return { ok: false, error: "Invalid status." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("orders").update({ status: status as OrderStatus }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/orders");
+  return { ok: true };
+}
+
+export async function bulkSetOrderArchived(ids: string[], archived: boolean): Promise<Result> {
+  if (!ids.length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("orders").update({ archived }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/orders");
+  return { ok: true };
+}
