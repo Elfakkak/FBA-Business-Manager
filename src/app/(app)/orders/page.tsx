@@ -23,7 +23,7 @@ export default async function OrdersPage() {
     const r = orderRollup(o.id, (invoices ?? []) as InvoiceRow[]);
     return {
       id: o.id, title: o.title, supplier: o.supplier, agent: o.agent,
-      status: o.status, placedOn: o.placed_on, fbaEta: o.fba_eta,
+      status: o.status, placedOn: o.placed_on, fbaEta: o.fba_eta, archived: o.archived,
       total: r.total, paid: r.paid, balance: r.balance, paidPct: r.paidPct,
       units: units.get(o.id) ?? 0, skuCount: skus.get(o.id) ?? 0,
     };

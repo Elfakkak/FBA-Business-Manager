@@ -1,21 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
 import { useNewParam } from "@/lib/use-new-param";
-import { createOrder } from "./actions";
+import { createOrder, bulkSetOrderStatus, bulkSetOrderArchived } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { Plus, ChevronRight, Boxes, Wallet, Hammer, ClipboardCheck, Truck, PackageCheck, Receipt, ArrowRight } from "lucide-react";
 
 export type OrderSummary = {
   id: string; title: string; supplier: string | null; agent: string | null;
-  status: string; placedOn: string | null; fbaEta: string | null;
+  status: string; placedOn: string | null; fbaEta: string | null; archived: boolean;
   total: number; paid: number; balance: number; paidPct: number;
   units: number; skuCount: number;
 };
@@ -26,15 +27,25 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
   const [q, setQ] = useState("");
   const [stage, setStage] = useState("all");
   const [peek, setPeek] = useState<OrderSummary | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [bulkPending, startBulk] = useTransition();
+  const router = useRouter();
+  const toggleSel = (id: string) => setSel((s) => { const c = new Set(s); if (c.has(id)) c.delete(id); else c.add(id); return c; });
+  const runBulk = (fn: () => Promise<unknown>) => startBulk(async () => { await fn(); setSel(new Set()); router.refresh(); });
 
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
     return orders.filter((o) => {
+      if (!showArchived && o.archived) return false;
       if (stage !== "all" && o.status !== stage) return false;
       if (n && !`${o.id} ${o.title} ${o.supplier ?? ""}`.toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [orders, q, stage]);
+  }, [orders, q, stage, showArchived]);
+  const allSelected = filtered.length > 0 && filtered.every((o) => sel.has(o.id));
+  const toggleAll = () => setSel((s) => { const c = new Set(s); if (allSelected) filtered.forEach((o) => c.delete(o.id)); else filtered.forEach((o) => c.add(o.id)); return c; });
+  const archivedCount = orders.filter((o) => o.archived).length;
 
   const openOrders = orders.filter((o) => o.status !== "closed" && o.status !== "fba").length;
   const outstanding = orders.reduce((s, o) => s + o.balance, 0);
@@ -66,9 +77,23 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
             {CHIPS.map((c) => (
               <button key={c.key} onClick={() => setStage(c.key)} className={cn("vy-chip", stage === c.key && "is-active")}>{c.label}</button>
             ))}
+            {archivedCount > 0 && <button onClick={() => setShowArchived((v) => !v)} className={cn("vy-chip", showArchived && "is-active")}>Archived ({archivedCount})</button>}
           </div>
         </div>
       </Card>
+
+      {sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-4 py-2.5 text-sm">
+          <span className="font-semibold">{sel.size} selected</span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Select value="" onChange={(v) => v && runBulk(() => bulkSetOrderStatus([...sel], v))} placeholder="Set status…" className="w-44"
+              options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} disabled={bulkPending} />
+            <button type="button" disabled={bulkPending} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm">Archive</button>
+            <button type="button" disabled={bulkPending} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm">Unarchive</button>
+            <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+          </div>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <CardHeader title={`${filtered.length} orders`} caption="Total / paid derived from invoices" />
@@ -76,6 +101,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="w-9 py-2 pl-4 pr-1"><input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>
                 <th className="px-4 py-2 font-medium">Order</th>
                 <th className="px-4 py-2 font-medium">Supplier</th>
                 <th className="px-4 py-2 text-right font-medium">Units</th>
@@ -88,12 +114,15 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
             </thead>
             <tbody className="divide-y">
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No orders match your filters.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No orders match your filters.</td></tr>
               ) : filtered.map((o) => (
-                <tr key={o.id} className="vy-order-row cursor-pointer hover:bg-accent/40" onClick={() => setPeek(o)}>
+                <tr key={o.id} className={cn("vy-order-row cursor-pointer hover:bg-accent/40", o.archived && "opacity-60")} onClick={() => setPeek(o)}>
+                  <td className="py-2.5 pl-4 pr-1" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggleSel(o.id)} className="h-4 w-4 accent-primary" aria-label={`Select ${o.id}`} />
+                  </td>
                   <td className="px-4 py-2.5">
                     <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-semibold hover:text-primary">{o.id}</Link>
-                    <div className="max-w-[260px] truncate text-[12px] text-muted-foreground">{o.title}</div>
+                    <div className="max-w-[260px] truncate text-[12px] text-muted-foreground">{o.title}{o.archived && <span className="ml-1.5 rounded bg-muted px-1 py-px text-[9px] uppercase tracking-wide">archived</span>}</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <div>{o.supplier ?? "—"}</div>
