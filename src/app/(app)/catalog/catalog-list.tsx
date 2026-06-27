@@ -32,6 +32,7 @@ export type FamilySummary = {
   avgMargin: number | null;
   status: string;
   favorite: boolean;
+  image: string | null;
   skus: { sku: string; asin: string | null; stock: number; status: string }[];
 };
 
@@ -205,7 +206,10 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                         <button onClick={(e) => { e.stopPropagation(); toggleFav(f.id, !f.favorite); }} className="shrink-0 text-muted-foreground hover:text-warning" title={f.favorite ? "Unfavorite" : "Favorite"} aria-label="Toggle favorite">
                           <Star className={cn("h-4 w-4", f.favorite && "fill-warning text-warning")} />
                         </button>
-                        <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>
+                        {f.image
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={f.image} alt="" className="h-8 w-8 shrink-0 rounded-md border object-cover" />
+                          : <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted text-muted-foreground"><Package className="h-4 w-4" /></span>}
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <Link href={`/catalog/${f.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-[240px] truncate font-medium hover:text-primary" title={f.parent}>{f.parent}{f.color ? ` · ${f.color}` : ""}</Link>
@@ -263,8 +267,16 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
       <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.parent}>
         {peek && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              {peek.category}{peek.supplier ? ` · ${peek.supplier}` : ""}
+            {/* image + identity */}
+            <div className="flex items-start gap-3">
+              {peek.image
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={peek.image} alt="" className="h-16 w-16 shrink-0 rounded-lg border object-cover" />
+                : <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg border bg-muted text-muted-foreground"><Package className="h-5 w-5" /></span>}
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] text-muted-foreground">{peek.category}{peek.supplier ? ` · ${peek.supplier}` : ""}</div>
+                <Link href={`/catalog/${peek.id}`} className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">Edit image &amp; details <ArrowUpRight className="h-3 w-3" /></Link>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={FAMILY_HEALTH_TONE[peek.health]}>{peek.health}</Badge>
