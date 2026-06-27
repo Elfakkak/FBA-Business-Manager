@@ -124,7 +124,7 @@ export default async function VariantPage({ params }: { params: Promise<{ id: st
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/catalog/${id}`} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> Product</Link>
             <Link href={`/inventory?q=${encodeURIComponent(v.sku)}`} className="vy-btn vy-btn--outline inline-flex items-center gap-1.5"><Boxes className="h-3.5 w-3.5" /> Inventory</Link>
-            <Link href="/orders" className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5" /> Model reorder</Link>
+            <Link href={`/fba-calculator?fam=${id}&sku=${encodeURIComponent(v.sku)}`} className="vy-btn vy-btn--primary inline-flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5" /> Model reorder</Link>
           </div>
         </div>
       </Card>
