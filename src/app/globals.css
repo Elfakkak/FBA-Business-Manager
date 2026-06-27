@@ -52,6 +52,14 @@
   --header-h: 60px;
   --max-content: 1440px;
   --content-pad: 24px;
+
+  /* motion system (V4) — signature easing for entrances/transforms, plain ease for state */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: ease;
+  --dur-1: 120ms;  /* hover, color, focus */
+  --dur-2: 170ms;  /* menus, pop-ins, row hover */
+  --dur-3: 260ms;  /* pages, scrims, dialogs */
+  --dur-4: 320ms;  /* right drawers */
 }
 
 .dark {
@@ -307,4 +315,28 @@ body {
 }
 @media (max-width: 480px) {
   .vy-kpi-row { grid-template-columns: 1fr; }
+}
+
+/* ---- Motion system (V4) ----------------------------------------------------- */
+/* Page / order-shell section enter — opacity-only (safe under reduced motion). */
+@keyframes vy-page-in { from { opacity: 0; } to { opacity: 1; } }
+.vy-page-in { animation: vy-page-in var(--dur-3) var(--ease-out) both; }
+
+/* Pop-over (menus, select popover) */
+@keyframes vy-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.vy-pop-in { animation: vy-pop-in var(--dur-2) var(--ease-out) both; }
+
+/* Shared Modal enter — scrim fades, panel rises + scales (class toggled after mount) */
+.vy-modal-scrim { opacity: 0; transition: opacity var(--dur-3) var(--ease-out); }
+.vy-modal-scrim.is-open { opacity: 1; }
+.vy-modal-panel { opacity: 0; transform: translateY(10px) scale(0.985); transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.vy-modal-panel.is-open { opacity: 1; transform: translateY(0) scale(1); }
+
+/* Button press */
+.vy-btn:active { transform: translateY(0.5px); }
+
+/* Reduced-motion: drop non-essential animation; force final visible state. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .vy-page-in, .vy-pop-in, .vy-modal-panel, .vy-modal-scrim { opacity: 1 !important; transform: none !important; }
 }
