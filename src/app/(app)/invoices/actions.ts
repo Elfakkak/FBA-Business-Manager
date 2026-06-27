@@ -59,17 +59,6 @@ export async function updateInvoice(id: string, form: FormData): Promise<Result>
   return { ok: true, id };
 }
 
-// Inline-save the structured payment term (from the Payment-terms card).
-export async function saveInvoiceTerms(id: string, cfg: { type: string; depositPct?: number | null; netDays?: number | null }): Promise<Result> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("invoices").update({
-    term_type: cfg.type, term_deposit_pct: cfg.depositPct ?? null, term_net_days: cfg.netDays ?? null,
-  }).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/invoices");
-  revalidatePath(`/invoices/${id}`);
-  return { ok: true, id };
-}
 
 // Attach (or replace) a payment's proof — a receipt file URL.
 export async function attachPaymentProof(paymentId: string, invoiceId: string, url: string): Promise<Result> {

@@ -14,7 +14,7 @@ export function Drawer({ open, onClose, title, subtitle, footer, width = 420, di
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && dismissable) onClose(); };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -22,7 +22,7 @@ export function Drawer({ open, onClose, title, subtitle, footer, width = 420, di
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open, onClose, dismissable]);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(

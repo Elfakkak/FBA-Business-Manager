@@ -130,7 +130,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       forwarders={forwarders}
       freightInvoice={freightInvoice}
       ordered={orderedShip}
-      unlinkedInbounds={(unlinkedInbounds ?? []) as never}
+      unlinkedInbounds={(unlinkedInbounds ?? []) as unknown as OrderInbound[]}
       inspection={inspection ?? null}
       rollup={r}
       initialTab={tab ?? "overview"}

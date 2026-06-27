@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, CardHeader, SortableTh, type SortState } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { FAMILY_HEALTH_TONE, VARIANT_STATUS_TONE, marginTone, num, type FamilyHealth, type Tone } from "@/lib/derive";
@@ -59,7 +59,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
   const toggleSel = (id: string) => setSel((s) => { const c = new Set(s); if (c.has(id)) c.delete(id); else c.add(id); return c; });
   const bulkApply = (status: "active" | "draft" | "archived") => startBulk(async () => { await bulkSetProductStatus([...sel], status); setSel(new Set()); router.refresh(); });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  const [sort, setSort] = useState<SortState<SortKey>>(null);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
   const [peek, setPeek] = useState<FamilySummary | null>(null);
@@ -112,6 +112,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
   const pageRows = sorted.slice(from, from + pageSize);
   useEffect(() => { setPage(1); }, [q, category, supplier, chip, singleOnly, favOnly, statusFilter, pageSize]);
 
+  // Keep the smart first-click default (text→asc, numeric→desc); render with the shared SortableTh.
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "parent" || key === "category" ? "asc" : "desc" }));
 
@@ -176,13 +177,13 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <SortTh label="Product" k="parent" sort={sort} onSort={toggleSort} />
-                <SortTh label="Category" k="category" sort={sort} onSort={toggleSort} />
-                <SortTh label="SKUs" k="skuCount" right sort={sort} onSort={toggleSort} />
-                <SortTh label="FBA stock" k="stock" right sort={sort} onSort={toggleSort} />
-                <SortTh label="Inbound" k="inbound" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Product" k="parent" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Category" k="category" sort={sort} onSort={toggleSort} />
+                <SortableTh label="SKUs" k="skuCount" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="FBA stock" k="stock" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Inbound" k="inbound" right sort={sort} onSort={toggleSort} />
                 <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Last cost</th>
-                <SortTh label="Margin" k="avgMargin" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Margin" k="avgMargin" right sort={sort} onSort={toggleSort} />
                 <th className="whitespace-nowrap px-3 py-2 font-medium">Health</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -320,13 +321,3 @@ function FamilyRows({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function SortTh({ label, k, right, sort, onSort }: {
-  label: string; k: SortKey; right?: boolean; sort: { key: SortKey; dir: "asc" | "desc" } | null; onSort: (k: SortKey) => void;
-}) {
-  const active = sort?.key === k;
-  return (
-    <th className={cn("cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:text-foreground", right && "text-right")} onClick={() => onSort(k)}>
-      <span className="inline-flex items-center gap-1">{label}{active && <span className="text-[8px]">{sort!.dir === "asc" ? "▲" : "▼"}</span>}</span>
-    </th>
-  );
-}

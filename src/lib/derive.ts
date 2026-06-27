@@ -171,6 +171,19 @@ export function incotermInfo(term: string | null): { customsBy: string; dutiesBy
 // shipments whose cargo is moving (left origin) — for "shipped/on-water" rollups
 export const SHIPMENT_MOVING = ["Picked up", "In transit", "Customs", "Delivered", "At FBA"];
 
+// The block of IDs a forwarder asks for — one shared composer so every "copy for
+// forwarder" hand-off (FBA detail card, order shipping rows, copy-all) is identical.
+export function forwarderCopyBlock(i: { id: string; reference_id?: string | null; fc: string; eta_from?: string | null; eta_to?: string | null; shipment_id?: string | null; order_id?: string | null }): string {
+  return [
+    `FBA shipment ID: ${i.id}`,
+    i.reference_id ? `Reference ID: ${i.reference_id}` : null,
+    `Dest FC: ${i.fc}`,
+    (i.eta_from || i.eta_to) ? `FBA arrival: ${i.eta_from || "?"} – ${i.eta_to || "?"}` : null,
+    i.shipment_id ? `Freight shipment: ${i.shipment_id}` : null,
+    i.order_id ? `Order: ${i.order_id}` : null,
+  ].filter(Boolean).join("\n");
+}
+
 const isClosed = (status: string) => /closed|fba/i.test(status);
 const unpaid = (inv: InvoiceRow) => Math.max(0, (inv.total ?? 0) - (inv.paid ?? 0));
 
