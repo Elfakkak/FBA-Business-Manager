@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Badge, Kpi, KpiStrip, SectionHeader, SectionTitle } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-import { money, num, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, SHIPMENT_MOVING, incotermInfo, type Tone, type OrderRow } from "@/lib/derive";
+import { money, num, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, SHIPMENT_MOVING, incotermInfo, forwarderCopyBlock, type Tone, type OrderRow } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "@/components/ui/copy";
 import { intgAgo } from "@/lib/integrations";
@@ -113,7 +113,7 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
         title="Shipping"
         blurb="Physical shipment data, packing lists, FBA inbound links, freight context, and shipment files."
         badges={<>
-          <Badge tone="muted">{shipments.length} shipment{shipments.length === 1 ? "" : "s"}</Badge>
+          <Badge tone="info">{shipments.length} shipment{shipments.length === 1 ? "" : "s"}</Badge>
           <Badge tone="muted">{num(packedTotal)} pcs</Badge>
           {inTransit > 0 && <Badge tone="info">{inTransit} in transit</Badge>}
           {packingMissing.length > 0 ? <Badge tone="warning">Packing missing</Badge> : shipments.length > 0 && <Badge tone="success">All packed</Badge>}
@@ -239,19 +239,14 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
           <Card className="p-5">
             <SectionTitle icon={PackageCheck} tone="success" strong title="FBA inbound shipments" sub={`Status & received units sync from Seller Central${inbLastSync ? ` · synced ${intgAgo(inbLastSync)}` : ""}`}
               action={<div className="flex items-center gap-1.5">
-                {activeInbounds.length > 0 && <CopyButton label="Copy all for forwarder" text={activeInbounds.map((f) => [
-                  `FBA shipment ID: ${f.id}`,
-                  f.reference_id ? `Reference ID: ${f.reference_id}` : null,
-                  `Dest FC: ${f.fc}`,
-                  (f.eta_from || f.eta_to) ? `FBA arrival: ${f.eta_from || "?"} – ${f.eta_to || "?"}` : null,
-                ].filter(Boolean).join("\n")).join("\n\n")} />}
+                {activeInbounds.length > 0 && <CopyButton label="Copy all for forwarder" text={activeInbounds.map((f) => forwarderCopyBlock(f)).join("\n\n")} />}
                 <button type="button" onClick={() => setLinkingFor(activeShip)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> Link FBA</button>
               </div>} />
             {activeInbounds.length === 0 ? (
               <div className="rounded-lg border border-dashed px-4 py-8 text-center"><span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground"><Link2 className="h-4 w-4" /></span><div className="text-[13px] font-semibold">No FBA inbounds linked</div><p className="mt-0.5 text-[11px] text-muted-foreground">Create the packing list first, then link Amazon FBA inbound shipments to track expected vs. received units.</p></div>
             ) : (
               <div className="space-y-2.5">
-                {activeInbounds.map((f) => { const variance = f.received - f.expected; const win = f.eta_from || f.eta_to ? `${f.eta_from || "?"} – ${f.eta_to || "?"}` : f.eta || null; const rowCopy = [`FBA shipment ID: ${f.id}`, f.reference_id ? `Reference ID: ${f.reference_id}` : null, `Dest FC: ${f.fc}`, (f.eta_from || f.eta_to) ? `FBA arrival: ${f.eta_from || "?"} – ${f.eta_to || "?"}` : null].filter(Boolean).join("\n"); return (
+                {activeInbounds.map((f) => { const variance = f.received - f.expected; const win = f.eta_from || f.eta_to ? `${f.eta_from || "?"} – ${f.eta_to || "?"}` : f.eta || null; const rowCopy = forwarderCopyBlock(f); return (
                   <div key={f.id} className="rounded-lg border bg-background/40 px-4 py-3">
                     {/* IDs — copy the whole set with 'Copy all for forwarder' above */}
                     <div className="flex flex-wrap items-center gap-2">

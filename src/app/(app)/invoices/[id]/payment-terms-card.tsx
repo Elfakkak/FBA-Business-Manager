@@ -25,7 +25,7 @@ export function PaymentTermsCard({ vendor, total, paid, cfg }: {
 
       <div className="px-5 pb-4">
         <div className="flex items-center gap-2">
-          <span className="grid h-7 w-9 place-items-center rounded-md bg-primary/12 text-[11px] font-bold text-primary">{t.label}</span>
+          <span className="grid h-7 w-9 place-items-center rounded-md bg-info/12 text-[11px] font-bold text-info">{t.label}</span>
           <span className="text-[13px] font-semibold">{t.name}</span>
         </div>
         <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">{t.blurb}</p>

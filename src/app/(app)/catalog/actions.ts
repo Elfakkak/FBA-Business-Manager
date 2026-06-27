@@ -244,7 +244,7 @@ export async function addVariant(familyId: string, form: FormData): Promise<Resu
   attrs = (attrs || []).filter((a) => a && a.key?.trim() && a.value?.trim()).map((a) => ({ key: a.key.trim(), value: a.value.trim() }));
   // Derive a display name from the attribute values; pack from a "Pack" attribute.
   const name = attrs.map((a) => a.value).join(" ") || sku;
-  const pack = attrs.find((a) => /pack/i.test(a.key))?.value || "1-Pack";
+  const pack = attrs.find((a) => /^pack$/i.test(a.key))?.value || "1-Pack";
   const attrObj = Object.fromEntries(attrs.map((a) => [a.key, a.value]));
   // ASIN/FNSKU auto-populate when the SKU links to Amazon — kept optional here.
   const asin = String(form.get("asin") ?? "").trim() || null;

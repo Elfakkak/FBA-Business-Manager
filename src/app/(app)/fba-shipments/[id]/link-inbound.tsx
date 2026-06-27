@@ -50,7 +50,7 @@ export function LinkInboundCard({ inboundId, shipmentId, orderId, shipments, ord
         </label>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <button onClick={save} disabled={pending} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5">{saved ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />} {pending ? "Saving…" : saved ? "Linked" : "Save link"}</button>
+        <button onClick={save} disabled={pending || (!!ship && !shipOrder)} title={ship && !shipOrder ? "That shipment isn't tied to an order yet — linking would clear this inbound's order." : undefined} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-50">{saved ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />} {pending ? "Saving…" : saved ? "Linked" : "Save link"}</button>
         {err && <span className="text-[12px] text-danger">{err}</span>}
       </div>
     </Card>
