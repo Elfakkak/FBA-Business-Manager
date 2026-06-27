@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Drawer } from "@/components/ui/drawer";
 import { Badge } from "@/components/ui/primitives";
 import { PaymentTermsCard } from "./[id]/payment-terms-card";
-import { InvoiceLinesTable } from "./invoice-charges";
+import { InvoiceLinesTable, EditChargesModal, type OrderLineLite, type ChargeTypeLite } from "./invoice-charges";
 import type { InvRow } from "./invoices-table";
 import {
   money, BALANCE_EPSILON, INVOICE_STATUS_TONE, PAY_STATUS_TONE,
@@ -18,11 +19,14 @@ function termCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTerm
 
 // One shared invoice quick-view drawer — used by the standalone Invoices list
 // AND the order-shell Invoices section, so they stay in harmony.
-export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, onDelete }: {
+export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, onDelete, orderLines, chargeTypes }: {
   open: boolean; invoice: InvRow | null;
   onClose: () => void; onRecord: () => void; onEdit: () => void; onDelete: () => void;
+  orderLines?: OrderLineLite[]; chargeTypes?: ChargeTypeLite[];
 }) {
   const i = invoice;
+  const [chargesOpen, setChargesOpen] = useState(false);
+  const canEditCharges = !!orderLines && !!chargeTypes;
   const bal = i ? invoiceBalance(i) : 0;
   const st = i ? invoiceStatus(i) : "Unpaid";
   const a = i ? invoiceAging(i.due, bal, Date.now()) : null;
@@ -80,11 +84,16 @@ export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, o
             </div>
           )}
 
-          {/* Lines / charges */}
+          {/* Lines / charges — add & edit right here */}
           <div>
-            <div className="vy-kicker mb-1.5">Lines / charges</div>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <div className="vy-kicker">Lines / charges</div>
+              {canEditCharges && <button onClick={() => setChargesOpen(true)} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3 w-3" /> {lines.length > 0 ? "Edit charges" : "Itemize"}</button>}
+            </div>
             {lines.length > 0
               ? <InvoiceLinesTable lines={lines} variant="drawer" />
+              : canEditCharges
+              ? <p className="rounded-lg border border-dashed px-3 py-4 text-center text-[12px] text-muted-foreground">Not itemized yet — <button onClick={() => setChargesOpen(true)} className="font-medium text-primary hover:underline">add charges</button>.</p>
               : <p className="rounded-lg border border-dashed px-3 py-4 text-center text-[12px] text-muted-foreground">Not itemized yet — open the full page to add charges.</p>}
           </div>
 
@@ -114,6 +123,10 @@ export function InvoiceQuickDrawer({ open, invoice, onClose, onRecord, onEdit, o
               <div className="min-w-0 flex-1"><div className="font-mono text-[11px] text-muted-foreground">{i.order_id}</div><div className="truncate text-[13px] font-semibold">{i.orderTitle}</div></div>
               <ArrowUpRight className="h-4 w-4 shrink-0 opacity-50" />
             </Link>
+          )}
+
+          {chargesOpen && orderLines && chargeTypes && (
+            <EditChargesModal invoiceId={i.id} invoiceTotal={i.total ?? 0} vendorType={i.vendor_type} lines={lines} orderLines={orderLines} chargeTypes={chargeTypes} onClose={() => setChargesOpen(false)} />
           )}
         </div>
       )}

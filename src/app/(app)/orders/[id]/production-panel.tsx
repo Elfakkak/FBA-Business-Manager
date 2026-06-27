@@ -512,9 +512,9 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
         </div>
       </div>}
     >
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 w-full flex-1">
         {/* LEFT — catalog (68%) */}
-        <div className="flex min-h-0 flex-[0_0_68%] flex-col border-r bg-muted/40">
+        <div className="flex min-h-0 min-w-0 flex-[0_0_68%] flex-col border-r bg-muted/40">
           <div className="shrink-0 space-y-2.5 border-b p-4">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, title, ASIN, family, supplier" className={inputCls} />
             <div className="flex flex-wrap gap-1.5">{SKU_FILTERS.map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn("vy-chip", filter === f && "is-active")}>{f}</button>)}</div>
@@ -524,7 +524,7 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
             {groups.map(([fam, vs]) => {
               const selCount = vs.filter((v) => sel.has(v.id)).length;
               return (
-                <SkuFamilyCard key={fam} fam={fam} vs={vs} isOpen={!!n || open.has(fam)} selCount={selCount} sel={sel} inOrderSkus={inOrderSkus} showCny={showCny}
+                <SkuFamilyCard key={fam} fam={fam} vs={vs} isOpen={open.has(fam)} selCount={selCount} sel={sel} inOrderSkus={inOrderSkus} showCny={showCny}
                   onToggleOpen={() => toggleOpen(fam)} onSelectAll={() => setFamily(vs, selCount !== vs.length)} onToggleVariant={toggle} />
               );
             })}
@@ -533,7 +533,7 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
         </div>
 
         {/* RIGHT — selected lines (32%), always visible */}
-        <div className="flex min-h-0 flex-[0_0_32%] flex-col" style={{ background: "hsl(var(--accent))" }}>
+        <div className="flex min-h-0 min-w-0 flex-[0_0_32%] flex-col" style={{ background: "hsl(var(--accent))" }}>
           <div className="shrink-0 border-b px-4 py-3.5">
             <div className="flex items-start justify-between gap-2">
               <div><div className="text-[14px] font-bold">Selected lines</div><p className="text-[11px] text-muted-foreground">Review quantities and pricing before adding</p></div>

@@ -133,7 +133,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
       {tab === "overview" ? (
         <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} />
       ) : tab === "invoices" ? (
-        <InvoicesPanel order={order} invoices={invoices} vendors={vendors} />
+        <InvoicesPanel order={order} invoices={invoices} vendors={vendors} lines={lines} chargeTypes={chargeTypes} />
       ) : tab === "shipping" ? (
         <ShippingPanel order={order} shipments={shipments} inbounds={inbounds} packLines={packLines} shipFiles={shipFiles} tracking={shipTracking} ordered={ordered} forwarders={forwarders} freightInvoice={freightInvoice} unlinkedInbounds={unlinkedInbounds} />
       ) : tab === "production" ? (
@@ -273,7 +273,8 @@ const fmtDue = (iso: string | null) => iso ? new Date(iso + "T00:00:00").toLocal
 const VENDOR_KIND: Record<string, string> = { Supplier: "Goods", Agent: "Service", Forwarder: "Freight", Inspection: "Inspection" };
 function invTermCfg(i: InvRow): PayTermCfg { return { type: (i.term_type as PayTermCfg["type"]) ?? "TT", depositPct: i.term_deposit_pct, netDays: i.term_net_days }; }
 
-function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices: InvRow[]; vendors: VendorOpt[] }) {
+function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order: OrderRow; invoices: InvRow[]; vendors: VendorOpt[]; lines: OrderLine[]; chargeTypes: ChargeTypeOpt[] }) {
+  const orderLinesLite = lines.map((l) => ({ id: l.id, sku: l.sku, product_name: l.product_name, qty: l.qty, unit_cost: l.unit_cost }));
   const router = useRouter();
   const [peek, setPeek] = useState<InvRow | null>(null);
   const [payFor, setPayFor] = useState<InvRow | null>(null);
@@ -374,6 +375,8 @@ function InvoicesPanel({ order, invoices, vendors }: { order: OrderRow; invoices
         onRecord={() => peek && setPayFor(peek)}
         onEdit={() => { if (peek) setEditing(peek); }}
         onDelete={async () => { if (!peek || !confirm(`Delete ${peek.id}?`)) return; await deleteInvoice(peek.id); setPeek(null); router.refresh(); }}
+        orderLines={orderLinesLite}
+        chargeTypes={chargeTypes}
       />
       {payFor && <RecordPaymentModal invoice={payFor} invoices={invoices} onClose={() => setPayFor(null)} />}
       {newOpen && <InvoiceModal title="New invoice" orders={orderOpts} vendors={vendors} lockedOrderId={order.id} onClose={() => setNewOpen(false)} onSubmit={(fd) => { fd.set("order_id", order.id); return createInvoice(fd); }} />}
