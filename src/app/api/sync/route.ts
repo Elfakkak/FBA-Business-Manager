@@ -28,17 +28,19 @@ async function handler(req: NextRequest) {
     try { results[k] = await fn(); } catch (e) { results[k] = { error: e instanceof Error ? e.message : "failed" }; }
   };
 
-  // Split cadence: the cheap direct-API streams (inventory, inbound) run on every
-  // 6-hourly cron tick; the throttled Reports-API streams (sales, ads) are daily
-  // aggregates that only settle end-of-day, so the cron runs them once a day (the
-  // 00:00 UTC tick). A manual owner sync always runs the full set.
-  const heavy = !cronOk || new Date().getUTCHours() < 6;
+  // Split cadence (cron ticks at 00/06/12/18 UTC). Cheap direct-API streams run
+  // every tick; throttled Reports-API streams are daily aggregates so they run less:
+  //   inventory + inbound → every tick (4x/day)
+  //   sales               → once/day (00:00 tick)
+  //   ads                 → twice/day (00:00 + 12:00 ticks)
+  // A manual owner sync always runs the full set.
+  const hour = new Date().getUTCHours();
+  const runSales = !cronOk || hour < 6;
+  const runAds = !cronOk || hour < 6 || (hour >= 12 && hour < 18);
   await run("inventory", () => runInventorySync(db, sp));
   await run("inbound", () => runInboundSync(db, sp));
-  if (heavy) {
-    await run("sales", () => runSalesSync(db, sp));
-    await run("ads", () => runAdsSync(db, adsCreds));
-  }
+  if (runSales) await run("sales", () => runSalesSync(db, sp));
+  if (runAds) await run("ads", () => runAdsSync(db, adsCreds));
 
   const errs = Object.entries(results).filter(([, v]) => (v as { error?: string })?.error).map(([k]) => k);
   await db.from("integrations").update({

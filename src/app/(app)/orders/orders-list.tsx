@@ -9,10 +9,10 @@ import { Select } from "@/components/ui/select";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
 import { useNewParam } from "@/lib/use-new-param";
-import { createOrder, bulkSetOrderStatus, bulkSetOrderArchived, setOrderStatus } from "./actions";
+import { createOrder, bulkSetOrderArchived } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Plus, ChevronRight, ChevronDown, Boxes, Wallet, Hammer, ClipboardCheck, Truck, PackageCheck, Receipt, ArrowRight } from "lucide-react";
+import { Plus, ChevronRight, Boxes, Wallet, Hammer, ClipboardCheck, Truck, PackageCheck, Receipt, ArrowRight } from "lucide-react";
 
 export type OrderSummary = {
   id: string; title: string; supplier: string | null; agent: string | null;
@@ -89,9 +89,8 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
         return (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-4 py-2.5 text-sm">
             <span className="font-semibold">{sel.size} selected</span>
+            <span className="text-[12px] text-muted-foreground">Archive soft-hides finished orders but keeps history.</span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Select value="" onChange={(v) => v && runBulk(() => bulkSetOrderStatus([...sel], v))} placeholder="Set status…" className="w-44"
-                options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} disabled={bulkPending} />
               <button type="button" disabled={bulkPending || !canArchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
               <button type="button" disabled={bulkPending || !canUnarchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
               <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
@@ -140,7 +139,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
                     <div className="text-muted-foreground">Placed <span className="text-foreground">{o.placedOn ?? "—"}</span></div>
                     <div className="text-muted-foreground">FBA ETA <span className="text-foreground">{o.fbaEta ?? "—"}</span></div>
                   </td>
-                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}><InlineStatus id={o.id} status={o.status} /></td>
+                  <td className="px-4 py-2.5"><Badge tone={ORDER_STATUS_TONE[o.status] ?? "muted"}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</Badge></td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">{o.total > 0 ? money(o.total) : "—"}</td>
                   <td className="tabular px-4 py-2.5 text-right font-mono">
                     {o.total > 0 ? <>{money(o.paid)}<span className="text-[11px] text-muted-foreground"> · {o.paidPct}%</span></> : "—"}
@@ -219,25 +218,6 @@ function PeekRow({ label, value, sub }: { label: string; value: string; sub?: st
   return <div><div className="vy-kicker mb-0.5">{label}</div><div className="text-[13px] font-semibold">{value}</div>{sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}</div>;
 }
 
-// Inline status editor — click the badge to swap in a status picker for that one order.
-function InlineStatus({ id, status }: { id: string; status: string }) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [pending, start] = useTransition();
-  const change = (v: string) => {
-    if (!v || v === status) { setEditing(false); return; }
-    start(async () => { await setOrderStatus(id, v); router.refresh(); setEditing(false); });
-  };
-  if (editing) {
-    return <Select value={status} onChange={change} className="w-36" options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} />;
-  }
-  return (
-    <button type="button" onClick={() => setEditing(true)} disabled={pending} className={cn("inline-flex items-center gap-1 rounded-md hover:opacity-80", pending && "opacity-50")} title="Change status">
-      <Badge tone={ORDER_STATUS_TONE[status] ?? "muted"}>{ORDER_STATUS_LABEL[status] ?? status}</Badge>
-      <ChevronDown className="h-3 w-3 opacity-40" />
-    </button>
-  );
-}
 
 function NewOrderButton({ suppliers, agents }: { suppliers: string[]; agents: string[] }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => createOrder(form));
