@@ -214,7 +214,7 @@ export function FbaCalculator({ variants, seed }: { variants: CalcVariant[]; see
 
       {/* RESULTS */}
       <div className="flex flex-col gap-3">
-        <div className="rounded-xl border p-[22px]" style={{ background: `hsl(var(--${vt}) / 0.07)`, borderColor: `hsl(var(--${vt}) / 0.3)` }}>
+        <div className="rounded-xl border p-[22px]" style={vt === "muted" ? { background: "hsl(var(--muted-bg) / 0.4)", borderColor: "hsl(var(--border))" } : { background: `hsl(var(--${vt}) / 0.07)`, borderColor: `hsl(var(--${vt}) / 0.3)` }}>
           <div className="flex items-center justify-between gap-2.5">
             <span className="vy-kicker">Net profit / unit{skuLabel ? ` · ${skuLabel}` : ""}</span>
             <Badge tone={vt}>{verdict.label}</Badge>
