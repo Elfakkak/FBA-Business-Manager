@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { SelectLabelContext } from "./select";
 
 export function Modal({
   open,
@@ -72,10 +73,13 @@ export function Modal({
 }
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  // labelId lets a wrapped <Select> (a button, not a labelable element) borrow this
+  // label as its accessible name via aria-labelledby.
+  const labelId = useId();
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
+      <span id={labelId} className="text-sm font-medium">{label}</span>
+      <SelectLabelContext.Provider value={labelId}>{children}</SelectLabelContext.Provider>
     </label>
   );
 }

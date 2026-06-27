@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SelectOption = { value: string; label: string; sub?: string };
+
+// Set by a wrapping <Field> so a Select (whose trigger is a <button>, not a labelable
+// element) still gets an accessible name from its field label.
+export const SelectLabelContext = createContext<string | undefined>(undefined);
 
 // App-wide pretty dropdown. Replaces native <select> so the option list is styled,
 // searchable for long lists, keyboard-navigable, and consistent everywhere.
@@ -24,6 +28,7 @@ export function Select({
   className?: string;
   ariaLabel?: string;
 }) {
+  const fieldLabelId = useContext(SelectLabelContext);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -75,7 +80,7 @@ export function Select({
   function onKey(e: React.KeyboardEvent) {
     if (!open && (e.key === "Enter" || e.key === " " || e.key === "ArrowDown")) { e.preventDefault(); setOpen(true); return; }
     if (!open) return;
-    if (e.key === "Escape") { setOpen(false); triggerRef.current?.focus(); }
+    if (e.key === "Escape") { e.stopPropagation(); setOpen(false); triggerRef.current?.focus(); }
     else if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(filtered.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
     else if (e.key === "Enter") { e.preventDefault(); const o = filtered[active]; if (o) choose(o.value); }
@@ -85,7 +90,7 @@ export function Select({
     <div className={cn("relative", className)}>
       {name && <input type="hidden" name={name} value={value} />}
       <button
-        ref={triggerRef} type="button" disabled={disabled} onKeyDown={onKey} aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open}
+        ref={triggerRef} type="button" disabled={disabled} onKeyDown={onKey} aria-label={ariaLabel} aria-labelledby={!ariaLabel ? fieldLabelId : undefined} aria-haspopup="listbox" aria-expanded={open}
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
           "flex w-full items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-left text-sm outline-none transition focus:ring-2 focus:ring-ring",
@@ -106,7 +111,7 @@ export function Select({
           {autoSearch && (
             <div className="flex items-center gap-2 border-b px-3 py-2">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search…" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+              <input ref={searchRef} name="select-search" autoComplete="off" aria-label="Filter options" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search…" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             </div>
           )}
           <ul ref={listRef} role="listbox" className="max-h-72 overflow-y-auto p-1.5">
