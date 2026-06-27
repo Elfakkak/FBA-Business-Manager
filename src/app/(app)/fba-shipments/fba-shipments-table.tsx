@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader } from "@/components/ui/primitives";
+import { Card, Badge, Kpi, PageHead, SourceTag, CardHeader, SortableTh, makeToggleSort, type SortState } from "@/components/ui/primitives";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { intgAgo } from "@/lib/integrations";
@@ -48,11 +48,26 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
     });
   }, [rows, q, status, fcFilter, orderFilter]);
 
+  type FbaSortKey = "id" | "order" | "fc" | "expected" | "received" | "variance" | "status";
+  const [sort, setSort] = useState<SortState<FbaSortKey>>(null);
+  const toggleSort = makeToggleSort(setSort);
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (r: FbaRow): string | number => {
+      switch (sort.key) {
+        case "id": return r.id; case "order": return r.orderId ?? ""; case "fc": return r.fc;
+        case "expected": return r.expected; case "received": return r.received; case "variance": return r.variance;
+        case "status": return r.status; default: return "";
+      }
+    };
+    return [...filtered].sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "number" ? x - (y as number) : String(x).localeCompare(String(y))) * dir; });
+  }, [filtered, sort]);
   // pagination
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const from = (safePage - 1) * pageSize;
-  const pageRows = filtered.slice(from, from + pageSize);
+  const pageRows = sorted.slice(from, from + pageSize);
   useEffect(() => { setPage(1); }, [q, status, fcFilter, orderFilter, pageSize]);
   const orderIds = [...new Set(rows.map((r) => r.orderId).filter((o): o is string => !!o))].sort();
 
@@ -128,15 +143,15 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
           <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 font-medium">FBA shipment</th>
+                <SortableTh label="FBA shipment" k="id" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2 font-medium">Parent shipment</th>
-                <th className="px-3 py-2 font-medium">Order</th>
-                <th className="px-3 py-2 font-medium">Dest FC</th>
+                <SortableTh label="Order" k="order" sort={sort} onSort={toggleSort} />
+                <SortableTh label="Dest FC" k="fc" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2 text-right font-medium">SKUs</th>
-                <th className="px-3 py-2 text-right font-medium">Expected</th>
-                <th className="px-3 py-2 text-right font-medium"><span className="inline-flex items-center gap-1">Received <SourceTag source="amazon" /></span></th>
-                <th className="px-3 py-2 text-right font-medium">Variance</th>
-                <th className="px-3 py-2 font-medium">Status</th>
+                <SortableTh label="Expected" k="expected" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Received" k="received" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Variance" k="variance" right sort={sort} onSort={toggleSort} />
+                <SortableTh label="Status" k="status" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2 text-right font-medium">Synced</th>
               </tr>
             </thead>
