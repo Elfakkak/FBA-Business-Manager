@@ -97,6 +97,10 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
 }) {
   const router = useRouter();
   const [tab, setTab] = useState(initialTab);
+  // Inspection is opt-in per order — hide its tab when not required (route to Home if landed there).
+  const showInspection = order.inspection_required;
+  const visibleTabs = TABS.filter((t) => t.key !== "inspection" || showInspection);
+  const activeTab = tab === "inspection" && !showInspection ? "overview" : tab;
   // Remember the active tab in the URL so a refresh stays on it (not back to Home).
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -118,13 +122,13 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         <ChevronRight className="h-3 w-3 opacity-50" />
         <span className="font-mono">{order.id}</span>
         <ChevronRight className="h-3 w-3 opacity-50" />
-        <span className="font-medium text-foreground">{TABS.find((t) => t.key === tab)?.label ?? "Home"}</span>
+        <span className="font-medium text-foreground">{TABS.find((t) => t.key === activeTab)?.label ?? "Home"}</span>
       </nav>
 
       {/* tab bar */}
       <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => {
-          const I = t.icon; const active = tab === t.key;
+        {visibleTabs.map((t) => {
+          const I = t.icon; const active = activeTab === t.key;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={cn("inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition",
@@ -135,24 +139,24 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         })}
       </div>
 
-      <div key={tab} className="vy-page-in">
-      {tab === "overview" ? (
+      <div key={activeTab} className="vy-page-in">
+      {activeTab === "overview" ? (
         <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} costCheck={costCheck} />
-      ) : tab === "invoices" ? (
+      ) : activeTab === "invoices" ? (
         <InvoicesPanel order={order} invoices={invoices} vendors={vendors} lines={lines} chargeTypes={chargeTypes} />
-      ) : tab === "shipping" ? (
+      ) : activeTab === "shipping" ? (
         <ShippingPanel order={order} shipments={shipments} inbounds={inbounds} packLines={packLines} shipFiles={shipFiles} tracking={shipTracking} ordered={ordered} forwarders={forwarders} freightInvoice={freightInvoice} unlinkedInbounds={unlinkedInbounds} />
-      ) : tab === "production" ? (
+      ) : activeTab === "production" ? (
         <div className="space-y-6">
           <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} costCheck={costCheck} />
           <PackagingPanel orderId={order.id} items={packagingItems} used={packaging} />
         </div>
-      ) : tab === "landed" ? (
+      ) : activeTab === "landed" ? (
         <LandedPanel order={order} lines={lines} costs={costs} variants={variants} />
-      ) : tab === "inspection" ? (
+      ) : activeTab === "inspection" ? (
         <InspectionPanel order={order} inspection={inspection} orderFiles={orderFiles} />
       ) : (
-        <StagePanel tab={tab} status={order.status} />
+        <StagePanel tab={activeTab} status={order.status} />
       )}
       </div>
 
