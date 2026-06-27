@@ -13,6 +13,10 @@ import { InvoiceQuickDrawer } from "../../invoices/invoice-quick-drawer";
 import { RecordPaymentModal, InvoiceModal, type InvRow, type VendorOpt } from "../../invoices/invoices-table";
 import { ProductionSection, type CatalogVariant } from "./production-panel";
 import { LandedPanel } from "./landed-panel";
+import { InspectionPanel } from "./inspection-panel";
+import type { Database } from "@/lib/database.types";
+
+type Inspection = Database["public"]["Tables"]["order_inspections"]["Row"];
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
@@ -29,6 +33,7 @@ import {
 const TABS = [
   { key: "overview", label: "Home", icon: Home },
   { key: "production", label: "Production", icon: Hammer },
+  { key: "inspection", label: "Inspection", icon: ClipboardCheck },
   { key: "shipping", label: "Shipping", icon: Truck },
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "landed", label: "Landed cost", icon: PackageCheck },
@@ -60,7 +65,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, inspection, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
@@ -75,6 +80,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   packaging: PkgUsed[];
   shipments: OrderShipment[];
   inbounds: OrderInbound[];
+  inspection: Inspection | null;
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
   initialTab?: string;
 }) {
@@ -124,6 +130,8 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         </div>
       ) : tab === "landed" ? (
         <LandedPanel order={order} lines={lines} costs={costs} variants={variants} />
+      ) : tab === "inspection" ? (
+        <InspectionPanel order={order} inspection={inspection} orderFiles={orderFiles} />
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}

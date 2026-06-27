@@ -970,6 +970,89 @@ export type Database = {
           },
         ]
       }
+      order_inspections: {
+        Row: {
+          aql: string | null
+          completed_date: string | null
+          created_at: string
+          defects_critical: number | null
+          defects_major: number | null
+          defects_minor: number | null
+          factory_contact: string | null
+          folder_link: string | null
+          inspector: string | null
+          lot_size: number | null
+          notes: string | null
+          order_id: string
+          partner_name: string | null
+          report_accepted: boolean
+          report_name: string | null
+          report_url: string | null
+          result: string
+          sample_size: number | null
+          scheduled_date: string | null
+          status: string
+          updated_at: string
+          visit_type: string | null
+        }
+        Insert: {
+          aql?: string | null
+          completed_date?: string | null
+          created_at?: string
+          defects_critical?: number | null
+          defects_major?: number | null
+          defects_minor?: number | null
+          factory_contact?: string | null
+          folder_link?: string | null
+          inspector?: string | null
+          lot_size?: number | null
+          notes?: string | null
+          order_id: string
+          partner_name?: string | null
+          report_accepted?: boolean
+          report_name?: string | null
+          report_url?: string | null
+          result?: string
+          sample_size?: number | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+          visit_type?: string | null
+        }
+        Update: {
+          aql?: string | null
+          completed_date?: string | null
+          created_at?: string
+          defects_critical?: number | null
+          defects_major?: number | null
+          defects_minor?: number | null
+          factory_contact?: string | null
+          folder_link?: string | null
+          inspector?: string | null
+          lot_size?: number | null
+          notes?: string | null
+          order_id?: string
+          partner_name?: string | null
+          report_accepted?: boolean
+          report_name?: string | null
+          report_url?: string | null
+          result?: string
+          sample_size?: number | null
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+          visit_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_inspections_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_lines: {
         Row: {
           created_at: string

@@ -10,7 +10,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const supabase = await createClient();
   const { data: order } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
   if (!order) notFound();
-  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }, { data: brand }, { data: orderFiles }, { data: allMoves }] = await Promise.all([
+  const [{ data: invoices }, { data: lines }, { data: orderCosts }, { data: chargeTypes }, { data: variants }, { data: products }, { data: pkgItems }, { data: pkgMoves }, { data: shipments }, { data: inbounds }, { data: suppliers }, { data: partners }, { data: brand }, { data: orderFiles }, { data: allMoves }, { data: inspection }] = await Promise.all([
     supabase.from("invoices").select("*").eq("order_id", id).order("issued"),
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
@@ -26,6 +26,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("brand").select("name").maybeSingle(),
     supabase.from("order_files").select("slot, name, url").eq("order_id", id),
     supabase.from("packaging_moves").select("item_id, qty, type"),
+    supabase.from("order_inspections").select("*").eq("order_id", id).maybeSingle(),
   ]);
   const invList = (invoices ?? []) as InvoiceRow[];
   const r = orderRollup(id, invList);
@@ -104,6 +105,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       packaging={packaging}
       shipments={(shipments ?? []) as OrderShipment[]}
       inbounds={(inbounds ?? []) as OrderInbound[]}
+      inspection={inspection ?? null}
       rollup={r}
       initialTab={tab ?? "overview"}
     />
