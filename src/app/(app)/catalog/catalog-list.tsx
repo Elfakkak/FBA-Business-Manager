@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { ChevronRight, ChevronDown, Package, ArrowRight, ArrowUpRight, Layers, Star } from "lucide-react";
 import { NewProductButton } from "./new-product-button";
 import { CategoryManagerButton, type CategoryRow } from "./category-manager";
-import { setProductFavorite } from "./actions";
+import { setProductFavorite, bulkSetProductStatus } from "./actions";
 
 const STATUS_TONE: Record<string, Tone> = { active: "success", draft: "info", archived: "muted" };
 
@@ -53,6 +53,10 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
   const [singleOnly, setSingleOnly] = useState(false);
   const [favOnly, setFavOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"current" | "active" | "draft" | "archived" | "all">("current");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [, startBulk] = useTransition();
+  const toggleSel = (id: string) => setSel((s) => { const c = new Set(s); if (c.has(id)) c.delete(id); else c.add(id); return c; });
+  const bulkApply = (status: "active" | "draft" | "archived") => startBulk(async () => { await bulkSetProductStatus([...sel], status); setSel(new Set()); router.refresh(); });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [pageSize, setPageSize] = useState(50);
@@ -153,6 +157,18 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
         </div>
       </Card>
 
+      {sel.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 px-4 py-2.5 text-sm">
+          <span className="font-semibold">{sel.size} selected</span>
+          <span className="text-[12px] text-muted-foreground">Bulk lifecycle — archive soft-hides them but keeps history.</span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button type="button" onClick={() => bulkApply("archived")} className="vy-btn vy-btn--outline vy-btn--sm">Archive</button>
+            <button type="button" onClick={() => bulkApply("active")} className="vy-btn vy-btn--ghost vy-btn--sm">Activate</button>
+            <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+          </div>
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         <CardHeader title={`${sorted.length} products`} caption="Click a row for a quick look · the name opens the product" />
         <div className="overflow-x-auto">
@@ -180,6 +196,7 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                   <tr onClick={() => setPeek(f)} className={cn("cursor-pointer hover:bg-accent/40", f.status === "archived" && "opacity-60")}>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={sel.has(f.id)} onClick={(e) => e.stopPropagation()} onChange={() => toggleSel(f.id)} className="h-4 w-4 shrink-0 accent-primary" aria-label="Select product" />
                         {f.skuCount > 1 ? (
                           <button onClick={(e) => { e.stopPropagation(); setExpanded((s) => ({ ...s, [f.id]: !open })); }} className="shrink-0 text-muted-foreground hover:text-foreground" title={open ? "Collapse" : "Show variants"} aria-label="Toggle variants">
                             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -270,6 +287,9 @@ export function CatalogList({ families, categories }: { families: FamilySummary[
                     <span className="min-w-0 flex-1 truncate font-mono">{s.sku}</span>
                     <span className={cn("tabular font-mono", s.stock <= 40 && "text-warning")}>{num(s.stock)} u</span>
                     <Badge tone={VARIANT_STATUS_TONE[s.status] ?? "muted"}>{s.status}</Badge>
+                    {s.asin
+                      ? <a href={`https://www.amazon.com/dp/${s.asin}`} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary hover:underline" title={`Open ${s.asin} on Amazon`}>Amazon <ArrowUpRight className="h-3 w-3" /></a>
+                      : <span className="shrink-0 text-[10px] text-muted-foreground">no ASIN</span>}
                   </li>
                 ))}
               </ul>

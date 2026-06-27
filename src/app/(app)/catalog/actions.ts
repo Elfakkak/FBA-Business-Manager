@@ -282,3 +282,14 @@ export async function updateVariant(variantId: string, familyId: string, form: F
   revalidatePath("/inventory");
   return { ok: true };
 }
+
+// Bulk lifecycle change for selected product families (archive / activate / draft).
+// Archive soft-hides imported listings you don't actively manage — history is kept.
+export async function bulkSetProductStatus(ids: string[], status: "active" | "draft" | "archived"): Promise<Result> {
+  if (!ids.length) return { ok: false, error: "No products selected." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").update({ status }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/catalog");
+  return { ok: true };
+}
