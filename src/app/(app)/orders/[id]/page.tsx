@@ -15,12 +15,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("order_costs").select("*").eq("order_id", id).order("position").order("created_at"),
     supabase.from("charge_types").select("id, label, owner").eq("archived", false).order("owner").order("label"),
-    supabase.from("product_variants").select("id, family_id, sku, name, pack, last_cost_usd, last_cost_rmb, sale_price, has_image, fba_stock, reorder_point, status").order("sku"),
+    supabase.from("product_variants").select("id, family_id, sku, asin, name, pack, last_cost_usd, last_cost_rmb, sale_price, has_image, fba_stock, reorder_point, status").order("sku"),
     supabase.from("products").select("id, parent, last_ordered"),
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
     supabase.from("packaging_moves").select("id, item_id, qty").eq("order_id", id).eq("type", "consume"),
-    supabase.from("shipments").select("id, mode, stage, forwarder, origin, destination, eta, packed").eq("order_id", id).order("created_at"),
-    supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id").eq("order_id", id),
+    supabase.from("shipments").select("id, mode, stage, forwarder, incoterm, origin, destination, etd, eta, cbm, gross_kg, net_kg, cartons, packed, freight_usd, bol, customs").eq("order_id", id).order("created_at"),
+    supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id, eta, synced").eq("order_id", id),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("partners").select("name, specialty").order("name"),
     supabase.from("brand").select("name").maybeSingle(),
@@ -64,9 +64,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const prodList = (products ?? []) as { id: string; parent: string | null; last_ordered: string | null }[];
   const familyName = new Map(prodList.map((p) => [p.id, p.parent ?? ""]));
   const familyLast = new Map(prodList.map((p) => [p.id, p.last_ordered]));
-  type V = { id: string; family_id: string | null; sku: string; name: string; pack: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean | null; fba_stock: number | null; reorder_point: number | null; status: string | null };
+  type V = { id: string; family_id: string | null; sku: string; asin: string | null; name: string; pack: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean | null; fba_stock: number | null; reorder_point: number | null; status: string | null };
   const catalogVariants = ((variants ?? []) as V[]).map((v) => ({
-    id: v.id, sku: v.sku, name: v.name, pack: v.pack,
+    id: v.id, sku: v.sku, asin: v.asin, name: v.name, pack: v.pack,
     familyName: (v.family_id && familyName.get(v.family_id)) || v.name,
     familyLastOrdered: (v.family_id && familyLast.get(v.family_id)) || null,
     last_cost_usd: v.last_cost_usd, last_cost_rmb: v.last_cost_rmb, sale_price: v.sale_price, has_image: !!v.has_image,
@@ -89,6 +89,21 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     return { moveId: m.id, itemId: m.item_id, name: it?.name ?? m.item_id, qty: m.qty, unitCost: it?.unit_cost ?? 0 };
   });
 
+  // Shipping: per-shipment packing lines, files & tracking for this order's shipments
+  const shipIds = ((shipments ?? []) as { id: string }[]).map((s) => s.id);
+  const [{ data: packLines }, { data: shipFiles }, { data: shipTracking }] = shipIds.length
+    ? await Promise.all([
+        supabase.from("shipment_packing_lines").select("id, shipment_id, sku, product_name, cartons, per_ctn, packed, fc").in("shipment_id", shipIds).order("position"),
+        supabase.from("shipment_files").select("id, shipment_id, slot, url, name").in("shipment_id", shipIds),
+        supabase.from("shipment_tracking").select("shipment_id, tracking_no, eta_override").in("shipment_id", shipIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+  const fwd = [...new Set(((partners ?? []) as { name: string; specialty: string | null }[]).filter((p) => /forward|freight|logistic|3pl|carrier|ship/i.test(p.specialty ?? "")).map((p) => p.name))];
+  const forwarders = fwd.length ? fwd : ((partners ?? []) as { name: string }[]).map((p) => p.name);
+  const freightInv = invoicesRich.find((i) => i.vendor_type === "Forwarder");
+  const freightInvoice = freightInv ? { id: freightInv.id, total: freightInv.total ?? 0, paid: freightInv.paid ?? 0 } : null;
+  const orderedShip = ((lines ?? []) as { sku: string | null; product_name: string | null; qty: number }[]).map((l) => ({ sku: l.sku, product_name: l.product_name, qty: l.qty ?? 0 }));
+
   return (
     <OrderShell
       order={order}
@@ -105,6 +120,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       packaging={packaging}
       shipments={(shipments ?? []) as OrderShipment[]}
       inbounds={(inbounds ?? []) as OrderInbound[]}
+      packLines={(packLines ?? []) as never}
+      shipFiles={(shipFiles ?? []) as never}
+      shipTracking={(shipTracking ?? []) as never}
+      forwarders={forwarders}
+      freightInvoice={freightInvoice}
+      ordered={orderedShip}
       inspection={inspection ?? null}
       rollup={r}
       initialTab={tab ?? "overview"}
