@@ -1646,6 +1646,88 @@ export type Database = {
         }
         Relationships: []
       }
+      shipment_files: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          shipment_id: string | null
+          slot: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          shipment_id?: string | null
+          slot: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          shipment_id?: string | null
+          slot?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_files_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipment_packing_lines: {
+        Row: {
+          cartons: number
+          created_at: string
+          fc: string | null
+          id: string
+          packed: number
+          per_ctn: number
+          position: number
+          product_name: string | null
+          shipment_id: string | null
+          sku: string | null
+        }
+        Insert: {
+          cartons?: number
+          created_at?: string
+          fc?: string | null
+          id?: string
+          packed?: number
+          per_ctn?: number
+          position?: number
+          product_name?: string | null
+          shipment_id?: string | null
+          sku?: string | null
+        }
+        Update: {
+          cartons?: number
+          created_at?: string
+          fc?: string | null
+          id?: string
+          packed?: number
+          per_ctn?: number
+          position?: number
+          product_name?: string | null
+          shipment_id?: string | null
+          sku?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipment_packing_lines_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shipment_tracking: {
         Row: {
           booking_ref: string | null
@@ -1721,6 +1803,7 @@ export type Database = {
           id: string
           incoterm: string | null
           mode: string
+          net_kg: number | null
           order_id: string | null
           order_title: string | null
           origin: string | null
@@ -1747,6 +1830,7 @@ export type Database = {
           id: string
           incoterm?: string | null
           mode: string
+          net_kg?: number | null
           order_id?: string | null
           order_title?: string | null
           origin?: string | null
@@ -1773,6 +1857,7 @@ export type Database = {
           id?: string
           incoterm?: string | null
           mode?: string
+          net_kg?: number | null
           order_id?: string | null
           order_title?: string | null
           origin?: string | null

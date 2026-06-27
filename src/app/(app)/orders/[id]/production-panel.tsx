@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
-export type CatalogVariant = { id: string; sku: string; name: string; pack: string | null; familyName: string; familyLastOrdered: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
+export type CatalogVariant = { id: string; sku: string; asin: string | null; name: string; pack: string | null; familyName: string; familyLastOrdered: string | null; last_cost_usd: number | null; last_cost_rmb: number | null; sale_price: number | null; has_image: boolean; fba_stock: number | null; reorder_point: number | null; status: string | null };
 
 // Parse an editable numeric cell → number, or null for blank/non-numeric (never NaN).
 const numOrNull = (s: string) => { if (s.trim() === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
@@ -401,9 +401,12 @@ function SkuRow({ v, on, inOrder, showCny, onToggle }: { v: CatalogVariant; on: 
     >
       <input type="checkbox" checked={on || inOrder} disabled={inOrder} onChange={onToggle} onClick={(e) => e.stopPropagation()} className="h-[17px] w-[17px] accent-primary" />
       <span className={cn("grid h-9 w-9 place-items-center rounded-md border", missingImg ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-accent text-muted-foreground")}>{missingImg ? <AlertTriangle className="h-4 w-4" /> : <Package className="h-4 w-4" />}</span>
-      <span className={cn("truncate font-mono text-[10.5px] font-bold", on && !inOrder && "text-primary")}>{v.sku}</span>
+      <span className={cn("min-w-0 font-mono leading-tight", on && !inOrder && "text-primary")}>
+        <span className="block truncate text-[10.5px] font-bold">{v.sku}</span>
+        <span className={cn("block truncate text-[9.5px]", v.asin ? "text-muted-foreground" : "text-warning")}>{v.asin || "Not linked"}</span>
+      </span>
       <span className="min-w-0 truncate font-medium">{[v.name, v.pack].filter(Boolean).join(" · ")}</span>
-      <span className="text-right text-[10.5px] text-muted-foreground">{v.fba_stock != null ? `${num(v.fba_stock)} FBA` : "—"}</span>
+      <span className="text-right text-[10.5px] text-muted-foreground">{v.asin ? `${num(v.fba_stock ?? 0)} FBA` : "no inv."}</span>
       <span className="text-right font-mono font-bold">{v.last_cost_usd != null ? money(v.last_cost_usd) : "—"}</span>
       {showCny && <span className="text-right font-mono text-[10.5px] text-muted-foreground">{rmb(v.last_cost_rmb)}</span>}
       <span className="justify-self-end">{inOrder ? <Badge tone="muted">In order</Badge> : <Badge tone={skuStatusTone(v.status)}>{v.status ?? "—"}</Badge>}</span>
@@ -421,8 +424,8 @@ function SkuFamilyCard({ fam, vs, isOpen, selCount, sel, inOrderSkus, showCny, o
   const lastOrdered = vs[0]?.familyLastOrdered;
   return (
     <div className="space-y-2">
-      <div className={cn("flex items-start gap-3 rounded-lg border border-l-[3px] px-3.5 py-3", hasSel ? "border-primary/50 border-l-primary" : "border-l-border")}>
-        <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 text-left">
+      <div className={cn("flex items-start gap-3 rounded-lg border border-l-[3px] bg-card px-3.5 py-3 shadow-sm", hasSel ? "border-primary/60 border-l-primary" : "border-l-border")}>
+        <button type="button" onClick={onToggleOpen} className="min-w-0 flex-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary">
           <div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-semibold leading-snug">{fam}</span>{hasSel && <span className="text-[11px] font-medium text-primary">({selCount} of {vs.length} selected)</span>}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{vs.length} {vs.length === 1 ? "variant" : "variants"} · factory{lastOrdered ? ` · last ordered ${lastOrdered}` : ""}</div>
           <span className="mt-1.5 inline-flex"><Badge tone="muted">Imported</Badge></span>
@@ -511,7 +514,7 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
     >
       <div className="flex min-h-0 flex-1">
         {/* LEFT — catalog (68%) */}
-        <div className="flex min-h-0 flex-[0_0_68%] flex-col border-r bg-background">
+        <div className="flex min-h-0 flex-[0_0_68%] flex-col border-r bg-muted/40">
           <div className="shrink-0 space-y-2.5 border-b p-4">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search SKU, title, ASIN, family, supplier" className={inputCls} />
             <div className="flex flex-wrap gap-1.5">{SKU_FILTERS.map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn("vy-chip", filter === f && "is-active")}>{f}</button>)}</div>
@@ -546,8 +549,8 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
                     <div className="flex items-start gap-2.5">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-accent text-muted-foreground"><Package className="h-4 w-4" /></span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-mono text-[12px] font-semibold">{v.sku}</div>
-                        <div className="text-[11px] text-muted-foreground">{[v.familyName, v.name, v.pack].filter(Boolean).join(" · ")}</div>
+                        <div className="truncate font-mono text-[12px] font-semibold">{v.sku}</div>
+                        <div className="truncate text-[11px] text-muted-foreground" title={[v.familyName, v.name, v.pack].filter(Boolean).join(" · ")}>{[v.familyName, v.name, v.pack].filter(Boolean).join(" · ")}</div>
                         {skuStatusTone(v.status) === "warning" && <div className="mt-0.5 text-[10px] text-warning">{v.status}</div>}
                       </div>
                       <button type="button" onClick={() => toggle(v)} className="vy-icon-btn shrink-0" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
