@@ -27,7 +27,7 @@ export default async function ShipmentDetailPage({ params }: { params: Promise<{
   const row: ShipRow = {
     ...s,
     fba,
-    tracking: track ? { trackingNo: track.tracking_no, bookingRef: track.booking_ref, carrier: track.carrier, scac: track.scac, lastSync: track.last_sync } : null,
+    tracking: track ? { trackingNo: track.tracking_no, bookingRef: track.booking_ref, carrier: track.carrier, scac: track.scac, lastSync: track.last_sync, carrierCode: track.carrier_code } : null,
   };
   const checkpoints = ((track?.checkpoints ?? []) as { time: string | null; description: string; location: string; stage: string | null }[]) || [];
   const liveStatus = track?.status ?? null;
