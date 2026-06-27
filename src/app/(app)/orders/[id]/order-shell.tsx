@@ -121,26 +121,33 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
 
   return (
     <div className="space-y-5">
-      {/* page switcher: breadcrumb + single segmented pill bar */}
-      <div className="vy-order-shell-head">
-        <nav className="vy-breadcrumb" aria-label="Breadcrumb">
-          <Link href="/orders" className="vy-bc-link">Orders</Link>
-          <ChevronRight className="vy-bc-sep h-3 w-3" />
-          <span className="vy-bc-id">{order.id}</span>
-          <ChevronRight className="vy-bc-sep h-3 w-3" />
-          <span className="vy-bc-current">{TABS.find((t) => t.key === activeTab)?.label ?? "Home"}</span>
+      {/* page switcher: breadcrumb + single segmented pill bar (inline styles — survives CSS-bundle drift) */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <nav aria-label="Breadcrumb" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, flexWrap: "wrap" }}>
+          <Link href="/orders" style={{ color: "hsl(var(--muted-fg))", textDecoration: "none" }}>Orders</Link>
+          <ChevronRight className="h-3 w-3" style={{ color: "hsl(var(--muted-fg))", opacity: 0.5 }} />
+          <span style={{ fontFamily: "var(--font-mono, ui-monospace, monospace)", color: "hsl(var(--muted-fg))" }}>{order.id}</span>
+          <ChevronRight className="h-3 w-3" style={{ color: "hsl(var(--muted-fg))", opacity: 0.5 }} />
+          <span style={{ color: "hsl(var(--foreground))", fontWeight: 500 }}>{TABS.find((t) => t.key === activeTab)?.label ?? "Home"}</span>
         </nav>
 
-        <div className="vy-pageswitch" role="tablist">
-        {visibleTabs.map((t) => {
-          const I = t.icon; const active = activeTab === t.key;
-          return (
-            <button key={t.key} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
-              className={cn("vy-page-pill", active && "is-active")}>
-              <I className="h-4 w-4" /> {t.label}
-            </button>
-          );
-        })}
+        <div role="tablist" style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 2, maxWidth: "100%", padding: 4, borderRadius: 14, background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", boxShadow: "var(--shadow-sm)", overflowX: "auto" }}>
+          {visibleTabs.map((t) => {
+            const I = t.icon; const active = activeTab === t.key;
+            return (
+              <button key={t.key} role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7, whiteSpace: "nowrap",
+                  padding: "8px 14px", borderRadius: 10, fontSize: 14, fontWeight: 500, border: 0, cursor: "pointer",
+                  background: active ? "hsl(var(--primary))" : "transparent",
+                  color: active ? "hsl(var(--primary-fg))" : "hsl(var(--muted-fg))",
+                  boxShadow: active ? "0 1px 2px hsl(var(--primary) / 0.4), 0 4px 12px hsl(var(--primary) / 0.3)" : "none",
+                  transition: "background 140ms ease, color 140ms ease",
+                }}>
+                <I className="h-4 w-4" /> {t.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
