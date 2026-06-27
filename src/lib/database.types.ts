@@ -1427,6 +1427,7 @@ export type Database = {
           ad_units_30d: number | null
           amazon_meta: Json | null
           asin: string | null
+          attributes: Json | null
           created_at: string
           family_id: string
           favorite: boolean
@@ -1455,6 +1456,7 @@ export type Database = {
           ad_units_30d?: number | null
           amazon_meta?: Json | null
           asin?: string | null
+          attributes?: Json | null
           created_at?: string
           family_id: string
           favorite?: boolean
@@ -1483,6 +1485,7 @@ export type Database = {
           ad_units_30d?: number | null
           amazon_meta?: Json | null
           asin?: string | null
+          attributes?: Json | null
           created_at?: string
           family_id?: string
           favorite?: boolean

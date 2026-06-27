@@ -39,7 +39,7 @@ export function VariantsTable({ familyId, familyName, familyImage, weightLb, var
 
   return (
     <>
-      <TableCard icon={Package} tone="brand" title="Variants" count={variants.length} action={<AddVariantButton familyId={familyId} />}>
+      <TableCard icon={Package} tone="brand" title="Variants" count={variants.length} action={<AddVariantButton familyId={familyId} familyName={familyName} />}>
         <table className="w-full min-w-[1000px] text-sm">
           <thead>
             <tr className="border-b text-left text-[10px] uppercase tracking-wide text-muted-foreground">
