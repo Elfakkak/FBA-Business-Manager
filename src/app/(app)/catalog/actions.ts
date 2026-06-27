@@ -236,13 +236,19 @@ export async function addTechPack(familyId: string, form: FormData): Promise<Res
 
 export async function addVariant(familyId: string, form: FormData): Promise<Result> {
   const sku = String(form.get("sku") ?? "").trim();
-  const name = String(form.get("name") ?? "").trim();
-  const pack = String(form.get("pack") ?? "1-Pack").trim() || "1-Pack";
   const cost = parseFloat(String(form.get("cost") ?? ""));
+  if (!sku) return { ok: false, error: "SKU is required." };
+  // Flexible defining attributes (color/pack/size/scent = value), JSON from the modal.
+  let attrs: { key: string; value: string }[] = [];
+  try { attrs = JSON.parse(String(form.get("attributes") ?? "[]")); } catch { attrs = []; }
+  attrs = (attrs || []).filter((a) => a && a.key?.trim() && a.value?.trim()).map((a) => ({ key: a.key.trim(), value: a.value.trim() }));
+  // Derive a display name from the attribute values; pack from a "Pack" attribute.
+  const name = attrs.map((a) => a.value).join(" ") || sku;
+  const pack = attrs.find((a) => /pack/i.test(a.key))?.value || "1-Pack";
+  const attrObj = Object.fromEntries(attrs.map((a) => [a.key, a.value]));
+  // ASIN/FNSKU auto-populate when the SKU links to Amazon — kept optional here.
   const asin = String(form.get("asin") ?? "").trim() || null;
   const fnsku = String(form.get("fnsku") ?? "").trim() || null;
-  if (!sku) return { ok: false, error: "SKU is required." };
-  if (!name) return { ok: false, error: "Variant name is required." };
 
   const supabase = await createClient();
   const { error } = await supabase.from("product_variants").insert({
@@ -250,6 +256,7 @@ export async function addVariant(familyId: string, form: FormData): Promise<Resu
     sku,
     name,
     pack,
+    attributes: attrs.length ? attrObj : null,
     last_cost_usd: Number.isFinite(cost) ? cost : null,
     asin,
     fnsku,

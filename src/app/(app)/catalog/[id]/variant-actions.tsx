@@ -4,31 +4,48 @@ import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
+import { cn } from "@/lib/utils";
 import { addVariant, updateVariant, moveVariant } from "../actions";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, X } from "lucide-react";
 
 const STATUSES = ["Ready", "Reorder", "SKU mislabeled", "Not linked"];
 
-export function AddVariantButton({ familyId }: { familyId: string }) {
+export function AddVariantButton({ familyId, familyName }: { familyId: string; familyName?: string }) {
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => addVariant(familyId, form));
+  // Flexible defining attributes — a variant can differ by color, pack, size, scent…
+  const [attrs, setAttrs] = useState<{ key: string; value: string }[]>([{ key: "Color", value: "" }]);
+  const setAttr = (i: number, patch: Partial<{ key: string; value: string }>) => setAttrs((a) => a.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
 
   return (
     <>
-      <PrimaryButton onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5">
+      <PrimaryButton onClick={() => { setAttrs([{ key: "Color", value: "" }]); setOpen(true); }} className="inline-flex items-center gap-1.5">
         <Plus className="h-4 w-4" /> Add variant
       </PrimaryButton>
-      <Modal open={open} onClose={() => setOpen(false)} title="Add variant">
+      <Modal open={open} onClose={() => setOpen(false)} title="Add variant"
+        subtitle={`New variant of ${familyName ?? "this product"}. Variants can differ by anything — color, pack, size, scent. Add the attributes that define this one.`}>
         <form onSubmit={onSubmit} className="space-y-4">
+          <input type="hidden" name="attributes" value={JSON.stringify(attrs)} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="SKU"><input name="sku" required autoFocus className={inputCls} placeholder="BLK-SKU-1P" /></Field>
-            <Field label="Pack"><input name="pack" className={inputCls} defaultValue="1-Pack" /></Field>
+            <Field label="SKU"><input name="sku" required autoFocus className={inputCls} placeholder="e.g. CAR-BSC-3P-BLK" /></Field>
+            <Field label="Unit cost (USD)"><input name="cost" type="number" step="0.01" className={inputCls} placeholder="e.g. 8.40" /></Field>
           </div>
-          <Field label="Variant name"><input name="name" required className={inputCls} placeholder="Black 1-Pack" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Unit cost (USD)"><input name="cost" type="number" step="0.01" className={inputCls} placeholder="0.00" /></Field>
-            <Field label="ASIN"><input name="asin" className={inputCls} placeholder="B0…" /></Field>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="vy-kicker">Defining attributes</span>
+              <button type="button" onClick={() => setAttrs((a) => [...a, { key: "", value: "" }])} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> Add attribute</button>
+            </div>
+            <div className="space-y-2">
+              {attrs.map((a, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input value={a.key} onChange={(e) => setAttr(i, { key: e.target.value })} placeholder="Attribute (e.g. Color)" className={cn(inputCls, "flex-1")} />
+                  <span className="shrink-0 text-muted-foreground">=</span>
+                  <input value={a.value} onChange={(e) => setAttr(i, { value: e.target.value })} placeholder="Value (e.g. Black)" className={cn(inputCls, "flex-1")} />
+                  <button type="button" onClick={() => setAttrs((arr) => arr.filter((_, idx) => idx !== i))} className="vy-icon-btn shrink-0" aria-label="Remove attribute"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10.5px] leading-snug text-muted-foreground">Unit cost is a seed — the actual cost comes from invoices. ASIN/FNSKU auto-fill once the SKU is linked to Amazon.</p>
           </div>
-          <Field label="FNSKU"><input name="fnsku" className={inputCls} placeholder="X0… (optional)" /></Field>
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
             <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>
