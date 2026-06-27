@@ -442,12 +442,15 @@ export type Database = {
           amazon_status: Database["public"]["Enums"]["fba_status"]
           created_at: string
           eta: string | null
+          eta_from: string | null
+          eta_to: string | null
           expected: number
           fc: string
           id: string
           mode: string | null
           order_id: string | null
           received: number
+          reference_id: string | null
           shipment_id: string | null
           sku_count: number
           synced: string | null
@@ -457,12 +460,15 @@ export type Database = {
           amazon_status?: Database["public"]["Enums"]["fba_status"]
           created_at?: string
           eta?: string | null
+          eta_from?: string | null
+          eta_to?: string | null
           expected?: number
           fc: string
           id: string
           mode?: string | null
           order_id?: string | null
           received?: number
+          reference_id?: string | null
           shipment_id?: string | null
           sku_count?: number
           synced?: string | null
@@ -472,12 +478,15 @@ export type Database = {
           amazon_status?: Database["public"]["Enums"]["fba_status"]
           created_at?: string
           eta?: string | null
+          eta_from?: string | null
+          eta_to?: string | null
           expected?: number
           fc?: string
           id?: string
           mode?: string | null
           order_id?: string | null
           received?: number
+          reference_id?: string | null
           shipment_id?: string | null
           sku_count?: number
           synced?: string | null

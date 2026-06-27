@@ -9,17 +9,18 @@ import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components
 import { Select } from "@/components/ui/select";
 import { money, num, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, SHIPMENT_MOVING, incotermInfo, type Tone, type OrderRow } from "@/lib/derive";
 import { cn } from "@/lib/utils";
+import { CopyValue } from "@/components/ui/copy";
 import {
   bookOrderShipment, updateOrderShipment, advanceOrderShipmentStage, savePackingList,
-  linkFbaInbound, updateFbaReceived, saveShipmentFile, pasteTrackingUpdate, deleteOrderShipment,
+  linkFbaInbound, linkExistingFbaInbound, updateFbaReceived, saveShipmentFile, pasteTrackingUpdate, deleteOrderShipment,
   type ShipFields, type PackingLineInput,
 } from "./shipping-actions";
 import {
-  Truck, PackageCheck, Box, FileText, Upload, Plus, ChevronRight, AlertTriangle, Check, Link2, Ship, DollarSign, Trash2,
+  Truck, PackageCheck, Box, FileText, Upload, Plus, ChevronRight, AlertTriangle, Check, Link2, Ship, DollarSign, Trash2, Calendar,
 } from "lucide-react";
 
 export type ShipmentRow = { id: string; mode: string; stage: string; forwarder: string | null; incoterm: string | null; origin: string | null; destination: string | null; etd: string | null; eta: string | null; cbm: number | null; gross_kg: number | null; net_kg: number | null; cartons: number | null; packed: number; freight_usd: number | null; bol: string | null; customs: string | null };
-export type InboundRow = { id: string; fc: string; expected: number; received: number; amazon_status: string; sku_count: number; shipment_id: string | null; eta: string | null; synced: string | null };
+export type InboundRow = { id: string; fc: string; expected: number; received: number; amazon_status: string; sku_count: number; shipment_id: string | null; eta: string | null; synced: string | null; reference_id: string | null; eta_from: string | null; eta_to: string | null };
 export type PackLine = { id: string; shipment_id: string | null; sku: string | null; product_name: string | null; cartons: number; per_ctn: number; packed: number; fc: string | null };
 export type ShipFile = { id: string; shipment_id: string | null; slot: string; url: string; name: string | null };
 export type TrackRow = { shipment_id: string; tracking_no: string | null; eta_override: string | null };
@@ -50,8 +51,8 @@ async function pickFile(accept: string, onFile: (f: File) => void) {
   input.click();
 }
 
-export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles, tracking, ordered, forwarders, freightInvoice }: {
-  order: OrderRow; shipments: ShipmentRow[]; inbounds: InboundRow[]; packLines: PackLine[]; shipFiles: ShipFile[]; tracking: TrackRow[]; ordered: OrderedLine[]; forwarders: string[]; freightInvoice: FreightInvoice | null;
+export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles, tracking, ordered, forwarders, freightInvoice, unlinkedInbounds }: {
+  order: OrderRow; shipments: ShipmentRow[]; inbounds: InboundRow[]; packLines: PackLine[]; shipFiles: ShipFile[]; tracking: TrackRow[]; ordered: OrderedLine[]; forwarders: string[]; freightInvoice: FreightInvoice | null; unlinkedInbounds: InboundRow[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -239,14 +240,22 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
             {activeInbounds.length === 0 ? (
               <div className="rounded-lg border border-dashed px-4 py-8 text-center"><span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground"><Link2 className="h-4 w-4" /></span><div className="text-[13px] font-semibold">No FBA inbounds linked</div><p className="mt-0.5 text-[11px] text-muted-foreground">Create the packing list first, then link Amazon FBA inbound shipments to track expected vs. received units.</p></div>
             ) : (
-              <div className="space-y-2">
-                {activeInbounds.map((f) => { const variance = f.received - f.expected; return (
-                  <div key={f.id} className="flex flex-wrap items-center gap-3 rounded-lg border bg-background/40 px-4 py-2.5 text-[12px]">
-                    <Link href={`/fba-shipments/${f.id}`} className="font-mono text-[12px] font-bold hover:text-primary">{f.id}</Link>
-                    <Badge tone="muted">{f.fc}</Badge>
-                    <span className="text-muted-foreground">exp {num(f.expected)} · rec <span className={cn(f.received >= f.expected && f.expected > 0 ? "text-success" : f.received > 0 ? "text-warning" : "text-muted-foreground")}>{num(f.received)}</span>{f.received > 0 && variance !== 0 ? <span className={variance < 0 ? "text-danger" : "text-warning"}> ({variance > 0 ? "+" : ""}{num(variance)})</span> : null}</span>
-                    <button type="button" onClick={() => { const v = window.prompt(`Received units for ${f.id}`, String(f.received)); if (v != null) run(() => updateFbaReceived(f.id, order.id, Number(v) || 0)); }} className="vy-btn vy-btn--ghost vy-btn--sm ml-auto">Update received</button>
-                    <Link href={`/fba-shipments/${f.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+              <div className="space-y-2.5">
+                {activeInbounds.map((f) => { const variance = f.received - f.expected; const win = f.eta_from || f.eta_to ? `${f.eta_from || "?"} – ${f.eta_to || "?"}` : f.eta || null; return (
+                  <div key={f.id} className="rounded-lg border bg-background/40 px-4 py-3">
+                    {/* IDs the forwarder asks for — one-click copy */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CopyValue value={f.id} label="FBA shipment ID" />
+                      {f.reference_id && <CopyValue value={f.reference_id} label="reference ID" />}
+                      <Badge tone="muted">{f.fc}</Badge>
+                      <Badge tone={f.amazon_status === "Closed" ? "success" : f.amazon_status === "Problem" ? "danger" : f.amazon_status === "Receiving" ? "warning" : "info"}>{f.amazon_status}</Badge>
+                      <Link href={`/fba-shipments/${f.id}`} className="vy-icon-btn ml-auto" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+                      <span>exp {num(f.expected)} · rec <span className={cn(f.received >= f.expected && f.expected > 0 ? "text-success" : f.received > 0 ? "text-warning" : "text-muted-foreground")}>{num(f.received)}</span>{f.received > 0 && variance !== 0 ? <span className={variance < 0 ? "text-danger" : "text-warning"}> ({variance > 0 ? "+" : ""}{num(variance)})</span> : null}</span>
+                      {win && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> FBA arrival {win}</span>}
+                      <button type="button" onClick={() => { const v = window.prompt(`Received units for ${f.id}`, String(f.received)); if (v != null) run(() => updateFbaReceived(f.id, order.id, Number(v) || 0)); }} className="vy-btn vy-btn--ghost vy-btn--sm ml-auto">Update received</button>
+                    </div>
                   </div>
                 ); })}
               </div>
@@ -291,7 +300,7 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
 
       {booking != null && <BookModal order={order} shipment={booking === "new" ? null : booking} forwarders={forwarders} onClose={() => setBooking(null)} onSaved={() => { setBooking(null); router.refresh(); }} onDelete={booking !== "new" ? () => { run(() => deleteOrderShipment((booking as ShipmentRow).id, order.id)); setBooking(null); } : undefined} />}
       {packingFor && <PackingModal shipment={packingFor} orderId={order.id} ordered={ordered} existing={packLines.filter((p) => p.shipment_id === packingFor.id)} onClose={() => setPackingFor(null)} onSaved={() => { setPackingFor(null); router.refresh(); }} />}
-      {linkingFor && <LinkFbaModal shipment={linkingFor} orderId={order.id} onClose={() => setLinkingFor(null)} onSaved={() => { setLinkingFor(null); router.refresh(); }} />}
+      {linkingFor && <LinkFbaModal shipment={linkingFor} orderId={order.id} unlinked={unlinkedInbounds} onClose={() => setLinkingFor(null)} onSaved={() => { setLinkingFor(null); router.refresh(); }} />}
       {pasteFor && <PasteModal shipment={pasteFor} orderId={order.id} onClose={() => setPasteFor(null)} onSaved={() => { setPasteFor(null); router.refresh(); }} />}
     </div>
   );
@@ -352,7 +361,7 @@ function BookModal({ order, shipment, forwarders, onClose, onSaved, onDelete }: 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Mode"><Select value={f.mode} onChange={(v) => set({ mode: v })} options={MODES.map((m) => ({ value: m, label: m }))} /></Field>
           <Field label="Forwarder"><Select value={f.forwarder ?? ""} onChange={(v) => set({ forwarder: v || null })} placeholder="Select forwarder…" searchable options={[{ value: "", label: "— none —" }, ...forwarders.map((n) => ({ value: n, label: n }))]} /></Field>
-          <Field label="Incoterm"><Select value={f.incoterm ?? ""} onChange={(v) => set({ incoterm: v || null })} options={[{ value: "", label: "— none —" }, ...INCOTERMS.map((t) => ({ value: t, label: t }))]} /></Field>
+          <Field label="Incoterm"><Select value={f.incoterm ?? ""} onChange={(v) => set({ incoterm: v || null })} options={[{ value: "", label: "— none —" }, ...INCOTERMS.map((t) => ({ value: t, label: t }))]} />{f.incoterm && <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">{incotermInfo(f.incoterm).blurb} · Customs: {incotermInfo(f.incoterm).customsBy} · Duties: {incotermInfo(f.incoterm).dutiesBy}</p>}</Field>
           <Field label="Freight estimate (USD, optional)"><input type="number" step="0.01" className={inputCls} value={f.freight_usd ?? ""} onChange={(e) => set({ freight_usd: e.target.value === "" ? null : Number(e.target.value) })} placeholder="0.00" /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">A planning number. The actual cost comes from the forwarder&apos;s invoice in the Invoices tab — that&apos;s what lands in Landed cost.</p></Field>
           <Field label="Origin"><input className={inputCls} value={f.origin ?? ""} onChange={(e) => set({ origin: e.target.value || null })} placeholder="e.g. Ningbo" /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">Departure port.</p></Field>
           <Field label="Destination"><input className={inputCls} value={f.destination ?? ""} onChange={(e) => set({ destination: e.target.value || null })} placeholder="e.g. Los Angeles" /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">Arrival port — not Amazon. The FC is tracked on the FBA inbound.</p></Field>
@@ -412,25 +421,50 @@ function PackingModal({ shipment, orderId, ordered, existing, onClose, onSaved }
   );
 }
 
-function LinkFbaModal({ shipment, orderId, onClose, onSaved }: { shipment: ShipmentRow; orderId: string; onClose: () => void; onSaved: () => void }) {
+function LinkFbaModal({ shipment, orderId, unlinked, onClose, onSaved }: { shipment: ShipmentRow; orderId: string; unlinked: InboundRow[]; onClose: () => void; onSaved: () => void }) {
+  const [mode, setMode] = useState<"existing" | "new">(unlinked.length ? "existing" : "new");
+  const [pick, setPick] = useState("");
   const [fc, setFc] = useState("");
   const [expected, setExpected] = useState(String(shipment.packed || ""));
+  const [refId, setRefId] = useState("");
+  const [etaFrom, setEtaFrom] = useState("");
+  const [etaTo, setEtaTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const canSave = mode === "existing" ? !!pick : !!fc.trim();
   const save = async () => {
     setSaving(true); setErr(null);
-    const r = await linkFbaInbound(orderId, shipment.id, { fc, expected: Number(expected) || 0, mode: shipment.mode });
+    const r = mode === "existing"
+      ? await linkExistingFbaInbound(orderId, shipment.id, pick)
+      : await linkFbaInbound(orderId, shipment.id, { fc, expected: Number(expected) || 0, mode: shipment.mode, reference_id: refId, eta_from: etaFrom, eta_to: etaTo });
     setSaving(false); if (r.ok) onSaved(); else setErr(r.error);
   };
   return (
-    <Modal open onClose={onClose} title="Link FBA inbound" subtitle="Create an Amazon inbound shipment to track expected vs received units."
-      footer={<div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="button" onClick={save} disabled={saving || !fc.trim()}>{saving ? "Linking…" : "Link inbound"}</PrimaryButton></div>}>
+    <Modal open onClose={onClose} title="Link FBA inbound" subtitle="Attach an Amazon inbound to this shipment — the order is set automatically from the shipment."
+      footer={<div className="flex justify-end gap-2"><GhostButton type="button" onClick={onClose}>Cancel</GhostButton><PrimaryButton type="button" onClick={save} disabled={saving || !canSave}>{saving ? "Linking…" : "Link inbound"}</PrimaryButton></div>}>
       <div className="space-y-4">
         {err && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{err}</p>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Fulfillment center (FC)"><input className={inputCls} value={fc} onChange={(e) => setFc(e.target.value)} placeholder="e.g. ONT8" autoFocus /></Field>
-          <Field label="Expected units"><input type="number" className={inputCls} value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="0" /></Field>
-        </div>
+        {unlinked.length > 0 && (
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => setMode("existing")} className={cn("vy-chip", mode === "existing" && "is-active")}>Link existing</button>
+            <button type="button" onClick={() => setMode("new")} className={cn("vy-chip", mode === "new" && "is-active")}>Create new</button>
+          </div>
+        )}
+        {mode === "existing" ? (
+          <Field label="Unlinked Amazon inbound"><Select value={pick} onChange={setPick} placeholder="Pick an inbound from FBA Shipments…" searchable options={unlinked.map((u) => ({ value: u.id, label: u.id, sub: `${u.fc} · ${num(u.expected)} exp${u.reference_id ? ` · ref ${u.reference_id}` : ""}` }))} /></Field>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Fulfillment center (FC)"><input className={inputCls} value={fc} onChange={(e) => setFc(e.target.value)} placeholder="e.g. ONT8" autoFocus /></Field>
+              <Field label="Expected units"><input type="number" className={inputCls} value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="0" /></Field>
+              <Field label="Reference ID (optional)"><input className={inputCls} value={refId} onChange={(e) => setRefId(e.target.value)} placeholder="Amazon ref / your ref" /></Field>
+              <div className="hidden sm:block" />
+              <Field label="FBA arrival — from"><input className={inputCls} value={etaFrom} onChange={(e) => setEtaFrom(e.target.value)} placeholder="e.g. Jul 10" /></Field>
+              <Field label="FBA arrival — to"><input className={inputCls} value={etaTo} onChange={(e) => setEtaTo(e.target.value)} placeholder="e.g. Jul 17" /></Field>
+            </div>
+            <p className="text-[11px] leading-snug text-muted-foreground">The forwarder often gives a window (e.g. &quot;hits FBA in 10–15 days&quot;). Enter it here to track the expected FBA arrival.</p>
+          </>
+        )}
       </div>
     </Modal>
   );

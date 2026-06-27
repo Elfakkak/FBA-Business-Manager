@@ -653,6 +653,7 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
   const [section, setSection] = useState<string>("Production");
   const [lineType, setLineType] = useState<string>("Other");
   const [chargeTypeId, setChargeTypeId] = useState<string>("");
+  const [showCny, setShowCny] = useState(false); // ¥ reference is optional — hidden unless toggled
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -667,12 +668,14 @@ function AddCostModal({ orderId, chargeTypes, vendors, onClose }: { orderId: str
 
         <Field label="Description"><input name="description" required autoFocus className={inputCls} placeholder={`e.g. "Tooling for 18\\" mold revision"`} /></Field>
 
-        {/* Amount is always USD (the calc currency). ¥ is a reference note only. */}
+        {/* Amount is always USD (the calc currency). ¥ is a reference note only — hidden behind a toggle. */}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amount (USD)"><input name="amount" type="number" step="0.01" required className={inputCls} placeholder="0.00" /></Field>
-          <Field label="¥ reference (optional)"><input name="amount_cny_ref" type="number" step="0.01" className={inputCls} placeholder="note only" /></Field>
+          {showCny
+            ? <Field label="¥ reference (optional)"><input name="amount_cny_ref" type="number" step="0.01" className={inputCls} placeholder="note only" /></Field>
+            : <div className="flex items-end pb-0.5"><button type="button" onClick={() => setShowCny(true)} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Add ¥ reference</button></div>}
         </div>
-        <p className="-mt-2 text-[11px] leading-relaxed text-muted-foreground">You pay in <span className="font-medium">USD</span> — that&apos;s what the app calculates. The <span className="font-medium">¥</span> is just to remember the RMB price; it never affects any total.</p>
+        {showCny && <p className="-mt-2 text-[11px] leading-relaxed text-muted-foreground">You pay in <span className="font-medium">USD</span> — that&apos;s what the app calculates. The <span className="font-medium">¥</span> is just to remember the RMB price; it never affects any total.</p>}
 
         <Field label="Vendor / payee"><Select name="vendor" value={vendor} onChange={setVendor} placeholder="Select vendor…" searchable options={vendors.map((v) => ({ value: v.name, label: v.name, sub: v.type }))} /></Field>
 

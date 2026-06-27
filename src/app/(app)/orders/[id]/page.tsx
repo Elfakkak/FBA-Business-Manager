@@ -20,7 +20,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     supabase.from("packaging_items").select("id, name, kind, unit_cost").order("name"),
     supabase.from("packaging_moves").select("id, item_id, qty").eq("order_id", id).eq("type", "consume"),
     supabase.from("shipments").select("id, mode, stage, forwarder, incoterm, origin, destination, etd, eta, cbm, gross_kg, net_kg, cartons, packed, freight_usd, bol, customs").eq("order_id", id).order("created_at"),
-    supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id, eta, synced").eq("order_id", id),
+    supabase.from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id, eta, synced, reference_id, eta_from, eta_to").eq("order_id", id),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("partners").select("name, specialty").order("name"),
     supabase.from("brand").select("name").maybeSingle(),
@@ -103,6 +103,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const freightInv = invoicesRich.find((i) => i.vendor_type === "Forwarder");
   const freightInvoice = freightInv ? { id: freightInv.id, total: freightInv.total ?? 0, paid: freightInv.paid ?? 0 } : null;
   const orderedShip = ((lines ?? []) as { sku: string | null; product_name: string | null; qty: number }[]).map((l) => ({ sku: l.sku, product_name: l.product_name, qty: l.qty ?? 0 }));
+  // Unlinked Amazon inbounds (no order yet) — selectable to attach to this order's shipments.
+  const { data: unlinkedInbounds } = await supabase
+    .from("fba_inbounds").select("id, fc, expected, received, amazon_status, sku_count, shipment_id, eta, synced, reference_id, eta_from, eta_to")
+    .is("order_id", null).order("created_at", { ascending: false });
 
   return (
     <OrderShell
@@ -126,6 +130,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       forwarders={forwarders}
       freightInvoice={freightInvoice}
       ordered={orderedShip}
+      unlinkedInbounds={(unlinkedInbounds ?? []) as never}
       inspection={inspection ?? null}
       rollup={r}
       initialTab={tab ?? "overview"}

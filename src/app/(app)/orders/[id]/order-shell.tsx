@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, KpiStrip, SectionHeader, Chip, SectionTitle } from "@/components/ui/primitives";
@@ -65,7 +65,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, freightInvoice, ordered, inspection, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, freightInvoice, ordered, unlinkedInbounds, inspection, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
@@ -86,12 +86,18 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   forwarders: string[];
   freightInvoice: FreightInvoice | null;
   ordered: OrderedLine[];
+  unlinkedInbounds: InboundRow[];
   inspection: Inspection | null;
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
   initialTab?: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState(initialTab);
+  // Remember the active tab in the URL so a refresh stays on it (not back to Home).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") !== tab) { url.searchParams.set("tab", tab); window.history.replaceState(null, "", url.toString()); }
+  }, [tab]);
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
@@ -129,7 +135,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
       ) : tab === "invoices" ? (
         <InvoicesPanel order={order} invoices={invoices} vendors={vendors} />
       ) : tab === "shipping" ? (
-        <ShippingPanel order={order} shipments={shipments} inbounds={inbounds} packLines={packLines} shipFiles={shipFiles} tracking={shipTracking} ordered={ordered} forwarders={forwarders} freightInvoice={freightInvoice} />
+        <ShippingPanel order={order} shipments={shipments} inbounds={inbounds} packLines={packLines} shipFiles={shipFiles} tracking={shipTracking} ordered={ordered} forwarders={forwarders} freightInvoice={freightInvoice} unlinkedInbounds={unlinkedInbounds} />
       ) : tab === "production" ? (
         <div className="space-y-6">
           <ProductionSection order={order} lines={lines} costs={costs} variants={variants} chargeTypes={chargeTypes} vendors={vendors} companyName={companyName} orderFiles={orderFiles} packagingOnHand={packagingOnHand} />
