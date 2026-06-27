@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Kpi, PageHead, Badge, SectionTitle } from "@/components/ui/primitives";
+import { SyncStamp } from "@/components/ui/sync-stamp";
 import { invStats, reorderQty, INV_HEALTH_TONE, INV_SAFETY_DAYS, num, type Variant, type Product } from "@/lib/derive";
 import { Radar } from "lucide-react";
 
 export default async function Dashboard() {
   const supabase = await createClient();
 
-  const [{ data: products }, { data: variants }] = await Promise.all([
+  const [{ data: products }, { data: variants }, { data: amzInt }] = await Promise.all([
     supabase.from("products").select("*"),
     supabase.from("product_variants").select("*"),
+    supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle(),
   ]);
+  const amazonLastSync = (amzInt?.last_sync as string | null) ?? null;
   const prods = (products ?? []) as Product[];
   const vars = (variants ?? []) as Variant[];
   const leadOf = new Map(prods.map((p) => [p.id, p.lead_time_days ?? 0]));
@@ -33,7 +36,10 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHead kicker="Overview" title="Dashboard" sub="Your FBA business at a glance — live from Amazon." />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <PageHead kicker="Overview" title="Dashboard" sub="Your FBA business at a glance — live from Amazon." />
+        <SyncStamp ts={amazonLastSync} className="mt-1" />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Products" value={num(prods.length)} sub="families" tone="info" />

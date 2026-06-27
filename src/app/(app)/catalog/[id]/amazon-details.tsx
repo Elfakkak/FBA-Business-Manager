@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge, SectionTitle, SourceTag } from "@/components/ui/primitives";
+import { SyncStamp } from "@/components/ui/sync-stamp";
 import { amazonSizeTier, money, num, cmFromIn, kgFromLb, type AmazonMeta } from "@/lib/derive";
 import { setPrimarySku } from "../actions";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ const dimsLabel = (d?: { l: number | null; w: number | null; h: number | null } 
   return `${f(d.l)} × ${f(d.w)} × ${f(d.h)} ${unit}`;
 };
 
-export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId: string; primarySku: string | null; variants: AmazonVariant[] }) {
+export function AmazonDetailsCard({ familyId, primarySku, variants, lastSync }: { familyId: string; primarySku: string | null; variants: AmazonVariant[]; lastSync?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   // default to the highest-stock SKU when none is pinned
@@ -36,7 +37,8 @@ export function AmazonDetailsCard({ familyId, primarySku, variants }: { familyId
   return (
     <Card className="p-5">
       <SectionTitle icon={ShoppingBag} tone="warning" title="Amazon details"
-        sub="Size, weight, tier & FBA fee — pulled per SKU from Amazon. Pick the SKU that represents this product." />
+        sub="Size, weight, tier & FBA fee — pulled per SKU from Amazon. Pick the SKU that represents this product."
+        action={<SyncStamp ts={lastSync ?? null} />} />
 
       {/* this product's SKUs — choose which one the details are pulled from */}
       <div className="mb-4 flex flex-wrap gap-2">

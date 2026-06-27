@@ -98,6 +98,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const linked = variants.filter((v) => v.asin && v.asin !== "Pending sync").length;
   const dim = (p.dim_cm ?? null) as { l?: number; w?: number; h?: number } | null;
   const carton = (p.carton_cm ?? null) as { l?: number; w?: number; h?: number } | null;
+  const { data: amzInt } = await supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle();
+  const amazonLastSync = (amzInt?.last_sync as string | null) ?? null;
   const { data: supplierList } = await supabase.from("suppliers").select("name").order("name");
   const supplierNames = (supplierList ?? []).map((s) => s.name);
   const { data: catList } = await supabase.from("categories").select("name").order("name");
@@ -222,6 +224,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <AmazonDetailsCard
         familyId={id}
         primarySku={p.primary_sku ?? null}
+        lastSync={amazonLastSync}
         variants={variants.map((v) => ({
           sku: v.sku, asin: v.asin, fnsku: v.fnsku, status: v.status, fbaStock: v.fba_stock ?? 0, salePrice: v.sale_price,
           meta: (v.amazon_meta as AmazonMeta | null) ?? null,
