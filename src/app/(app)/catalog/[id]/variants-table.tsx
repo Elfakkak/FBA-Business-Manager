@@ -98,7 +98,7 @@ export function VariantsTable({ familyId, familyName, familyImage, weightLb, var
         </table>
       </TableCard>
 
-      <Drawer open={!!peek} onClose={() => setPeek(null)} width={520} title={peek?.sku} dismissable={false}>
+      <Drawer open={!!peek} onClose={() => setPeek(null)} width={520} title={peek?.sku}>
         {peek && eco && (
           <div className="space-y-4">
             {/* header — image, name/pack, parent, linked status */}
