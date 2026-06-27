@@ -3,35 +3,62 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { DollarSign, Receipt, ClipboardCheck, Truck, Hammer, Package, Check, AlertTriangle } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { DollarSign, Receipt, ClipboardCheck, Truck, Hammer, Package, Check, AlertTriangle, Download } from "lucide-react";
 import { ACT_LABEL_LONG, ACT_DEFAULT_TONE, relTime, groupByDay, type ActEvent, type ActCat } from "@/lib/activity";
 
 const ICON: Record<ActCat, React.ElementType> = { Pay: DollarSign, Inv: Receipt, Insp: ClipboardCheck, Ship: Truck, Prod: Hammer, Doc: Package };
 const CATS: ActCat[] = ["Pay", "Inv", "Insp", "Ship", "Prod", "Doc"];
+const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
 // One shared feed — the order Activity drawer (variant="drawer") and the portfolio
-// Activity journal (variant="page") render from the same component.
-export function ActivityFeed({ events, nowMs, variant = "drawer", showOrder = false, initialCat = "All" }: {
-  events: ActEvent[]; nowMs: number; variant?: "drawer" | "page"; showOrder?: boolean; initialCat?: "All" | ActCat;
+// Activity journal (variant="page", with order filter + search + export + actor avatars).
+export function ActivityFeed({ events, nowMs, variant = "drawer", showOrder = false, initialCat = "All", orders = [] }: {
+  events: ActEvent[]; nowMs: number; variant?: "drawer" | "page"; showOrder?: boolean; initialCat?: "All" | ActCat; orders?: { id: string; title: string }[];
 }) {
   const [filter, setFilter] = useState<"All" | ActCat>(initialCat);
-  const counts = useMemo(() => { const c = {} as Record<ActCat, number>; for (const cat of CATS) c[cat] = events.filter((e) => e.cat === cat).length; return c; }, [events]);
-  const present = CATS.filter((c) => counts[c] > 0);
-  const filtered = filter === "All" ? events : events.filter((e) => e.cat === filter);
-  const groups = groupByDay(filtered, nowMs);
+  const [orderId, setOrderId] = useState("all");
+  const [q, setQ] = useState("");
   const long = variant === "page";
+
+  const scoped = useMemo(() => events.filter((e) => {
+    if (orderId !== "all" && e.orderId !== orderId) return false;
+    if (q.trim()) { const n = q.trim().toLowerCase(); if (![e.title, e.detail, e.orderId, e.actor].filter(Boolean).join(" ").toLowerCase().includes(n)) return false; }
+    return true;
+  }), [events, orderId, q]);
+  const counts = useMemo(() => { const c = {} as Record<ActCat, number>; for (const cat of CATS) c[cat] = scoped.filter((e) => e.cat === cat).length; return c; }, [scoped]);
+  const present = CATS.filter((c) => counts[c] > 0);
+  const filtered = filter === "All" ? scoped : scoped.filter((e) => e.cat === filter);
+  const groups = groupByDay(filtered, nowMs);
+
+  const exportCsv = () => {
+    const esc = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["When", "Category", "Title", "Detail", "Order", "Actor"];
+    const body = filtered.map((e) => [new Date(e.at).toISOString(), e.cat, e.title, e.detail ?? "", e.orderId, e.actor ?? ""].map(esc).join(","));
+    const blob = new Blob([[head.map(esc).join(","), ...body].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "activity.csv"; a.click(); URL.revokeObjectURL(a.href);
+  };
 
   return (
     <div className="space-y-4">
-      {/* filter chips */}
-      <div className="flex flex-wrap gap-1.5">
-        <Chip active={filter === "All"} onClick={() => setFilter("All")} label="All" count={events.length} />
-        {present.map((c) => <Chip key={c} active={filter === c} onClick={() => setFilter(c)} label={long ? ACT_LABEL_LONG[c] : c} count={counts[c]} />)}
+      {/* toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          <Chip active={filter === "All"} onClick={() => setFilter("All")} label="All" count={scoped.length} />
+          {present.map((c) => <Chip key={c} active={filter === c} onClick={() => setFilter(c)} label={long ? ACT_LABEL_LONG[c] : c} count={counts[c]} />)}
+        </div>
+        {long && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Select value={orderId} onChange={setOrderId} className="w-44" searchable options={[{ value: "all", label: "All orders" }, ...orders.map((o) => ({ value: o.id, label: o.id, sub: o.title }))]} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search activity…" className="w-48 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+            <button type="button" onClick={exportCsv} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export</button>
+          </div>
+        )}
       </div>
 
       <div className="space-y-5">
         {groups.length === 0 ? (
-          <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">No activity yet.</div>
+          <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">No activity{q || orderId !== "all" || filter !== "All" ? " matches your filters" : " yet"}.</div>
         ) : groups.map((g) => (
           <div key={g.day}>
             <div className="mb-2 flex items-center justify-between">
@@ -60,15 +87,16 @@ function Row({ e, nowMs, long, showOrder }: { e: ActEvent; nowMs: number; long: 
   const tone = e.tone || ACT_DEFAULT_TONE[e.cat];
   const Ico = e.icon === "check" ? Check : e.icon === "alert" ? AlertTriangle : ICON[e.cat];
   return (
-    <div className="flex gap-3 rounded-lg border bg-background/40 px-3 py-2.5">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md" style={{ background: `hsl(var(--${tone}) / 0.12)`, color: `hsl(var(--${tone}))` }}><Ico className="h-3.5 w-3.5" /></span>
+    <div className="flex items-start gap-3 rounded-lg border bg-background/40 px-3 py-2.5">
+      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md" style={{ background: `hsl(var(--${tone}) / 0.12)`, color: `hsl(var(--${tone}))` }}><Ico className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-semibold leading-snug">{e.title}</div>
         {long && e.detail && <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{e.detail}</div>}
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
           <span className="rounded bg-muted px-1 py-px font-mono uppercase tracking-wide">{e.cat}</span>
           {showOrder && <Link href={`/orders/${e.orderId}`} className="font-mono hover:text-primary">{e.orderId}</Link>}
-          {e.actor && <span>· {e.actor}</span>}
+          {long && e.actor && <span className="inline-flex items-center gap-1"><span className="grid h-4 w-4 place-items-center rounded-full bg-primary/12 text-[8px] font-bold text-primary">{initials(e.actor)}</span>{e.actor}</span>}
+          {!long && e.actor && <span>· {e.actor}</span>}
           <span>· {relTime(e.at, nowMs)}</span>
         </div>
       </div>
