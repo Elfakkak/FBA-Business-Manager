@@ -30,9 +30,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     supabase.from("products").select("*").eq("id", id).maybeSingle(),
     supabase.from("product_variants").select("*").eq("family_id", id).order("sku"),
     supabase.from("products").select("id, parent").order("parent"),
-    supabase.from("order_lines").select("id, order_id, qty, unit_cost, orders(title, status, placed_on)").eq("family_id", id),
-    supabase.from("variant_cost_history").select("unit_cost, qty, recorded_at, invoice_id, order_id, invoices(vendor), orders(title)").eq("family_id", id).eq("kind", "product").order("recorded_at", { ascending: true }),
-    supabase.from("variant_cost_history").select("unit_cost, recorded_at, order_id, orders(title)").eq("family_id", id).eq("kind", "landed").order("recorded_at", { ascending: true }),
+    supabase.from("order_lines").select("id, order_id, sku, qty, unit_cost, orders(title, status, placed_on)").eq("family_id", id),
+    supabase.from("variant_cost_history").select("sku, unit_cost, qty, recorded_at, invoice_id, order_id, invoices(vendor), orders(title)").eq("family_id", id).eq("kind", "product").order("recorded_at", { ascending: true }),
+    supabase.from("variant_cost_history").select("sku, unit_cost, recorded_at, order_id, orders(title)").eq("family_id", id).eq("kind", "landed").order("recorded_at", { ascending: true }),
     supabase.from("integrations").select("last_sync").eq("id", "amazon").maybeSingle(),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("categories").select("name").order("name"),
@@ -70,18 +70,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const haveVelocity = famVelocity > 0;
 
   // order-line history for this family → cost history + order history (queried above)
-  type LineJoin = { order_id: string; qty: number; unit_cost: number | null; orders: { title: string; status: string; placed_on: string | null } | null };
+  type LineJoin = { order_id: string; sku: string | null; qty: number; unit_cost: number | null; orders: { title: string; status: string; placed_on: string | null } | null };
   const lines = (lineRows ?? []) as unknown as LineJoin[];
   // Product cost history — the ACTUAL unit price paid, sourced from invoices (provenance).
-  type VCH = { unit_cost: number; qty: number | null; recorded_at: string; invoice_id: string | null; order_id: string | null; invoices: { vendor: string } | null; orders: { title: string } | null };
+  type VCH = { sku: string | null; unit_cost: number; qty: number | null; recorded_at: string; invoice_id: string | null; order_id: string | null; invoices: { vendor: string } | null; orders: { title: string } | null };
   const costHistory = ((vchRows ?? []) as unknown as VCH[]).map((h) => ({
-    date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, qty: h.qty,
+    sku: h.sku, date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, qty: h.qty,
     invoiceId: h.invoice_id, orderId: h.order_id, vendor: h.invoices?.vendor ?? null,
   }));
   // Landed cost history — the all-in cost per unit, locked at closeout (queried above)
-  type LVCH = { unit_cost: number; recorded_at: string; order_id: string | null; orders: { title: string } | null };
+  type LVCH = { sku: string | null; unit_cost: number; recorded_at: string; order_id: string | null; orders: { title: string } | null };
   const landedHistory = ((lvchRows ?? []) as unknown as LVCH[]).map((h) => ({
-    date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, orderId: h.order_id, orderTitle: h.orders?.title ?? null,
+    sku: h.sku, date: h.recorded_at ? h.recorded_at.slice(0, 10) : null, cost: h.unit_cost, orderId: h.order_id, orderTitle: h.orders?.title ?? null,
   }));
   const orderMap = new Map<string, { id: string; title: string; status: string; placedOn: string | null; qty: number }>();
   for (const l of lines) {
@@ -90,6 +90,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     orderMap.set(l.order_id, cur);
   }
   const orderHistory = [...orderMap.values()].sort((a, b) => (b.placedOn ?? "").localeCompare(a.placedOn ?? ""));
+  // Per-SKU order history for the variant drawer (which orders bought this exact SKU).
+  const skuOrders: Record<string, { id: string; title: string; placedOn: string | null; qty: number }[]> = {};
+  const skuOrderMap = new Map<string, Map<string, { id: string; title: string; placedOn: string | null; qty: number }>>();
+  for (const l of lines) {
+    if (!l.sku) continue;
+    if (!skuOrderMap.has(l.sku)) skuOrderMap.set(l.sku, new Map());
+    const m = skuOrderMap.get(l.sku)!;
+    const cur = m.get(l.order_id) ?? { id: l.order_id, title: l.orders?.title ?? l.order_id, placedOn: l.orders?.placed_on ?? null, qty: 0 };
+    cur.qty += l.qty ?? 0; m.set(l.order_id, cur);
+  }
+  for (const [sku, m] of skuOrderMap) skuOrders[sku] = [...m.values()].sort((a, b) => (b.placedOn ?? "").localeCompare(a.placedOn ?? ""));
+  const familyImage = Array.isArray(p.images) && p.images.length ? (p.images[0] as string) : null;
 
   const s = catFamilyStats(variants);
   const weightLb = familyWeightLb(p);
@@ -202,8 +214,13 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       {/* variants — click a row for the detail drawer */}
       <VariantsTable
         familyId={id}
+        familyName={p.parent}
+        familyImage={familyImage}
         weightLb={weightLb}
         products={productOptions}
+        costHistory={costHistory}
+        landedHistory={landedHistory}
+        skuOrders={skuOrders}
         variants={variants.map((v) => ({
           id: v.id, sku: v.sku, name: v.name, pack: v.pack, fnsku: v.fnsku, asin: v.asin,
           fba_stock: v.fba_stock ?? 0, last_cost_usd: v.last_cost_usd, sale_price: v.sale_price,
