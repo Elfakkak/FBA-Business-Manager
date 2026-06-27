@@ -125,14 +125,14 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         <span className="font-medium text-foreground">{TABS.find((t) => t.key === activeTab)?.label ?? "Home"}</span>
       </nav>
 
-      {/* tab bar */}
-      <div className="flex flex-wrap gap-1.5">
+      {/* tab bar — one framed pill container (matches the prototype's vy-workspace-pills) */}
+      <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl border bg-card p-1.5 shadow-sm">
         {visibleTabs.map((t) => {
           const I = t.icon; const active = activeTab === t.key;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={cn("inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition",
-                active ? "bg-primary text-primary-foreground shadow-sm" : "border text-muted-foreground hover:bg-accent")}>
+              className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-semibold transition",
+                active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
               <I className="h-4 w-4" /> {t.label}
             </button>
           );
