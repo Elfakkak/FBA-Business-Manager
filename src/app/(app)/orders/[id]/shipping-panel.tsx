@@ -9,7 +9,8 @@ import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components
 import { Select } from "@/components/ui/select";
 import { money, num, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, SHIPMENT_MOVING, incotermInfo, type Tone, type OrderRow } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { CopyValue } from "@/components/ui/copy";
+import { CopyButton } from "@/components/ui/copy";
+import { intgAgo } from "@/lib/integrations";
 import {
   bookOrderShipment, updateOrderShipment, advanceOrderShipmentStage, savePackingList,
   linkFbaInbound, linkExistingFbaInbound, updateFbaReceived, saveShipmentFile, pasteTrackingUpdate, deleteOrderShipment,
@@ -90,6 +91,7 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
 
   const activeShip = shipments.find((s) => s.id === active) ?? null;
   const activeInbounds = inbounds.filter((i) => i.shipment_id === active);
+  const inbLastSync = activeInbounds.map((i) => i.synced).filter(Boolean).sort().at(-1) ?? null;
   const activeFiles = shipFiles.filter((f) => f.shipment_id === active);
   const activeTrack = tracking.find((t) => t.shipment_id === active) ?? null;
 
@@ -235,21 +237,32 @@ export function ShippingPanel({ order, shipments, inbounds, packLines, shipFiles
 
           {/* FBA inbounds */}
           <Card className="p-5">
-            <SectionTitle icon={PackageCheck} tone="success" strong title="FBA inbound shipments" sub="Status & received units sync from Seller Central · expected is your packing allocation"
-              action={<button type="button" onClick={() => setLinkingFor(activeShip)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> Link FBA</button>} />
+            <SectionTitle icon={PackageCheck} tone="success" strong title="FBA inbound shipments" sub={`Status & received units sync from Seller Central${inbLastSync ? ` · synced ${intgAgo(inbLastSync)}` : ""}`}
+              action={<div className="flex items-center gap-1.5">
+                {activeInbounds.length > 0 && <CopyButton label="Copy all for forwarder" text={activeInbounds.map((f) => [
+                  `FBA shipment ID: ${f.id}`,
+                  f.reference_id ? `Reference ID: ${f.reference_id}` : null,
+                  `Dest FC: ${f.fc}`,
+                  (f.eta_from || f.eta_to) ? `FBA arrival: ${f.eta_from || "?"} – ${f.eta_to || "?"}` : null,
+                ].filter(Boolean).join("\n")).join("\n\n")} />}
+                <button type="button" onClick={() => setLinkingFor(activeShip)} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> Link FBA</button>
+              </div>} />
             {activeInbounds.length === 0 ? (
               <div className="rounded-lg border border-dashed px-4 py-8 text-center"><span className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground"><Link2 className="h-4 w-4" /></span><div className="text-[13px] font-semibold">No FBA inbounds linked</div><p className="mt-0.5 text-[11px] text-muted-foreground">Create the packing list first, then link Amazon FBA inbound shipments to track expected vs. received units.</p></div>
             ) : (
               <div className="space-y-2.5">
-                {activeInbounds.map((f) => { const variance = f.received - f.expected; const win = f.eta_from || f.eta_to ? `${f.eta_from || "?"} – ${f.eta_to || "?"}` : f.eta || null; return (
+                {activeInbounds.map((f) => { const variance = f.received - f.expected; const win = f.eta_from || f.eta_to ? `${f.eta_from || "?"} – ${f.eta_to || "?"}` : f.eta || null; const rowCopy = [`FBA shipment ID: ${f.id}`, f.reference_id ? `Reference ID: ${f.reference_id}` : null, `Dest FC: ${f.fc}`, (f.eta_from || f.eta_to) ? `FBA arrival: ${f.eta_from || "?"} – ${f.eta_to || "?"}` : null].filter(Boolean).join("\n"); return (
                   <div key={f.id} className="rounded-lg border bg-background/40 px-4 py-3">
-                    {/* IDs the forwarder asks for — one-click copy */}
+                    {/* IDs — copy the whole set with 'Copy all for forwarder' above */}
                     <div className="flex flex-wrap items-center gap-2">
-                      <CopyValue value={f.id} label="FBA shipment ID" />
-                      {f.reference_id && <CopyValue value={f.reference_id} label="reference ID" />}
+                      <Link href={`/fba-shipments/${f.id}`} className="font-mono text-[12px] font-bold hover:text-primary">{f.id}</Link>
+                      {f.reference_id && <span className="font-mono text-[11px] text-muted-foreground">ref {f.reference_id}</span>}
                       <Badge tone="muted">{f.fc}</Badge>
                       <Badge tone={f.amazon_status === "Closed" ? "success" : f.amazon_status === "Problem" ? "danger" : f.amazon_status === "Receiving" ? "warning" : "info"}>{f.amazon_status}</Badge>
-                      <Link href={`/fba-shipments/${f.id}`} className="vy-icon-btn ml-auto" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <CopyButton label="Copy" text={rowCopy} />
+                        <Link href={`/fba-shipments/${f.id}`} className="vy-icon-btn" aria-label="Open"><ChevronRight className="h-4 w-4" /></Link>
+                      </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
                       <span>exp {num(f.expected)} · rec <span className={cn(f.received >= f.expected && f.expected > 0 ? "text-success" : f.received > 0 ? "text-warning" : "text-muted-foreground")}>{num(f.received)}</span>{f.received > 0 && variance !== 0 ? <span className={variance < 0 ? "text-danger" : "text-warning"}> ({variance > 0 ? "+" : ""}{num(variance)})</span> : null}</span>

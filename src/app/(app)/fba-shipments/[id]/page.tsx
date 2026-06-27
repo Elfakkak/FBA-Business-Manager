@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge } from "@/components/ui/primitives";
-import { CopyValue } from "@/components/ui/copy";
+import { CopyButton } from "@/components/ui/copy";
 import { num, type Tone, FBA_EVENTS, fbaDoneIdx } from "@/lib/derive";
 import { intgAgo } from "@/lib/integrations";
 import { cn } from "@/lib/utils";
@@ -176,12 +176,22 @@ export default async function FbaDetailPage({ params }: { params: Promise<{ id: 
             <div className="flex items-center gap-2.5 rounded-xl border border-dashed bg-background/40 px-4 py-3"><Package className="h-4 w-4 shrink-0 text-muted-foreground" /><div className="text-[12px] text-muted-foreground"><span className="font-semibold text-foreground">Direct to Amazon</span> — no forwarder leg linked.</div></div>
           )}
 
-          {/* Amazon identifiers — the IDs the forwarder / Amazon asks for, one-click copy */}
+          {/* Amazon identifiers — one "Copy for forwarder" grabs the whole block */}
           <Card className="p-5">
-            <div className="vy-kicker mb-3">Amazon identifiers</div>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="vy-kicker">Amazon identifiers</div>
+              <CopyButton label="Copy for forwarder" text={[
+                `FBA shipment ID: ${inbound.id}`,
+                inbound.reference_id ? `Reference ID: ${inbound.reference_id}` : null,
+                `Dest FC: ${inbound.fc}`,
+                (inbound.eta_from || inbound.eta_to) ? `FBA arrival: ${inbound.eta_from || "?"} – ${inbound.eta_to || "?"}` : null,
+                inbound.shipment_id ? `Freight shipment: ${inbound.shipment_id}` : null,
+                parent?.order_id ? `Order: ${parent.order_id}` : null,
+              ].filter(Boolean).join("\n")} />
+            </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
-              <div><div className="vy-kicker mb-1">FBA shipment ID</div><CopyValue value={inbound.id} label="FBA shipment ID" className="w-full" /></div>
-              <div><div className="vy-kicker mb-1">Reference ID</div><CopyValue value={inbound.reference_id} label="reference ID" className="w-full" /></div>
+              <div><div className="vy-kicker mb-0.5">FBA shipment ID</div><div className="font-mono text-[13px] font-semibold">{inbound.id}</div></div>
+              <div><div className="vy-kicker mb-0.5">Reference ID</div><div className="font-mono text-[13px] font-semibold">{inbound.reference_id || "—"}</div></div>
               <div><div className="vy-kicker mb-0.5">Dest FC</div><div className="font-mono text-[13px] font-semibold">{inbound.fc}</div></div>
               <div><div className="vy-kicker mb-0.5">FBA arrival</div><div className="text-[13px] font-semibold">{inbound.eta_from || inbound.eta_to ? `${inbound.eta_from || "?"} – ${inbound.eta_to || "?"}` : (eta ?? "—")}</div></div>
               <div><div className="vy-kicker mb-0.5">Synced</div><div className="text-[12px] font-semibold">{intgAgo(inbound.synced)}</div></div>
