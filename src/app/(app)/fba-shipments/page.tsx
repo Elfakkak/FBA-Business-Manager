@@ -5,13 +5,13 @@ export default async function FbaShipmentsPage() {
   const supabase = await createClient();
   const { data: inbounds } = await supabase
     .from("fba_inbounds")
-    .select("id, fc, sku_count, expected, received, amazon_status, synced, eta, mode, shipment_id, order_id, fba_inbound_items(sku, fnsku, expected, received)")
+    .select("id, fc, sku_count, expected, received, amazon_status, synced, eta, eta_from, eta_to, mode, shipment_id, order_id, fba_inbound_items(sku, fnsku, expected, received)")
     .order("synced", { ascending: false, nullsFirst: false });
   const { data: amazon } = await supabase.from("integrations").select("status, last_sync").eq("id", "amazon").maybeSingle();
 
   type Row = {
     id: string; fc: string; sku_count: number; expected: number; received: number; amazon_status: string;
-    synced: string | null; eta: string | null; mode: string | null; shipment_id: string | null; order_id: string | null;
+    synced: string | null; eta: string | null; eta_from: string | null; eta_to: string | null; mode: string | null; shipment_id: string | null; order_id: string | null;
     fba_inbound_items: { sku: string; fnsku: string | null; expected: number; received: number }[];
   };
   const rows: FbaRow[] = ((inbounds ?? []) as unknown as Row[]).map((r) => ({
@@ -24,6 +24,7 @@ export default async function FbaShipmentsPage() {
     status: r.amazon_status,
     synced: r.synced,
     eta: r.eta,
+    etaWindow: r.eta_from || r.eta_to ? `${r.eta_from || "?"} – ${r.eta_to || "?"}` : null,
     mode: r.mode,
     shipmentId: r.shipment_id,
     orderId: r.order_id,

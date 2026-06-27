@@ -15,7 +15,7 @@ import { Truck, Boxes, PackageCheck, AlertCircle, RefreshCw, ArrowUpRight, Loade
 
 export type FbaRow = {
   id: string; fc: string; skuCount: number; expected: number; received: number; variance: number;
-  status: string; synced: string | null; eta: string | null; mode: string | null;
+  status: string; synced: string | null; eta: string | null; etaWindow: string | null; mode: string | null;
   shipmentId: string | null; orderId: string | null;
   items: { sku: string; fnsku: string | null; expected: number; received: number }[];
 };
@@ -30,6 +30,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [fcFilter, setFcFilter] = useState("all");
+  const [orderFilter, setOrderFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [peek, setPeek] = useState<FbaRow | null>(null);
@@ -41,17 +42,19 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
     return rows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
       if (fcFilter !== "all" && r.fc !== fcFilter) return false;
-      if (n && !`${r.id} ${r.fc} ${r.items.map((i) => i.sku).join(" ")}`.toLowerCase().includes(n)) return false;
+      if (orderFilter !== "all" && (orderFilter === "__none" ? r.orderId : r.orderId !== orderFilter)) return false;
+      if (n && !`${r.id} ${r.fc} ${r.orderId ?? ""} ${r.items.map((i) => i.sku).join(" ")}`.toLowerCase().includes(n)) return false;
       return true;
     });
-  }, [rows, q, status, fcFilter]);
+  }, [rows, q, status, fcFilter, orderFilter]);
 
   // pagination
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const from = (safePage - 1) * pageSize;
   const pageRows = filtered.slice(from, from + pageSize);
-  useEffect(() => { setPage(1); }, [q, status, fcFilter, pageSize]);
+  useEffect(() => { setPage(1); }, [q, status, fcFilter, orderFilter, pageSize]);
+  const orderIds = [...new Set(rows.map((r) => r.orderId).filter((o): o is string => !!o))].sort();
 
   const open = rows.filter((r) => r.status !== "Closed");
   const inTransitUnits = open.filter((r) => r.received === 0).reduce((s, r) => s + r.expected, 0);
@@ -110,6 +113,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipment, FC, SKU"
             className="min-w-56 flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
           <Select value={fcFilter} onChange={setFcFilter} className="w-40" options={[{ value: "all", label: "All FCs" }, ...fcs.map((fc) => ({ value: fc, label: fc }))]} />
+          <Select value={orderFilter} onChange={setOrderFilter} className="w-44" searchable options={[{ value: "all", label: "All orders" }, { value: "__none", label: "Direct to Amazon" }, ...orderIds.map((o) => ({ value: o, label: o }))]} />
           <div className="flex flex-wrap gap-1">
             {STATUSES.map((s) => (
               <button key={s} onClick={() => setStatus(s)} className={cn("vy-chip", status === s && "is-active")}>{s === "all" ? "All" : s}</button>
@@ -141,7 +145,7 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
                 <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">{rows.length === 0 ? "No inbound shipments yet — hit “Sync from Amazon”." : "No shipments match your filters."}</td></tr>
               ) : pageRows.map((r) => (
                 <tr key={r.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(r)}>
-                  <td className="px-3 py-2.5"><Link href={`/fba-shipments/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-semibold hover:text-primary" title="Open shipment page">{r.id}</Link><div className="text-[11px] text-muted-foreground">{[r.mode, r.eta && `ETA ${r.eta}`].filter(Boolean).join(" · ") || "Amazon inbound"}</div></td>
+                  <td className="px-3 py-2.5"><Link href={`/fba-shipments/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-semibold hover:text-primary" title="Open shipment page">{r.id}</Link><div className="text-[11px] text-muted-foreground">{[r.mode, r.etaWindow ? `FBA ${r.etaWindow}` : r.eta && `ETA ${r.eta}`].filter(Boolean).join(" · ") || "Amazon inbound"}</div></td>
                   <td className="px-3 py-2.5 text-[12px]">{r.shipmentId ? <Link href={`/orders`} onClick={(e) => e.stopPropagation()} className="font-mono hover:text-primary">{r.shipmentId}</Link> : <span className="text-muted-foreground">Direct to Amazon</span>}</td>
                   <td className="px-3 py-2.5 text-[12px]">{r.orderId ? <Link href={`/orders/${r.orderId}`} onClick={(e) => e.stopPropagation()} className="font-mono hover:text-primary">{r.orderId}</Link> : <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-3 py-2.5"><Badge tone="muted">{r.fc}</Badge></td>
