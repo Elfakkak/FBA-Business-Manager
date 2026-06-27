@@ -9,9 +9,10 @@ import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components
 import { Select } from "@/components/ui/select";
 import { num, money, type ShipmentRow, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, SHIPMENT_MOVING, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived } from "./actions";
+import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived, syncShipmentTracking, advanceShipmentStage } from "./actions";
 import { useNewParam } from "@/lib/use-new-param";
-import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, Pencil, Trash2, Link as LinkIcon, Check, Archive } from "lucide-react";
+import { intgAgo } from "@/lib/integrations";
+import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, ArrowRight, RefreshCw, Pencil, Trash2, Link as LinkIcon, Check, Archive } from "lucide-react";
 
 type FbaLink = { id: string; fc: string; expected: number; received: number; amazonStatus: string; skuCount: number };
 export type ShipRow = ShipmentRow & {
@@ -168,7 +169,14 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
       </Card>
 
       {/* Drawer */}
-      <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id}>
+      <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id} width={460}
+        footer={peek && (
+          <div className="flex items-center gap-2">
+            <Link href={`/shipments/${peek.id}`} className="vy-btn vy-btn--primary inline-flex flex-1 items-center justify-center gap-1.5"><Boxes className="h-4 w-4" /> Open full shipment <ArrowUpRight className="h-4 w-4" /></Link>
+            {peek.order_id && <Link href={`/orders/${peek.order_id}`} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><PackageCheck className="h-3.5 w-3.5" /> Order</Link>}
+            <button onClick={() => setPeek(null)} className="vy-btn vy-btn--ghost vy-btn--sm">Close</button>
+          </div>
+        )}>
         {peek && <ShipmentDetail s={peek} onEdit={() => { setEditing(peek); setPeek(null); }} onTracking={() => { setTrackingFor(peek); }} />}
       </Drawer>
 
@@ -186,6 +194,11 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
 function ShipmentDetail({ s, onEdit, onTracking }: { s: ShipRow; onEdit: () => void; onTracking: () => void }) {
   const curIdx = SHIPMENT_STAGES.indexOf(s.stage as typeof SHIPMENT_STAGES[number]);
   const hasTracking = !!s.tracking?.trackingNo;
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [trkErr, setTrkErr] = useState<string | null>(null);
+  const doSync = () => start(async () => { setTrkErr(null); const r = await syncShipmentTracking(s.id); if (!r.ok) setTrkErr(r.error); router.refresh(); });
+  const doAdvance = () => start(async () => { await advanceShipmentStage(s.id); router.refresh(); });
   return (
     <div className="space-y-6">
       <div>
@@ -207,7 +220,7 @@ function ShipmentDetail({ s, onEdit, onTracking }: { s: ShipRow; onEdit: () => v
 
       {/* Tracking · forwarder leg */}
       <div>
-        <div className="mb-2.5 flex items-center gap-2"><span className="vy-kicker">Tracking · Forwarder leg</span><button onClick={onTracking} className="ml-auto text-[11px] font-medium text-primary hover:underline">{hasTracking ? "Edit" : "Add tracking"}</button></div>
+        <div className="mb-2.5 flex flex-wrap items-center gap-2"><span className="vy-kicker">Tracking · Forwarder leg</span>{hasTracking && s.tracking!.lastSync && <span className="text-[10.5px] text-muted-foreground">17TRACK · synced {intgAgo(s.tracking!.lastSync)}</span>}<button onClick={onTracking} className="ml-auto text-[11px] font-medium text-primary hover:underline">{hasTracking ? "Edit" : "Add tracking"}</button></div>
         {hasTracking ? (
           <div className="mb-3 flex flex-wrap gap-3 rounded-lg border bg-background/50 px-3 py-2.5">
             <div className="min-w-0 flex-1"><div className="vy-kicker mb-0.5">Tracking no.</div><div className="font-mono text-[13px] font-bold">{s.tracking!.trackingNo}</div></div>
@@ -234,6 +247,14 @@ function ShipmentDetail({ s, onEdit, onTracking }: { s: ShipRow; onEdit: () => v
             );
           })}
         </div>
+        {/* 17TRACK actions */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={doSync} disabled={pending || !hasTracking} title={hasTracking ? undefined : "Add a tracking number first"} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-40"><RefreshCw className={cn("h-3.5 w-3.5", pending && "animate-spin")} /> Sync 17TRACK</button>
+          <button onClick={onTracking} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit tracking</button>
+          <button onClick={doAdvance} disabled={pending || curIdx >= SHIPMENT_STAGES.length - 1} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-40">Advance <ArrowRight className="h-3.5 w-3.5" /></button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">Live via 17TRACK — checkpoints auto-feed from the carrier. Edit tracking or Advance to override manually.</p>
+        {trkErr && <p className="mt-1.5 rounded-md bg-danger/10 px-2.5 py-1.5 text-[11px] text-danger">{trkErr}</p>}
         {s.fba.length > 0 && <p className="mt-3 rounded-md bg-accent/50 px-2.5 py-2 text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Amazon takes over at the FC.</span> Checked-in · received · closed events sync from Seller Central — see FBA inbounds below.</p>}
       </div>
 
