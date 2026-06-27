@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { num, money, type ShipmentRow, SHIPMENT_STAGES, SHIPMENT_STAGE_TONE, CUSTOMS_TONE, SHIPMENT_MOVING, type Tone } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { createShipment, updateShipment, deleteShipment, updateTracking, setShipmentArchived } from "./actions";
+import { useNewParam } from "@/lib/use-new-param";
 import { Ship, Route, Boxes, PackageCheck, DollarSign, Plus, ArrowUpRight, Pencil, Trash2, Link as LinkIcon, Check, Archive } from "lucide-react";
 
 type FbaLink = { id: string; fc: string; expected: number; received: number; amazonStatus: string; skuCount: number };
@@ -33,6 +34,7 @@ export function ShipmentsTable({ rows, orders, suppliers, forwarders }: { rows: 
   const [showArchived, setShowArchived] = useState(false);
   const [peek, setPeek] = useState<ShipRow | null>(null);
   const [modal, setModal] = useState<"new" | null>(null);
+  useNewParam(() => setModal("new"));
   const [editing, setEditing] = useState<ShipRow | null>(null);
   const [trackingFor, setTrackingFor] = useState<ShipRow | null>(null);
 

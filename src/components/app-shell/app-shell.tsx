@@ -52,8 +52,10 @@ const NAV: Group[] = [
 ];
 
 const QUICK_CREATE = [
-  { label: "New product", href: "/catalog?new=1", icon: Package },
-  { label: "Add packaging", href: "/packaging?new=1", icon: Boxes },
+  { label: "New order", href: "/orders?new=1", icon: Package },
+  { label: "New shipment", href: "/shipments?new=1", icon: Ship },
+  { label: "Add product", href: "/catalog?new=1", icon: PackageOpen },
+  { label: "Log finance entry", href: "/invoices?new=1", icon: DollarSign },
 ];
 
 export function AppShell({
