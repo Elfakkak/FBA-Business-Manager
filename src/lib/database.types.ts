@@ -1174,6 +1174,8 @@ export type Database = {
           ship_mode: string | null
           status: Database["public"]["Enums"]["order_status"]
           supplier: string | null
+          term_deposit_pct: number | null
+          term_type: string | null
           title: string
           updated_at: string
         }
@@ -1189,6 +1191,8 @@ export type Database = {
           ship_mode?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           supplier?: string | null
+          term_deposit_pct?: number | null
+          term_type?: string | null
           title: string
           updated_at?: string
         }
@@ -1204,6 +1208,8 @@ export type Database = {
           ship_mode?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           supplier?: string | null
+          term_deposit_pct?: number | null
+          term_type?: string | null
           title?: string
           updated_at?: string
         }

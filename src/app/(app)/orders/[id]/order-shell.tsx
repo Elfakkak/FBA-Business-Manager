@@ -21,14 +21,16 @@ type Inspection = Database["public"]["Tables"]["order_inspections"]["Row"];
 import {
   money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds, poVsInvoiced,
   BALANCE_EPSILON, INVOICE_STATUS_TONE, invoiceBalance, invoiceStatus, invoiceAging, payTermSummary,
+  PAYTERM_TYPES, PAYTERM_BY_KEY,
   type OrderRow, type PayTermCfg, type OrderCostRow, type CostCheck,
 } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import {
   Factory, Route, Pencil, Check, Hammer, ClipboardCheck, Truck, Receipt,
   PackageCheck, LayoutDashboard, ChevronRight, ChevronLeft, AlertCircle, Plus, Trash2, Boxes,
-  Home, Activity, ArrowRight, Calendar, DollarSign, ShieldCheck,
+  Home, Activity, ArrowRight, Calendar, DollarSign, ShieldCheck, Info,
 } from "lucide-react";
+import { Drawer, DrawerGuard } from "@/components/ui/drawer";
 
 // Top tab bar (matches the prototype: Home · Production · Shipping · Invoices · Landed cost)
 const TABS = [
@@ -65,7 +67,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, freightInvoice, ordered, unlinkedInbounds, inspection, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, suppliers, agents, freightInvoice, ordered, unlinkedInbounds, inspection, rollup, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
@@ -84,6 +86,8 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   shipFiles: ShipFile[];
   shipTracking: TrackRow[];
   forwarders: string[];
+  suppliers: string[];
+  agents: string[];
   freightInvoice: FreightInvoice | null;
   ordered: OrderedLine[];
   unlinkedInbounds: InboundRow[];
@@ -152,7 +156,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
       )}
       </div>
 
-      {editing && <EditOrderModal order={order} onClose={() => setEditing(false)} />}
+      {editing && <EditOrderModal order={order} suppliers={suppliers} agents={agents} onClose={() => setEditing(false)} />}
     </div>
   );
 }
@@ -522,28 +526,83 @@ function StagePanel({ tab, status }: { tab: string; status: string }) {
   );
 }
 
-function EditOrderModal({ order, onClose }: { order: OrderRow; onClose: () => void }) {
+function EditOrderModal({ order, suppliers, agents, onClose }: { order: OrderRow; suppliers: string[]; agents: string[]; onClose: () => void }) {
   const { error, pending, onSubmit } = useFormModal((form) => updateOrder(order.id, form), { onSuccess: onClose });
-  const [status, setStatus] = useState<string>(order.status);
+  const [title, setTitle] = useState(order.title);
+  const [supplier, setSupplier] = useState(order.supplier ?? "");
+  const [agent, setAgent] = useState(order.agent ?? "");
+  const [placed, setPlaced] = useState(order.placed_on ?? "");
+  const [eta, setEta] = useState(order.fba_eta ?? "");
+  const [term, setTerm] = useState<string>(order.term_type ?? "TT");
+  const [deposit, setDeposit] = useState<string>(order.term_deposit_pct != null ? String(order.term_deposit_pct) : "30");
+  const [inspection, setInspection] = useState<boolean>(order.inspection_required);
+  const [dirty, setDirty] = useState(false);
+  const touch = () => setDirty(true);
+
+  const t = PAYTERM_BY_KEY[term] ?? PAYTERM_BY_KEY.TT;
+  const dep = parseFloat(deposit);
+  const balance = Number.isFinite(dep) ? Math.max(0, 100 - dep) : null;
+  const supplierOpts = [{ value: "", label: "— none —" }, ...[...new Set([order.supplier, ...suppliers].filter((x): x is string => !!x))].map((s) => ({ value: s, label: s }))];
+  const agentOpts = [{ value: "", label: "Direct supplier" }, ...[...new Set([order.agent, ...agents].filter((x): x is string => !!x))].map((a) => ({ value: a, label: a }))];
 
   return (
-    <Modal open onClose={onClose} title={`Edit ${order.id}`}>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="Title"><input name="title" defaultValue={order.title} className={inputCls} /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Status">
-            <Select name="status" value={status} onChange={setStatus} options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} />
-            <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">Auto-advances as the order progresses (inspection · shipping · landed). Set manually only to override.</p>
-          </Field>
-          <Field label="Supplier (factory)"><input name="supplier" defaultValue={order.supplier ?? ""} className={inputCls} placeholder="e.g. Huasheng Leather" /></Field>
-        </div>
-        <Field label="Placed on"><input name="placed_on" type="date" defaultValue={order.placed_on ?? ""} className={inputCls} /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">The FBA arrival date now lives on the FBA inbound (Shipping), derived from the forwarder&apos;s window.</p></Field>
-        {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-        <div className="flex justify-end gap-2">
+    <Drawer
+      open onClose={onClose} width={520}
+      title={<span className="inline-flex items-baseline gap-2"><span className="font-medium">Edit order</span><span className="font-mono text-[12px] text-muted-foreground">{order.id}</span></span>}
+      subtitle="The order's identity & terms. Units and SKUs live in Production; the order total comes from its invoices."
+      footer={
+        <div className="flex items-center justify-end gap-2">
           <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</PrimaryButton>
+          <PrimaryButton type="submit" form="edit-order-form" disabled={pending} className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" /> {pending ? "Saving…" : "Save changes"}</PrimaryButton>
         </div>
+      }
+    >
+      {/* Editable drawer → guard unsaved edits (confirm-on-dirty). */}
+      <DrawerGuard active={dirty && !pending} />
+      <form id="edit-order-form" onSubmit={onSubmit} className="space-y-5">
+        <input type="hidden" name="term_type" value={term} />
+        <input type="hidden" name="inspection_required" value={String(inspection)} />
+        {!t.hasDeposit && <input type="hidden" name="term_deposit_pct" value="" />}
+
+        <Field label="Order name"><input name="title" value={title} onChange={(e) => { setTitle(e.target.value); touch(); }} className={inputCls} /></Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Supplier / factory"><Select name="supplier" value={supplier} onChange={(v) => { setSupplier(v); touch(); }} options={supplierOpts} /></Field>
+          <Field label="Agent"><Select name="agent" value={agent} onChange={(v) => { setAgent(v); touch(); }} options={agentOpts} /><p className="mt-1 text-[11px] text-muted-foreground">Direct = no agent</p></Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Placed date"><input name="placed_on" type="date" value={placed} onChange={(e) => { setPlaced(e.target.value); touch(); }} className={inputCls} /></Field>
+          <Field label="FBA ETA"><input name="fba_eta" type="date" value={eta} onChange={(e) => { setEta(e.target.value); touch(); }} className={inputCls} /></Field>
+        </div>
+
+        <div>
+          <div className="vy-kicker mb-1.5">Payment terms</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PAYTERM_TYPES.map((p) => (
+              <button type="button" key={p.key} onClick={() => { setTerm(p.key); touch(); }} className={cn("vy-chip", term === p.key && "is-active")}>{p.label}</button>
+            ))}
+          </div>
+          {t.hasDeposit && (
+            <div className="mt-2.5 flex items-center gap-2 text-[13px]">
+              <span className="text-muted-foreground">Deposit</span>
+              <input name="term_deposit_pct" type="number" min={0} max={100} value={deposit} onChange={(e) => { setDeposit(e.target.value); touch(); }} className={cn(inputCls, "w-20 text-center")} />
+              <span className="text-muted-foreground">% / {balance != null ? `${balance}% balance` : "balance"}</span>
+            </div>
+          )}
+          <div className="mt-3 flex gap-2.5 rounded-lg border px-3 py-2.5" style={{ background: "hsl(var(--info) / 0.06)", borderColor: "hsl(var(--info) / 0.22)" }}>
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+            <div><div className="text-[13px] font-semibold">{t.label} · {t.name}</div><p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{t.blurb}</p></div>
+          </div>
+        </div>
+
+        <button type="button" onClick={() => { setInspection((v) => !v); touch(); }} className="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left hover:border-primary/40">
+          <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold">Inspection required</div><p className="text-[11px] text-muted-foreground">Off for trusted suppliers — hides the Inspection tab.</p></div>
+          <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", inspection ? "bg-primary" : "bg-muted")}><span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all", inspection ? "left-[22px]" : "left-0.5")} /></span>
+        </button>
+
+        {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
       </form>
-    </Modal>
+    </Drawer>
   );
 }
