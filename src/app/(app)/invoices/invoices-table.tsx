@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, CardHeader, SortableTh, makeToggleSort, type SortState } from "@/components/ui/primitives";
+import { useNewParam } from "@/lib/use-new-param";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { num, money, type InvoiceRow, type InvoiceLineRow, INVOICE_STATUS_TONE, BALANCE_EPSILON, invoiceBalance, invoiceStatus, invoiceAging, PAYTERM_TYPES, PAYTERM_BY_KEY } from "@/lib/derive";
@@ -33,6 +34,7 @@ export function InvoicesTable({ rows, orders, vendors }: { rows: InvRow[]; order
   const [payFor, setPayFor] = useState<InvRow | null>(null); // locked to a specific invoice
   const [payPicker, setPayPicker] = useState(false);          // list-level: pick which invoice
   const [newOpen, setNewOpen] = useState(false);
+  useNewParam(() => setNewOpen(true));
   const [editing, setEditing] = useState<InvRow | null>(null);
   type InvSortKey = "id" | "order" | "vendor" | "issued" | "due" | "total" | "paid" | "balance" | "status";
   const [sort, setSort] = useState<SortState<InvSortKey>>(null);

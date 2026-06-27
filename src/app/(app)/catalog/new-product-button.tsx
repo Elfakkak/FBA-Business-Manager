@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
+import { useNewParam } from "@/lib/use-new-param";
 import { createProduct } from "./actions";
 import { Plus } from "lucide-react";
 
@@ -16,6 +17,7 @@ export function NewProductButton({ categories }: { categories: string[] }) {
     if (form.get("category") === ADD_NEW) form.set("category", String(form.get("category_new") ?? ""));
     return createProduct(form);
   }, { onSuccess: () => setCatChoice("") });
+  useNewParam(() => setOpen(true));
 
   return (
     <>

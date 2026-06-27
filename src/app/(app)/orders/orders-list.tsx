@@ -7,6 +7,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { useFormModal } from "@/lib/use-form-modal";
+import { useNewParam } from "@/lib/use-new-param";
 import { createOrder } from "./actions";
 import { money, num, ORDER_STATUS_TONE, ORDER_STATUS_LABEL, ORDER_PIPELINE, orderNeeds } from "@/lib/derive";
 import { cn } from "@/lib/utils";
@@ -188,6 +189,7 @@ function NewOrderButton({ suppliers, agents }: { suppliers: string[]; agents: st
   const { open, setOpen, error, pending, onSubmit } = useFormModal((form) => createOrder(form));
   const [supplier, setSupplier] = useState("");
   const [agent, setAgent] = useState("");
+  useNewParam(() => setOpen(true));
 
   return (
     <>
