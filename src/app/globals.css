@@ -243,6 +243,46 @@ body {
 .vy-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; box-shadow: var(--shadow-sm); color: hsl(var(--card-fg)); }
 .vy-card-hover:hover, button.vy-card:hover, a.vy-card:hover { border-color: hsl(var(--border)); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
+/* Order page-switcher: breadcrumb + a single segmented pill bar (never wraps; scrolls). */
+.vy-order-shell-head { display: flex; flex-direction: column; gap: 10px; }
+.vy-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.vy-bc-link { color: hsl(var(--muted-fg)); text-decoration: none; }
+.vy-bc-link:hover { color: hsl(var(--foreground)); }
+.vy-bc-id { font-family: var(--font-mono, ui-monospace, monospace); color: hsl(var(--muted-fg)); }
+.vy-bc-current { color: hsl(var(--foreground)); font-weight: 500; }
+.vy-bc-sep { color: hsl(var(--muted-fg)); opacity: 0.5; display: inline-flex; }
+
+.vy-pageswitch {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 2px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 14px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.vy-pageswitch::-webkit-scrollbar { display: none; }
+.vy-page-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  white-space: nowrap;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  color: hsl(var(--muted-fg));
+  background: transparent; border: 0; cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.vy-page-pill:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+.vy-page-pill.is-active,
+.vy-page-pill.is-active:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-fg));
+  box-shadow: 0 1px 2px hsl(var(--primary) / 0.4), 0 4px 12px hsl(var(--primary) / 0.3);
+}
+
 /* Visible focus ring on every field — incl. inline-styled inputs ported from the handoff. */
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none;
