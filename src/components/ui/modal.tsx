@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -25,6 +25,13 @@ export function Modal({
   children: React.ReactNode;
 }) {
   const maxW = size === "2xl" ? "max-w-[1120px]" : size === "xl" ? "max-w-4xl" : size === "lg" ? "max-w-2xl" : "max-w-lg";
+  // Enter motion: mount hidden, flip `is-open` next frame so the CSS transition plays.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!open) { setShown(false); return; }
+    const r = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(r);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -42,11 +49,11 @@ export function Modal({
   // become the containing block for our position:fixed overlay.
   return createPortal(
     <div className="fixed inset-0 z-100 flex items-center justify-center p-4" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className={cn("vy-modal-scrim absolute inset-0 bg-black/40 backdrop-blur-[2px]", shown && "is-open")} onClick={onClose} />
       {/* Solid (non-translucent) panel, capped height with internal scroll so
           the header + footer buttons never clip off-screen. */}
       <div
-        className={cn("relative flex w-full flex-col overflow-hidden rounded-xl border", maxW)}
+        className={cn("vy-modal-panel relative flex w-full flex-col overflow-hidden rounded-xl border", maxW, shown && "is-open")}
         style={{ background: "hsl(var(--card))", color: "hsl(var(--card-fg))", boxShadow: "var(--shadow-lg)", maxHeight: unpadded ? "82vh" : "90vh" }}
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-3">

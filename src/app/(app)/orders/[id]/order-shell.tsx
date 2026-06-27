@@ -123,6 +123,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
         })}
       </div>
 
+      <div key={tab} className="vy-page-in">
       {tab === "overview" ? (
         <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} />
       ) : tab === "invoices" ? (
@@ -141,6 +142,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
       ) : (
         <StagePanel tab={tab} status={order.status} />
       )}
+      </div>
 
       {editing && <EditOrderModal order={order} onClose={() => setEditing(false)} />}
     </div>
