@@ -100,6 +100,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     : [{ data: [] }, { data: [] }, { data: [] }];
   const fwd = [...new Set(((partners ?? []) as { name: string; specialty: string | null }[]).filter((p) => /forward|freight|logistic|3pl|carrier|ship/i.test(p.specialty ?? "")).map((p) => p.name))];
   const forwarders = fwd.length ? fwd : ((partners ?? []) as { name: string }[]).map((p) => p.name);
+  const supplierNames = ((suppliers ?? []) as { name: string }[]).map((s) => s.name);
+  const agentNames = [...new Set(((partners ?? []) as { name: string; specialty: string | null }[]).filter((p) => /agent|sourc|trad/i.test(p.specialty ?? "")).map((p) => p.name))];
   const freightInv = invoicesRich.find((i) => i.vendor_type === "Forwarder");
   const freightInvoice = freightInv ? { id: freightInv.id, total: freightInv.total ?? 0, paid: freightInv.paid ?? 0 } : null;
   const orderedShip = ((lines ?? []) as { sku: string | null; product_name: string | null; qty: number }[]).map((l) => ({ sku: l.sku, product_name: l.product_name, qty: l.qty ?? 0 }));
@@ -128,6 +130,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       shipFiles={(shipFiles ?? []) as never}
       shipTracking={(shipTracking ?? []) as never}
       forwarders={forwarders}
+      suppliers={supplierNames}
+      agents={agentNames}
       freightInvoice={freightInvoice}
       ordered={orderedShip}
       unlinkedInbounds={(unlinkedInbounds ?? []) as unknown as OrderInbound[]}

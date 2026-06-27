@@ -46,7 +46,11 @@ export async function updateOrder(id: string, form: FormData): Promise<Result> {
   const status = form.get("status"); if (status !== null && isValidStatus(String(status))) patch.status = String(status) as OrderStatus;
   const eta = form.get("fba_eta"); if (eta !== null) patch.fba_eta = String(eta).trim() || null;
   const supplier = form.get("supplier"); if (supplier !== null) patch.supplier = String(supplier).trim() || null;
+  const agent = form.get("agent"); if (agent !== null) patch.agent = String(agent).trim() || null;
   const placed = form.get("placed_on"); if (placed !== null) patch.placed_on = String(placed).trim() || null;
+  const termType = form.get("term_type"); if (termType !== null) patch.term_type = String(termType).trim() || null;
+  const dep = form.get("term_deposit_pct"); if (dep !== null) { const n = parseFloat(String(dep)); patch.term_deposit_pct = Number.isFinite(n) ? n : null; }
+  const insp = form.get("inspection_required"); if (insp !== null) patch.inspection_required = String(insp) === "true";
 
   const { error } = await supabase.from("orders").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
