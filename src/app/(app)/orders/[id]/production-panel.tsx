@@ -110,15 +110,25 @@ export function ProductionSection({ order, lines, costs, variants, chargeTypes, 
 }
 
 function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
+  // Optional & collapsed by default — packaging is usually bundled in the supplier
+  // price; only expand when you supply it separately from your own inventory.
+  const [open, setOpen] = useState(false);
   const total = items.reduce((s, i) => s + i.onHand * (i.unitCost ?? 0), 0);
   return (
     <Card className="overflow-hidden p-0">
-      <div className="px-5 pt-4"><SectionTitle icon={Package} tone="info" strong title="Packaging on hand" sub="Live from your Packaging inventory — orders draw from here."
-        action={<Link href="/packaging" className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link>} /></div>
-      {items.length === 0 ? (
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2.5 px-5 py-4 text-left">
+        <span className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-md bg-info/12 text-info"><Package className="h-4 w-4" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">Packaging on hand <span className="text-[11px] font-normal text-muted-foreground">· optional</span></div>
+          <p className="text-[11px] text-muted-foreground">{items.length === 0 ? "Only if you supply packaging separately (not bundled in the supplier price)." : `${items.length} item${items.length === 1 ? "" : "s"} · ${money(total)} on hand — orders draw from here.`}</p>
+        </div>
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-90")} />
+      </button>
+      {open && (items.length === 0 ? (
         <div className="border-t px-5 py-8 text-center text-sm text-muted-foreground">No packaging on hand. Add stock on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page.</div>
       ) : (
         <div className="border-t">
+          <div className="flex items-center justify-end border-b px-5 py-2"><Link href="/packaging" className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link></div>
           <ul className="divide-y">
             {items.map((i) => (
               <li key={i.id} className="flex items-center gap-3 px-5 py-2.5">
@@ -130,7 +140,7 @@ function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
           </ul>
           <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-5 py-2.5 text-[13px]"><span className="text-muted-foreground">Total value</span><span className="font-mono font-bold">{money(total)}</span></div>
         </div>
-      )}
+      ))}
     </Card>
   );
 }
@@ -543,10 +553,10 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {selected.length === 0 ? <EmptySelected /> : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {selected.map(({ v, p }) => (
-                  <div key={v.id} className="rounded-lg border bg-card p-3">
-                    <div className="flex items-start gap-2.5">
+                  <div key={v.id} className="rounded-lg border bg-card p-3.5 shadow-sm">
+                    <div className="flex items-start gap-3">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-accent text-muted-foreground"><Package className="h-4 w-4" /></span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-mono text-[12px] font-semibold">{v.sku}</div>
@@ -555,12 +565,12 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
                       </div>
                       <button type="button" onClick={() => toggle(v)} className="vy-icon-btn shrink-0" aria-label="Remove"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>
                     </div>
-                    <div className="mt-2.5 grid grid-cols-2 gap-2">
-                      <label className="block"><span className="vy-kicker">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(decOrNull(e.target.value) ?? 0)) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
-                      <label className="block"><span className="vy-kicker">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: decOrNull(e.target.value) })} className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                    <div className="mt-3 grid grid-cols-2 gap-2.5">
+                      <label className="block"><span className="vy-kicker mb-1 block">Qty</span><input type="number" value={p.qty || ""} onChange={(e) => setField(v.id, { qty: Math.max(0, Math.round(decOrNull(e.target.value) ?? 0)) })} className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                      <label className="block"><span className="vy-kicker mb-1 block">Unit $</span><input type="number" step="0.01" value={p.unit_cost ?? ""} onChange={(e) => setField(v.id, { unit_cost: decOrNull(e.target.value) })} className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
                     </div>
-                    {showCny && <label className="mt-2 block"><span className="vy-kicker">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: decOrNull(e.target.value) })} placeholder="note only" className="mt-0.5 w-full rounded-md border bg-background px-2 py-1 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
-                    <div className="mt-2.5 flex items-center justify-between border-t pt-2 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
+                    {showCny && <label className="mt-2.5 block"><span className="vy-kicker mb-1 block">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={p.unit_cny ?? ""} onChange={(e) => setField(v.id, { unit_cny: decOrNull(e.target.value) })} placeholder="note only" className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
+                    <div className="mt-3 flex items-center justify-between border-t pt-2.5 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money(p.qty * (p.unit_cost ?? 0))}</span></div>
                   </div>
                 ))}
               </div>

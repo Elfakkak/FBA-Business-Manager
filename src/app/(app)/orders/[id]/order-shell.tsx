@@ -392,6 +392,7 @@ function InvoicesPanel({ order, invoices, vendors, lines, chargeTypes }: { order
 function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgItemOpt[]; used: PkgUsed[] }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [open, setOpen] = useState(false); // optional · collapsed by default
   const [itemId, setItemId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -413,10 +414,17 @@ function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgI
   }
 
   return (
-    <Card className="p-5">
-      <SectionTitle icon={Boxes} tone="info" title="Packaging used" count={used.length}
-        action={items.length > 0 ? <GhostButton onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add packaging</GhostButton> : undefined} />
-
+    <Card className="overflow-hidden p-0">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2.5 px-5 py-4 text-left">
+        <span className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-md bg-info/12 text-info"><Boxes className="h-4 w-4" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">Packaging used <span className="text-[11px] font-normal text-muted-foreground">· optional</span></div>
+          <p className="text-[11px] text-muted-foreground">{used.length === 0 ? "Only if you supply packaging separately from the supplier price." : `${used.length} item${used.length === 1 ? "" : "s"} · ${money(totalCost)} drawn from stock.`}</p>
+        </div>
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-90")} />
+      </button>
+      {open && (<div className="border-t p-5">
+      <div className="mb-3 flex justify-end">{items.length > 0 && <GhostButton onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> Add packaging</GhostButton>}</div>
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-background/40 px-4 py-10 text-center text-sm text-muted-foreground">
           No packaging items yet. Add some on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page first.
@@ -459,6 +467,7 @@ function PackagingPanel({ orderId, items, used }: { orderId: string; items: PkgI
         </div>
       )}
       <p className="mt-2 text-[11px] text-muted-foreground">Adding packaging here records a consume move that deducts it from packaging on-hand. Remove a line to restore the stock.</p>
+      </div>)}
 
       <Modal open={adding} onClose={() => setAdding(false)} title="Add packaging used">
         <form onSubmit={onAdd} className="space-y-4">
