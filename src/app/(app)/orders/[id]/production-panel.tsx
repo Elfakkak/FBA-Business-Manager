@@ -128,6 +128,9 @@ function PackagingOnHand({ items }: { items: PkgOnHand[] }) {
         <div className="border-t px-5 py-8 text-center text-sm text-muted-foreground">No packaging on hand. Add stock on the <Link href="/packaging" className="font-medium text-primary hover:underline">Packaging</Link> page.</div>
       ) : (
         <div className="border-t">
+          <p className="border-b bg-muted/30 px-5 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">What is this?</span> Your own packaging stock — mailers, cartons, inserts, labels — that this order consumes when you pack it, <span className="font-medium">separate from the supplier&apos;s unit price</span>. Most orders bundle packaging into the supplier cost, so this stays optional. The value is your packaging inventory on hand; it draws down as you ship and is restocked on the Packaging page.
+          </p>
           <div className="flex items-center justify-end border-b px-5 py-2"><Link href="/packaging" className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">Manage <ArrowRight className="h-3.5 w-3.5" /></Link></div>
           <ul className="divide-y">
             {items.map((i) => (
