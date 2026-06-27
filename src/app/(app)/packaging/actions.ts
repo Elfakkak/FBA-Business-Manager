@@ -88,6 +88,15 @@ export async function savePackagingDesign(id: string, url: string): Promise<Resu
   return { ok: true };
 }
 
+export async function bulkSetPackagingArchived(ids: string[], archived: boolean): Promise<Result> {
+  if (!ids.length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("packaging_items").update({ archived }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/packaging");
+  return { ok: true };
+}
+
 export async function receivePackaging(itemId: string, form: FormData): Promise<Result> {
   const qty = parseInt(String(form.get("qty") ?? ""));
   const unitCost = parseFloat(String(form.get("unit_cost") ?? ""));
