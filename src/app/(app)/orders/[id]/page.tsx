@@ -137,6 +137,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       unlinkedInbounds={(unlinkedInbounds ?? []) as unknown as OrderInbound[]}
       inspection={inspection ?? null}
       rollup={r}
+      nowMs={Date.now()}
       initialTab={tab ?? "overview"}
     />
   );
