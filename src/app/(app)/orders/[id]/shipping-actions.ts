@@ -78,16 +78,39 @@ export async function savePackingList(shipmentId: string, orderId: string, data:
   return { ok: true };
 }
 
-export async function linkFbaInbound(orderId: string, shipmentId: string, f: { fc: string; expected: number; mode: string | null }): Promise<Result> {
+export type FbaInboundFields = { fc: string; expected: number; mode: string | null; reference_id?: string | null; eta_from?: string | null; eta_to?: string | null };
+export async function linkFbaInbound(orderId: string, shipmentId: string, f: FbaInboundFields): Promise<Result> {
   const supabase = await createClient();
   if (!f.fc?.trim()) return { ok: false, error: "FC is required." };
   const now = new Date();
   const yymm = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}`;
   const id = `FBA-${yymm}-${(Date.now() % 1000).toString().padStart(3, "0")}`;
-  const { error } = await supabase.from("fba_inbounds").insert({ id, order_id: orderId, shipment_id: shipmentId, fc: f.fc.trim(), expected: f.expected || 0, received: 0, amazon_status: "Working", sku_count: 0, mode: f.mode });
+  const { error } = await supabase.from("fba_inbounds").insert({
+    id, order_id: orderId, shipment_id: shipmentId, fc: f.fc.trim(), expected: f.expected || 0, received: 0, amazon_status: "Working", sku_count: 0, mode: f.mode,
+    reference_id: f.reference_id?.trim() || null, eta_from: f.eta_from?.trim() || null, eta_to: f.eta_to?.trim() || null,
+  });
   if (error) return { ok: false, error: error.message };
   rev(orderId, shipmentId);
   return { ok: true, id };
+}
+
+// Attach an EXISTING unlinked Amazon inbound to this shipment. The order is derived
+// from the shipment — an inbound never needs a separate order pick when a shipment
+// is chosen (only a direct-to-Amazon inbound with no shipment would).
+export async function linkExistingFbaInbound(orderId: string, shipmentId: string, inboundId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("fba_inbounds").update({ order_id: orderId, shipment_id: shipmentId }).eq("id", inboundId);
+  if (error) return { ok: false, error: error.message };
+  rev(orderId, shipmentId);
+  return { ok: true, id: inboundId };
+}
+
+export async function updateFbaInbound(inboundId: string, orderId: string, patch: { fc?: string; expected?: number; reference_id?: string | null; eta_from?: string | null; eta_to?: string | null }): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("fba_inbounds").update(patch).eq("id", inboundId);
+  if (error) return { ok: false, error: error.message };
+  rev(orderId);
+  return { ok: true };
 }
 
 export async function updateFbaReceived(inboundId: string, orderId: string, received: number): Promise<Result> {
