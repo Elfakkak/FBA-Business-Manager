@@ -505,10 +505,11 @@ function EditOrderModal({ order, onClose }: { order: OrderRow; onClose: () => vo
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status">
             <Select name="status" value={status} onChange={setStatus} options={ORDER_PIPELINE.map((p) => ({ value: p.key, label: p.label }))} />
+            <p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">Auto-advances as the order progresses (inspection · shipping · landed). Set manually only to override.</p>
           </Field>
-          <Field label="FBA ETA"><input name="fba_eta" type="date" defaultValue={order.fba_eta ?? ""} className={inputCls} /></Field>
+          <Field label="Supplier (factory)"><input name="supplier" defaultValue={order.supplier ?? ""} className={inputCls} placeholder="e.g. Huasheng Leather" /></Field>
         </div>
-        <Field label="Placed on"><input name="placed_on" type="date" defaultValue={order.placed_on ?? ""} className={inputCls} /></Field>
+        <Field label="Placed on"><input name="placed_on" type="date" defaultValue={order.placed_on ?? ""} className={inputCls} /><p className="mt-1 text-[10.5px] leading-snug text-muted-foreground">The FBA arrival date now lives on the FBA inbound (Shipping), derived from the forwarder&apos;s window.</p></Field>
         {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>

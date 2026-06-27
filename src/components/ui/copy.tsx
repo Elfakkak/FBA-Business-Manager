@@ -25,3 +25,18 @@ export function CopyValue({ value, label, mono = true, className }: { value: str
     </button>
   );
 }
+
+// "Copy everything" button — copies a pre-composed multi-line block (e.g. all the
+// IDs a forwarder needs) in one click.
+export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* clipboard blocked */ }
+  };
+  return (
+    <button type="button" onClick={copy} disabled={!text} className={cn("vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-50", className)}>
+      {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : label}
+    </button>
+  );
+}
