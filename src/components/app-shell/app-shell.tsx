@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -134,6 +134,18 @@ function Sidebar({
   }, [pathname]);
   const [open, setOpen] = useState(initialOpen);
   const [quickOpen, setQuickOpen] = useState(false);
+  const quickRef = useRef<HTMLDivElement>(null);
+
+  // Close the Quick-create menu on any outside click or Escape (a fixed scrim gets
+  // trapped in the sidebar's stacking context, so clicks on the main area miss it).
+  useEffect(() => {
+    if (!quickOpen) return;
+    const onDown = (e: MouseEvent) => { if (quickRef.current && !quickRef.current.contains(e.target as Node)) setQuickOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setQuickOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [quickOpen]);
 
   return (
     <nav className={cn("vy-sidebar", collapsed && "vy-sidebar--collapsed", mobile && "vy-sidebar--mobile")} aria-label="Primary">
@@ -155,7 +167,7 @@ function Sidebar({
       )}
 
       {!collapsed && (
-        <div style={{ position: "relative" }}>
+        <div ref={quickRef} style={{ position: "relative" }}>
           <button className="vy-quick-create" onClick={() => setQuickOpen((v) => !v)}>
             <Plus className="h-3.5 w-3.5" />
             <span>Quick create</span>
@@ -163,7 +175,6 @@ function Sidebar({
           </button>
           {quickOpen && (
             <>
-              <div onClick={() => setQuickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
               <div className="vy-card" style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 2px)", zIndex: 41, padding: 4 }}>
                 {QUICK_CREATE.map((q) => {
                   const Icon = q.icon;
