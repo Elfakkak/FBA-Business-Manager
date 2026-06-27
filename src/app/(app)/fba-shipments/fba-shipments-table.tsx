@@ -16,7 +16,7 @@ import { Truck, Boxes, PackageCheck, AlertCircle, RefreshCw, ArrowUpRight, Loade
 export type FbaRow = {
   id: string; fc: string; skuCount: number; expected: number; received: number; variance: number;
   status: string; synced: string | null; eta: string | null; etaWindow: string | null; mode: string | null;
-  shipmentId: string | null; orderId: string | null;
+  shipmentId: string | null; orderId: string | null; referenceId: string | null;
   items: { sku: string; fnsku: string | null; expected: number; received: number }[];
 };
 
@@ -212,7 +212,16 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
         </Card>
       )}
 
-      <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id}>
+      <Drawer open={!!peek} onClose={() => setPeek(null)} title={peek?.id}
+        footer={peek && (
+          <div className="space-y-2">
+            <Link href={`/fba-shipments/${peek.id}`} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5"><Boxes className="h-4 w-4" /> View full details &amp; contents <ArrowUpRight className="h-4 w-4" /></Link>
+            <div className="flex items-center justify-between gap-2">
+              {peek.shipmentId ? <Link href={`/shipments/${peek.shipmentId}`} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5" /> Forwarder leg</Link> : <span />}
+              {peek.orderId && <Link href={`/orders/${peek.orderId}`} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5">Open order <ArrowUpRight className="h-3.5 w-3.5" /></Link>}
+            </div>
+          </div>
+        )}>
         {peek && (() => {
           const variance = peek.variance;
           const vHint = peek.received <= 0 ? "Not yet received — units book as Amazon checks them in."
@@ -232,7 +241,16 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
                 </div>
               </div>
 
-              {/* order / forwarder seam */}
+              {/* forwarder leg (freight to the FC) */}
+              {peek.shipmentId && (
+                <Link href={`/shipments/${peek.shipmentId}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 rounded-lg border bg-accent/50 px-3 py-2.5 hover:border-primary/40">
+                  <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1"><div className="text-[11px] text-muted-foreground">← Forwarder leg (freight to the FC)</div><div className="font-mono text-[12px] font-bold">{peek.shipmentId}</div></div>
+                  <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
+                </Link>
+              )}
+
+              {/* order seam */}
               {peek.orderId ? (
                 <Link href={`/orders/${peek.orderId}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2.5 rounded-lg border bg-accent/50 px-3 py-2.5 hover:border-primary/40">
                   <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -306,17 +324,14 @@ export function FbaShipmentsTable({ rows, amazonConnected, lastSync }: { rows: F
               {/* Identifiers */}
               <div>
                 <div className="vy-kicker mb-2">Amazon identifiers</div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <DrawerStat label="FBA shipment ID" value={<span className="text-[11px]">{peek.id}</span>} />
+                  <DrawerStat label="Amazon ref" value={<span className="text-[11px]">{peek.referenceId || "—"}</span>} />
                   <DrawerStat label="Dest FC" value={peek.fc} />
+                  <DrawerStat label="ETA" value={<span className="text-[11px]">{peek.etaWindow || peek.eta || "—"}</span>} />
                   <DrawerStat label="Synced" value={<span className="text-[11px]">{intgAgo(peek.synced)}</span>} />
                 </div>
               </div>
-
-              {/* Footer action */}
-              {peek.orderId && (
-                <Link href={`/orders/${peek.orderId}`} onClick={(e) => e.stopPropagation()} className="vy-btn vy-btn--primary flex w-full items-center justify-center gap-1.5">Open order <ArrowUpRight className="h-4 w-4" /></Link>
-              )}
             </div>
           );
         })()}
