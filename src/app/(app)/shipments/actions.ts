@@ -103,8 +103,10 @@ export async function syncShipmentTracking(id: string): Promise<Result> {
   const { data: trk } = await supabase.from("shipment_tracking").select("tracking_no").eq("shipment_id", id).maybeSingle();
   if (!trk?.tracking_no) return { ok: false, error: "Add a tracking number first." };
   const { data: intg } = await supabase.from("integrations").select("status, oauth_token").eq("id", "track17").maybeSingle();
-  const apiKey = (intg?.oauth_token as Record<string, string> | null)?.api_key;
-  if (intg?.status !== "connected" || !apiKey) return { ok: false, error: "Connect 17TRACK in Integrations first." };
+  // Key from the Integrations connect flow (DB) OR a TRACK17_API_KEY env var fallback.
+  const dbKey = intg?.status === "connected" ? (intg?.oauth_token as Record<string, string> | null)?.api_key : undefined;
+  const apiKey = dbKey || process.env.TRACK17_API_KEY;
+  if (!apiKey) return { ok: false, error: "Add a 17TRACK API key — connect it in Integrations or set TRACK17_API_KEY." };
 
   try {
     await track17Register(apiKey, trk.tracking_no).catch(() => {}); // idempotent
