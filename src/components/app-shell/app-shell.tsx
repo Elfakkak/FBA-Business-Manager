@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Boxes, Factory, Receipt, Truck, Ship, Package, Warehouse,
   TrendingUp, PackageOpen, Calculator, Wallet, DollarSign, Users, Shield, Tags,
-  FileText, Settings, Plus, Search, Bell, Sun, Moon, Menu, X,
+  FileText, Settings, Plus, Search, Bell, Sun, Moon, Menu, X, Activity,
   ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 
@@ -22,6 +22,7 @@ const NAV: Group[] = [
       { label: "Invoices", href: "/invoices", section: "finance", icon: Receipt, ready: true },
       { label: "Shipments", href: "/shipments", section: "shipments", icon: Ship, ready: true },
       { label: "FBA Shipments", href: "/fba-shipments", section: "shipments", icon: Truck, ready: true },
+      { label: "Activity", href: "/activity", section: "orders", icon: Activity, ready: true },
     ],
   },
   {

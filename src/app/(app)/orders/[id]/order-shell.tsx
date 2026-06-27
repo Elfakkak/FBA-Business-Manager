@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, KpiStrip, SectionHeader, Chip, SectionTitle } from "@/components/ui/primitives";
@@ -31,6 +31,8 @@ import {
   Home, Activity, ArrowRight, Calendar, DollarSign, ShieldCheck, Info,
 } from "lucide-react";
 import { Drawer, DrawerGuard } from "@/components/ui/drawer";
+import { ActivityFeed } from "@/components/ui/activity-feed";
+import { deriveOrderActivity } from "@/lib/activity";
 
 // Top tab bar (matches the prototype: Home · Production · Shipping · Invoices · Landed cost)
 const TABS = [
@@ -67,7 +69,7 @@ const SECTIONS: { key: string; label: string; icon: React.ElementType; tone: Ton
   { key: "landed", label: "Landed cost", icon: PackageCheck, tone: "success" },
 ];
 
-export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, suppliers, agents, freightInvoice, ordered, unlinkedInbounds, inspection, rollup, initialTab = "overview" }: {
+export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes, companyName, orderFiles, packagingOnHand, variants, packagingItems, packaging, shipments, inbounds, packLines, shipFiles, shipTracking, forwarders, suppliers, agents, freightInvoice, ordered, unlinkedInbounds, inspection, rollup, nowMs, initialTab = "overview" }: {
   order: OrderRow;
   invoices: InvRow[];
   vendors: VendorOpt[];
@@ -93,6 +95,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
   unlinkedInbounds: InboundRow[];
   inspection: Inspection | null;
   rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
+  nowMs: number;
   initialTab?: string;
 }) {
   const router = useRouter();
@@ -107,7 +110,9 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
     if (url.searchParams.get("tab") !== tab) { url.searchParams.set("tab", tab); window.history.replaceState(null, "", url.toString()); }
   }, [tab]);
   const [editing, setEditing] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [pending, start] = useTransition();
+  const activity = useMemo(() => deriveOrderActivity(order.id, { placedOn: order.placed_on, invoices, inspection, shipments }), [order.id, order.placed_on, invoices, inspection, shipments]);
   const curIdx = ORDER_PIPELINE.findIndex((p) => p.key === order.status);
   const units = lines.reduce((s, l) => s + (l.qty ?? 0), 0);
   // PO (planned) vs invoiced (actual) goods cost — surfaced on Home + Production.
@@ -141,7 +146,7 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
 
       <div key={activeTab} className="vy-page-in">
       {activeTab === "overview" ? (
-        <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} pending={pending} costCheck={costCheck} />
+        <Overview order={order} rollup={rollup} units={units} skuCount={lines.length} curIdx={curIdx} onJump={setTab} onAdvance={advance} onEdit={() => setEditing(true)} onOpenActivity={() => setActivityOpen(true)} pending={pending} costCheck={costCheck} />
       ) : activeTab === "invoices" ? (
         <InvoicesPanel order={order} invoices={invoices} vendors={vendors} lines={lines} chargeTypes={chargeTypes} />
       ) : activeTab === "shipping" ? (
@@ -161,13 +166,19 @@ export function OrderShell({ order, invoices, vendors, lines, costs, chargeTypes
       </div>
 
       {editing && <EditOrderModal order={order} suppliers={suppliers} agents={agents} onClose={() => setEditing(false)} />}
+
+      <Drawer open={activityOpen} onClose={() => setActivityOpen(false)} width={480}
+        title="Order activity" subtitle={<span className="font-mono">{order.id}</span>}
+        footer={<Link href="/activity" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline">See full journal <ArrowRight className="h-3.5 w-3.5" /></Link>}>
+        <ActivityFeed events={activity} nowMs={nowMs} variant="drawer" />
+      </Drawer>
     </div>
   );
 }
 
-function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, onEdit, pending, costCheck }: {
+function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, onEdit, onOpenActivity, pending, costCheck }: {
   order: OrderRow; rollup: { total: number; paid: number; balance: number; paidPct: number; invoiceCount: number };
-  units: number; skuCount: number; curIdx: number; onJump: (k: string) => void; onAdvance: (k: string) => void; onEdit: () => void; pending: boolean; costCheck: CostCheck;
+  units: number; skuCount: number; curIdx: number; onJump: (k: string) => void; onAdvance: (k: string) => void; onEdit: () => void; onOpenActivity: () => void; pending: boolean; costCheck: CostCheck;
 }) {
   const needs = orderNeeds({ status: order.status, balance: rollup.balance, paidPct: rollup.paidPct, units, supplier: order.supplier });
   const top = needs[0];
@@ -199,7 +210,7 @@ function Overview({ order, rollup, units, skuCount, curIdx, onJump, onAdvance, o
           <Badge tone={liveTone}>{ORDER_STATUS_LABEL[order.status] ?? order.status}</Badge>
         </>}
         actions={<>
-          <button className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Activity</button>
+          <button onClick={onOpenActivity} className="vy-btn vy-btn--ghost vy-btn--sm inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Activity</button>
           <button onClick={onEdit} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</button>
         </>}
         badges={<>
