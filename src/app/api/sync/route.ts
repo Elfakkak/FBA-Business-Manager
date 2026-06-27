@@ -28,16 +28,23 @@ async function handler(req: NextRequest) {
     try { results[k] = await fn(); } catch (e) { results[k] = { error: e instanceof Error ? e.message : "failed" }; }
   };
 
+  // Split cadence: the cheap direct-API streams (inventory, inbound) run on every
+  // 6-hourly cron tick; the throttled Reports-API streams (sales, ads) are daily
+  // aggregates that only settle end-of-day, so the cron runs them once a day (the
+  // 00:00 UTC tick). A manual owner sync always runs the full set.
+  const heavy = !cronOk || new Date().getUTCHours() < 6;
   await run("inventory", () => runInventorySync(db, sp));
   await run("inbound", () => runInboundSync(db, sp));
-  await run("sales", () => runSalesSync(db, sp));
-  await run("ads", () => runAdsSync(db, adsCreds));
+  if (heavy) {
+    await run("sales", () => runSalesSync(db, sp));
+    await run("ads", () => runAdsSync(db, adsCreds));
+  }
 
   const errs = Object.entries(results).filter(([, v]) => (v as { error?: string })?.error).map(([k]) => k);
   await db.from("integrations").update({
     status: errs.length ? "error" : "connected",
     last_sync: new Date().toISOString(),
-    note: errs.length ? `Last sync had issues: ${errs.join(", ")}.` : "Full sync complete — inventory, inbound, sales, ads.",
+    note: errs.length ? `Last sync had issues: ${errs.join(", ")}.` : `Sync complete — ${Object.keys(results).join(", ")}.`,
   }).eq("id", "amazon");
 
   return NextResponse.json({ ok: errs.length === 0, ranBy: cronOk ? "cron" : "owner", results });
