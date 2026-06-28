@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/primitives";
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
 import { createSupplier } from "./actions";
-import { money, num } from "@/lib/derive";
+import { money, num, PAYTERM_TYPES, PAYTERM_BY_KEY } from "@/lib/derive";
 import { cn } from "@/lib/utils";
-import { Plus, ArrowRight } from "lucide-react";
+import { Plus, ArrowRight, Info } from "lucide-react";
 
 export type SupplierSummary = {
   name: string;
@@ -18,13 +19,14 @@ export type SupplierSummary = {
   route: string | null;
   leadTimeDays: number | null;
   isNew: boolean | null;
+  archived: boolean;
   productCount: number;
   orderCount: number;
   openOrders: number;
   openBalance: number;
 };
 
-export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
+export function SuppliersList({ suppliers, contactNames }: { suppliers: SupplierSummary[]; contactNames: string[] }) {
   const [q, setQ] = useState("");
   const [peek, setPeek] = useState<SupplierSummary | null>(null);
   const filtered = useMemo(() => {
@@ -42,7 +44,7 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
         kicker="Partners"
         title="Suppliers"
         sub="Every factory you buy from — products sourced, orders in flight, lead time and what you owe."
-        actions={<NewSupplierButton />}
+        actions={<NewSupplierButton contactNames={contactNames} />}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -123,12 +125,21 @@ export function SuppliersList({ suppliers }: { suppliers: SupplierSummary[] }) {
   );
 }
 
-function NewSupplierButton() {
+const NEW_CONTACT = "__new_contact__";
+function NewSupplierButton({ contactNames }: { contactNames: string[] }) {
   const router = useRouter();
+  const [term, setTerm] = useState("TT");
+  const [deposit, setDeposit] = useState("30");
+  const [contact, setContact] = useState("");
+  const [newContact, setNewContact] = useState("");
   const { open, setOpen, error, pending, onSubmit } = useFormModal(
     (form) => createSupplier(form),
     { onSuccess: (form) => router.push(`/suppliers/${encodeURIComponent(String(form.get("name")))}`) },
   );
+  const t = PAYTERM_BY_KEY[term] ?? PAYTERM_BY_KEY.TT;
+  const dep = parseFloat(deposit);
+  const balance = Number.isFinite(dep) ? Math.max(0, 100 - dep) : null;
+  const contactValue = contact === NEW_CONTACT ? newContact : contact;
 
   return (
     <>
@@ -136,12 +147,43 @@ function NewSupplierButton() {
       <Modal open={open} onClose={() => setOpen(false)} title="New supplier">
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">Create a supplier record. You can fill in the full profile next.</p>
         <form onSubmit={onSubmit} className="space-y-4">
+          <input type="hidden" name="term_type" value={term} />
+          {!t.hasDeposit && <input type="hidden" name="term_deposit_pct" value="" />}
+          <input type="hidden" name="contact" value={contactValue} />
+          {contact === NEW_CONTACT && newContact.trim() && <input type="hidden" name="create_contact" value="1" />}
+
           <Field label="Supplier name"><input name="name" required autoFocus className={inputCls} placeholder="e.g. Ningbo Auto Trim" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Origin"><input name="origin" className={inputCls} placeholder="Dongguan, CN" /></Field>
-            <Field label="Contact"><input name="contact" className={inputCls} placeholder="Lily Chen" /></Field>
+            <Field label="Contact">
+              <Select value={contact} onChange={setContact} placeholder="— none —" searchable
+                options={[{ value: "", label: "— none —" }, ...contactNames.map((n) => ({ value: n, label: n })), { value: NEW_CONTACT, label: "＋ New contact" }]} />
+            </Field>
           </div>
-          <Field label="Payment terms"><input name="payment_terms" className={inputCls} placeholder="30% deposit / 70% before ship" /></Field>
+          {contact === NEW_CONTACT && (
+            <Field label="New contact name"><input value={newContact} onChange={(e) => setNewContact(e.target.value)} autoFocus className={inputCls} placeholder="Lily Chen" /></Field>
+          )}
+
+          <div>
+            <div className="vy-kicker mb-1.5">Payment terms</div>
+            <div className="flex flex-wrap gap-1.5">
+              {PAYTERM_TYPES.map((p) => (
+                <button type="button" key={p.key} onClick={() => setTerm(p.key)} className={cn("vy-chip", term === p.key && "is-active")}>{p.label}</button>
+              ))}
+            </div>
+            {t.hasDeposit && (
+              <div className="mt-2.5 flex items-center gap-2 text-[13px]">
+                <span className="text-muted-foreground">Deposit</span>
+                <input name="term_deposit_pct" type="number" min={0} max={100} value={deposit} onChange={(e) => setDeposit(e.target.value)} className={cn(inputCls, "w-20 text-center")} />
+                <span className="text-muted-foreground">% / {balance != null ? `${balance}% balance` : "balance"}</span>
+              </div>
+            )}
+            <div className="mt-3 flex gap-2.5 rounded-lg border px-3 py-2.5" style={{ background: "hsl(var(--info) / 0.06)", borderColor: "hsl(var(--info) / 0.22)" }}>
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+              <div><div className="text-[13px] font-semibold">{t.label} · {t.name}</div><p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{t.blurb}</p></div>
+            </div>
+          </div>
+
           {error && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
             <GhostButton type="button" onClick={() => setOpen(false)}>Cancel</GhostButton>
