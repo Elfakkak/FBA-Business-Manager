@@ -106,31 +106,52 @@ async function adsToken(c: AdsCreds) {
   const j = await res.json(); if (!j.access_token) throw new Error(j.error_description || "Ads LWA failed"); return j.access_token as string;
 }
 
-export async function runAdsSync(db: DB, c: AdsCreds, maxWaitMs = 120_000) {
+// Amazon Ads reports are async (minutes to generate) and the serverless function is
+// time-boxed (≤60s on Hobby). So this is DEFERRED: create the report and persist its id;
+// each later run resumes that report, and only downloads once Amazon says COMPLETED. A
+// not-ready report returns { pending } (soft) — it never throws, so it can't flip status.
+export async function runAdsSync(db: DB, c: AdsCreds, maxWaitMs = 25_000) {
   if (!c.refresh_token) return { skipped: true, skus: 0 };
   const host = ADS_HOST[(c.region || "na").toLowerCase()] || ADS_HOST.na;
   const profileId = c.profile_id || "2713745068193310";
   const token = await adsToken(c);
   const H = { Authorization: `Bearer ${token}`, "Amazon-Advertising-API-ClientId": c.client_id ?? "", "Amazon-Advertising-API-Scope": profileId };
-  const end = new Date(); const start = new Date(end.getTime() - 30 * 864e5);
 
-  const create = await fetch(`${host}/reporting/reports`, {
-    method: "POST", headers: { ...H, "Content-Type": "application/vnd.createasyncreportrequest.v3+json" },
-    body: JSON.stringify({ name: "vyonix-sp-adv", startDate: ymd(start), endDate: ymd(end), configuration: { adProduct: "SPONSORED_PRODUCTS", reportTypeId: "spAdvertisedProduct", groupBy: ["advertiser"], columns: ["advertisedSku", "spend", "sales30d", "unitsSoldClicks30d"], timeUnit: "SUMMARY", format: "GZIP_JSON" } }),
-  });
-  const cj = await create.json();
-  if (!create.ok) throw new Error(cj?.detail || cj?.message || `ads report HTTP ${create.status}`);
+  const tok = c as unknown as Record<string, unknown>;
+  const savePending = (id: string | null) => {
+    const t: Record<string, unknown> = { ...tok };
+    if (id) { t.pending_report_id = id; t.pending_report_at = new Date().toISOString(); }
+    else { delete t.pending_report_id; delete t.pending_report_at; }
+    return db.from("integrations").update({ oauth_token: t as never }).eq("id", "amazonads");
+  };
+
+  // Resume a report from a prior run (discard if stale — Amazon expires reports).
+  let reportId = typeof tok.pending_report_id === "string" ? (tok.pending_report_id as string) : undefined;
+  const ageMs = tok.pending_report_at ? Date.now() - new Date(tok.pending_report_at as string).getTime() : Infinity;
+  if (reportId && ageMs > 40 * 60 * 1000) reportId = undefined;
+
+  if (!reportId) {
+    const end = new Date(); const start = new Date(end.getTime() - 30 * 864e5);
+    const create = await fetch(`${host}/reporting/reports`, {
+      method: "POST", headers: { ...H, "Content-Type": "application/vnd.createasyncreportrequest.v3+json" },
+      body: JSON.stringify({ name: "vyonix-sp-adv", startDate: ymd(start), endDate: ymd(end), configuration: { adProduct: "SPONSORED_PRODUCTS", reportTypeId: "spAdvertisedProduct", groupBy: ["advertiser"], columns: ["advertisedSku", "spend", "sales30d", "unitsSoldClicks30d"], timeUnit: "SUMMARY", format: "GZIP_JSON" } }),
+    });
+    const cj = await create.json();
+    if (!create.ok) throw new Error(cj?.detail || cj?.message || `ads report HTTP ${create.status}`);
+    reportId = cj.reportId as string;
+    await savePending(reportId);
+  }
 
   const deadline = Date.now() + maxWaitMs;
   let url: string | undefined, status = "";
   while (Date.now() < deadline) {
-    await sleep(5000);
-    const g = await (await fetch(`${host}/reporting/reports/${cj.reportId}`, { headers: H })).json();
+    const g = await (await fetch(`${host}/reporting/reports/${reportId}`, { headers: H })).json();
     status = g.status; url = g.url;
     if (status === "COMPLETED") break;
-    if (status === "FAILURE") throw new Error(`ads report FAILURE`);
+    if (status === "FAILURE") { await savePending(null); throw new Error("ads report FAILURE"); }
+    await sleep(5000);
   }
-  if (!url) throw new Error(`ads report not ready (${status})`);
+  if (!url) return { pending: true, reportId, status }; // not ready — resume next run, no error
 
   const rows = JSON.parse(gunzipSync(Buffer.from(await (await fetch(url)).arrayBuffer())).toString("utf8")) as { advertisedSku?: string; spend?: number; sales30d?: number; unitsSoldClicks30d?: number }[];
   const bySku: Record<string, { spend: number; sales: number; units: number }> = {};
@@ -145,5 +166,6 @@ export async function runAdsSync(db: DB, c: AdsCreds, maxWaitMs = 120_000) {
     const { data } = await db.from("product_variants").update({ ad_spend_30d: +e.spend.toFixed(2), ad_sales_30d: +e.sales.toFixed(2), ad_units_30d: e.units }).eq("sku", sku).select("id");
     updated += data?.length ?? 0;
   }
+  await savePending(null); // report consumed — clear so the next run creates a fresh one
   return { skus: Object.keys(bySku).length, updated };
 }

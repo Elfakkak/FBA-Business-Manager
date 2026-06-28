@@ -42,14 +42,27 @@ async function handler(req: NextRequest) {
   if (runSales) await run("sales", () => runSalesSync(db, sp));
   if (runAds) await run("ads", () => runAdsSync(db, adsCreds));
 
-  const errs = Object.entries(results).filter(([, v]) => (v as { error?: string })?.error).map(([k]) => k);
+  const now = new Date().toISOString();
+  // The `amazon` integration's status = CORE SP-API health only (inventory/inbound/sales).
+  // Ads is a separate integration row: its async reports take minutes and time out
+  // independently, so an ads hiccup must NOT flag the SP-API connection as broken.
+  const coreErrs = (["inventory", "inbound", "sales"] as const).filter((k) => (results[k] as { error?: string } | undefined)?.error);
   await db.from("integrations").update({
-    status: errs.length ? "error" : "connected",
-    last_sync: new Date().toISOString(),
-    note: errs.length ? `Last sync had issues: ${errs.join(", ")}.` : `Sync complete — ${Object.keys(results).join(", ")}.`,
+    status: coreErrs.length ? "error" : "connected",
+    last_sync: now,
+    note: coreErrs.length ? `Last sync had issues: ${coreErrs.join(", ")}.` : "Connected — SP-API (inventory · inbound · sales).",
   }).eq("id", "amazon");
 
-  return NextResponse.json({ ok: errs.length === 0, ranBy: cronOk ? "cron" : "owner", results });
+  if ("ads" in results) {
+    const a = results.ads as { error?: string; pending?: boolean; updated?: number };
+    await db.from("integrations").update({
+      status: a.error ? "error" : "connected",
+      last_sync: now,
+      note: a.error ? `Ads sync issue: ${a.error}` : a.pending ? "Ads report generating — completes on the next sync." : `Ads synced — ${a.updated ?? 0} SKUs.`,
+    }).eq("id", "amazonads");
+  }
+
+  return NextResponse.json({ ok: coreErrs.length === 0, ranBy: cronOk ? "cron" : "owner", results });
 }
 
 export const GET = handler;
