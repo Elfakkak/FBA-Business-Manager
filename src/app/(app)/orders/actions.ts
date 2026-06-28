@@ -19,13 +19,12 @@ export async function createOrder(form: FormData): Promise<Result> {
   if (!title) return { ok: false, error: "Order title is required." };
 
   const supabase = await createClient();
-  // human id ORD-YYYY-MM-NNN, sequence scoped to that month so it never collides
-  const ym = (placed || new Date().toISOString().slice(0, 10)).slice(0, 7);
-  const { data: latest } = await supabase
-    .from("orders").select("id").like("id", `ORD-${ym}-%`)
-    .order("id", { ascending: false }).limit(1).maybeSingle();
-  const seq = latest ? (parseInt(latest.id.slice(-3)) || 0) + 1 : 1;
-  const id = `ORD-${ym}-${String(seq).padStart(3, "0")}`;
+  // Sequential global order number ORD-NNN (real numbering, not date-encoded). Continues
+  // from the existing count and the max ORD-NNN seen, so it never collides or restarts.
+  const { data: all } = await supabase.from("orders").select("id");
+  const nums = (all ?? []).map((o) => { const m = /^ORD-(\d+)$/.exec(o.id); return m ? parseInt(m[1]) : 0; });
+  const next = Math.max(all?.length ?? 0, 0, ...nums) + 1;
+  const id = `ORD-${String(next).padStart(3, "0")}`;
 
   const { error } = await supabase.from("orders").insert({
     id, title, supplier, agent,
