@@ -15,7 +15,7 @@ import {
 } from "@/lib/derive";
 import { addOrderLines, updateOrderLine, deleteOrderLine, addOrderCost, updateOrderCost, deleteOrderCost, saveOrderFile } from "../actions";
 import {
-  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check, AlertTriangle, X,
+  Package, Activity, ClipboardCheck, FileText, Plus, Trash2, DollarSign, ChevronRight, ArrowRight, Check, AlertTriangle, X, Pencil,
 } from "lucide-react";
 
 type ProdLine = { id: string; sku: string | null; product_name: string | null; family_id: string | null; qty: number; unit_cost: number | null; unit_cny_ref: number | null };
@@ -323,24 +323,18 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
   const allLines = groups.flatMap((g) => g.lines);
   const onDelete = (id: string) => start(async () => { await deleteOrderLine(id, order.id); router.refresh(); });
 
-  // Shared inline-edit controller (same primitive used across the app).
-  const ed = useInlineEditor(
-    allLines,
-    (l) => ({ qty: String(l.qty ?? 0), unit_cost: l.unit_cost == null ? "" : String(l.unit_cost), unit_cny_ref: l.unit_cny_ref == null ? "" : String(l.unit_cny_ref) }),
-    (id, f) => updateOrderLine(id, order.id, { qty: Math.max(0, Math.round(Number(f.qty) || 0)), unit_cost: numOrNull(f.unit_cost), unit_cny_ref: numOrNull(f.unit_cny_ref) }),
-    () => router.refresh(),
-  );
-  const liveUnits = ed.on ? allLines.reduce((s, l) => s + (Number(ed.get(l.id, "qty")) || 0), 0) : totalUnits;
-  const liveGoods = ed.on ? allLines.reduce((s, l) => s + (Number(ed.get(l.id, "qty")) || 0) * (Number(ed.get(l.id, "unit_cost")) || 0), 0) : totalGoods;
-
   return (
     <Card className="overflow-hidden p-0">
-      <div className="px-5 pt-4"><SectionTitle icon={Package} tone="brand" strong title="Production lines" sub={ed.on ? "Editing — change quantities or unit cost; totals update live." : "Sellable SKUs and variants included in this factory commitment."}
-        action={<EditToolbar editor={ed} editable={allLines.length > 0} addLabel="Add SKU" onAdd={() => setAdding(true)} />} /></div>
+      <div className="px-5 pt-4"><SectionTitle icon={Package} tone="brand" strong title="Production lines" sub="Sellable SKUs and variants included in this factory commitment."
+        action={<div className="flex items-center gap-2">
+          <button type="button" onClick={() => setEditing(true)} disabled={allLines.length === 0} className="vy-btn vy-btn--outline vy-btn--sm inline-flex items-center gap-1.5 disabled:opacity-40"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+          <button type="button" onClick={() => setAdding(true)} className="vy-btn vy-btn--primary vy-btn--sm inline-flex items-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Add SKU</button>
+        </div>} /></div>
       {groups.length === 0 ? (
         <div className="border-t px-5 py-10 text-center text-sm text-muted-foreground">No SKUs yet — add the products in this factory commitment.</div>
       ) : (
@@ -362,16 +356,16 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
                 <tr className="bg-primary/5"><td colSpan={7} className="px-5 py-2 text-[12px] font-semibold">{g.name} <span className="font-normal text-muted-foreground">· {g.lines.length} {g.lines.length === 1 ? "variant" : "variants"}</span></td></tr>
                 {g.lines.map((l) => {
                   const d = landedById.get(l.id);
-                  const line = ed.on ? (Number(ed.get(l.id, "qty")) || 0) * (Number(ed.get(l.id, "unit_cost")) || 0) : (d?.line ?? 0);
+                  const line = d?.line ?? 0;
                   return (
                     <tr key={l.id}>
                       <td className="px-5 py-2.5 font-mono text-[12px] font-semibold">{l.sku}</td>
-                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "qty")} onChange={(v) => ed.set(l.id, "qty", v)} mode="numeric" /></div> : <span className="tabular">{num(l.qty)}</span>}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cny_ref")} onChange={(v) => ed.set(l.id, "unit_cny_ref", v)} placeholder="¥" /></div> : <span className="tabular">{l.unit_cny_ref != null ? `¥${Number(l.unit_cny_ref).toFixed(2)}` : "—"}</span>}</td>
-                      <td className="px-3 py-2.5 text-right font-mono">{ed.on ? <div className="ml-auto w-20"><EditCell value={ed.get(l.id, "unit_cost")} onChange={(v) => ed.set(l.id, "unit_cost", v)} placeholder="$" /></div> : (() => { const cc = l.sku ? costCheck.bySku.get(l.sku) : undefined; const diff = cc?.invUnit != null ? cc.invUnit - (Number(l.unit_cost) || 0) : null; return <div><span className="tabular">{money(l.unit_cost)}</span>{cc?.invUnit != null && <div className={cn("text-[10px]", diff != null && Math.abs(diff) > 0.01 ? "text-warning" : "text-success")} title="Invoiced unit price (actual)">inv {money(cc.invUnit)}{diff != null && Math.abs(diff) > 0.01 ? ` (${diff > 0 ? "+" : ""}${money(diff)})` : " ✓"}</div>}</div>; })()}</td>
+                      <td className="px-3 py-2.5 text-right font-mono"><span className="tabular">{num(l.qty)}</span></td>
+                      <td className="px-3 py-2.5 text-right font-mono text-muted-foreground"><span className="tabular">{l.unit_cny_ref != null ? `¥${Number(l.unit_cny_ref).toFixed(2)}` : "—"}</span></td>
+                      <td className="px-3 py-2.5 text-right font-mono">{(() => { const cc = l.sku ? costCheck.bySku.get(l.sku) : undefined; const diff = cc?.invUnit != null ? cc.invUnit - (Number(l.unit_cost) || 0) : null; return <div><span className="tabular">{money(l.unit_cost)}</span>{cc?.invUnit != null && <div className={cn("text-[10px]", diff != null && Math.abs(diff) > 0.01 ? "text-warning" : "text-success")} title="Invoiced unit price (actual)">inv {money(cc.invUnit)}{diff != null && Math.abs(diff) > 0.01 ? ` (${diff > 0 ? "+" : ""}${money(diff)})` : " ✓"}</div>}</div>; })()}</td>
                       <td className="tabular px-3 py-2.5 text-right font-mono font-semibold">{money(line)}</td>
-                      <td className="tabular px-3 py-2.5 text-right font-mono text-info">{!ed.on && d ? `${money(d.landedUnit)} est` : "—"}</td>
-                      <td className="px-3 py-2.5 text-right">{!ed.on && <button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>}</td>
+                      <td className="tabular px-3 py-2.5 text-right font-mono text-info">{d ? `${money(d.landedUnit)} est` : "—"}</td>
+                      <td className="px-3 py-2.5 text-right"><button onClick={() => onDelete(l.id)} disabled={pending} className="vy-icon-btn" aria-label="Delete"><Trash2 className="h-3.5 w-3.5 text-danger" /></button></td>
                     </tr>
                   );
                 })}
@@ -380,9 +374,9 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
             <tfoot>
               <tr className="border-t bg-muted/30 font-semibold">
                 <td className="px-5 py-3">Product subtotal</td>
-                <td className="tabular px-3 py-3 text-right font-mono">{num(liveUnits)}</td>
+                <td className="tabular px-3 py-3 text-right font-mono">{num(totalUnits)}</td>
                 <td colSpan={2} />
-                <td className="tabular px-3 py-3 text-right font-mono">{money(liveGoods)}</td>
+                <td className="tabular px-3 py-3 text-right font-mono">{money(totalGoods)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -391,7 +385,83 @@ function ProductionLines({ order, groups, landedById, totalUnits, totalGoods, va
       )}
       <p className="px-5 py-3 text-[11px] text-muted-foreground">Prices are last‑known references seeded from the catalog (editable) — the <span className="font-medium">actual</span> price is recorded on the invoice. Line $ = qty × unit $ invoice. Est landed/u spreads non‑product costs over units (duties excluded — estimate).</p>
       {adding && <AddSkuModal orderId={order.id} variants={variants} inOrderSkus={new Set(allLines.map((l) => l.sku).filter((s): s is string => !!s))} onClose={() => setAdding(false)} />}
+      {editing && <EditLinesModal orderId={order.id} groups={groups} onClose={() => setEditing(false)} />}
     </Card>
+  );
+}
+
+// Edit existing production lines in one window — change qty / unit $ / ¥ ref, or remove a
+// line. Keyed by line id (handles imported lines with no variant_id too). Reconciles on Save
+// via the shared updateOrderLine / deleteOrderLine actions.
+function EditLinesModal({ orderId, groups, onClose }: { orderId: string; groups: { name: string; lines: ProdLine[] }[]; onClose: () => void }) {
+  const router = useRouter();
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const [showCny, setShowCny] = useState(false);
+  const orig = useMemo(() => groups.flatMap((g) => g.lines.map((l) => ({ ...l, fam: g.name }))), [groups]);
+  const [rows, setRows] = useState(() => orig.map((l) => ({ id: l.id, sku: l.sku, fam: l.fam, name: l.product_name, qty: String(l.qty ?? 0), unit_cost: l.unit_cost == null ? "" : String(l.unit_cost), unit_cny: l.unit_cny_ref == null ? "" : String(l.unit_cny_ref), removed: false })));
+  const set = (id: string, patch: Partial<(typeof rows)[number]>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const kept = rows.filter((r) => !r.removed);
+  const units = kept.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+  const subtotal = kept.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit_cost) || 0), 0);
+
+  function save() {
+    setErr(null);
+    start(async () => {
+      for (const r of rows) {
+        const o = orig.find((x) => x.id === r.id)!;
+        if (r.removed) { const res = await deleteOrderLine(r.id, orderId); if (!res.ok) { setErr(res.error); return; } continue; }
+        const qty = Math.max(0, Math.round(Number(r.qty) || 0));
+        const unit_cost = numOrNull(r.unit_cost);
+        const unit_cny_ref = numOrNull(r.unit_cny);
+        if (qty !== o.qty || unit_cost !== o.unit_cost || unit_cny_ref !== o.unit_cny_ref) {
+          const res = await updateOrderLine(r.id, orderId, { qty, unit_cost, unit_cny_ref });
+          if (!res.ok) { setErr(res.error); return; }
+        }
+      }
+      onClose();
+      router.refresh();
+    });
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Edit production lines" subtitle="Change quantities or unit cost, or remove a line." size="lg"
+      footer={<div className="flex flex-wrap items-center gap-3">
+        <div className="text-[12px] text-muted-foreground">{kept.length} lines · {num(units)} units · <span className="font-mono font-semibold text-foreground">{money(subtotal)}</span> subtotal</div>
+        <div className="ml-auto flex gap-2">
+          <GhostButton type="button" onClick={onClose}>Cancel</GhostButton>
+          <PrimaryButton type="button" onClick={save} disabled={pending}>{pending ? "Saving…" : "Save changes"}</PrimaryButton>
+        </div>
+      </div>}>
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-center justify-end gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" checked={showCny} onChange={(e) => setShowCny(e.target.checked)} className="h-3.5 w-3.5 accent-primary" /> Show ¥ reference</label>
+        {rows.map((r) => (
+          <div key={r.id} className={cn("rounded-lg border bg-card p-3.5 shadow-sm", r.removed && "opacity-50")}>
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-accent text-muted-foreground"><Package className="h-4 w-4" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-mono text-[12px] font-semibold">{r.sku ?? "—"}</div>
+                <div className="truncate text-[11px] text-muted-foreground">{[r.fam, r.name].filter(Boolean).join(" · ")}</div>
+              </div>
+              {r.removed
+                ? <button type="button" onClick={() => set(r.id, { removed: false })} className="shrink-0 text-[11px] font-medium text-primary hover:underline">Undo</button>
+                : <button type="button" onClick={() => set(r.id, { removed: true })} className="vy-icon-btn shrink-0" aria-label="Remove line"><Trash2 className="h-3.5 w-3.5 text-danger" /></button>}
+            </div>
+            {!r.removed && (
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <label className="block"><span className="vy-kicker mb-1 block">Qty</span><input type="number" value={r.qty} onChange={(e) => set(r.id, { qty: e.target.value })} className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                  <label className="block"><span className="vy-kicker mb-1 block">Unit $</span><input type="number" step="0.01" value={r.unit_cost} onChange={(e) => set(r.id, { unit_cost: e.target.value })} className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>
+                </div>
+                {showCny && <label className="mt-2.5 block"><span className="vy-kicker mb-1 block">Supplier ¥ <span className="font-normal normal-case text-muted-foreground">(reference)</span></span><input type="number" step="0.01" value={r.unit_cny} onChange={(e) => set(r.id, { unit_cny: e.target.value })} placeholder="note only" className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px] outline-none focus:ring-2 focus:ring-ring" /></label>}
+                <div className="mt-3 flex items-center justify-between border-t pt-2.5 text-[12px]"><span className="text-muted-foreground">Line total</span><span className="font-mono font-bold text-primary">{money((Number(r.qty) || 0) * (Number(r.unit_cost) || 0))}</span></div>
+              </>
+            )}
+          </div>
+        ))}
+        {err && <div className="text-[12px] text-danger">{err}</div>}
+      </div>
+    </Modal>
   );
 }
 
