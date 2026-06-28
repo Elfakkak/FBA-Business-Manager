@@ -489,7 +489,7 @@ function AddSkuModal({ orderId, variants, inOrderSkus, onClose }: { orderId: str
     return true;
   };
   const n = q.trim().toLowerCase();
-  const filtered = variants.filter((v) => matchesFilter(v) && (!n || `${v.sku} ${v.name} ${v.familyName}`.toLowerCase().includes(n)));
+  const filtered = variants.filter((v) => matchesFilter(v) && (!n || `${v.sku} ${v.name} ${v.familyName} ${v.asin ?? ""} ${v.pack ?? ""}`.toLowerCase().includes(n)));
   const groups = useMemo(() => {
     const m = new Map<string, CatalogVariant[]>();
     for (const v of filtered) { if (!m.has(v.familyName)) m.set(v.familyName, []); m.get(v.familyName)!.push(v); }

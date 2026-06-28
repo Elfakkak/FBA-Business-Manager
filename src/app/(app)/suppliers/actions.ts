@@ -1,7 +1,9 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { payTermSummary, type PayTermCfg } from "@/lib/derive";
 import type { Database } from "@/lib/database.types";
 
 type Result = { ok: true } | { ok: false; error: string } | { ok: true; name: string };
@@ -14,14 +16,28 @@ export async function createSupplier(form: FormData): Promise<Result> {
   const { data: existing } = await supabase.from("suppliers").select("name");
   if ((existing ?? []).some((s) => s.name.toLowerCase() === name.toLowerCase()))
     return { ok: false, error: "A supplier with that name already exists." };
+  const termType = String(form.get("term_type") ?? "").trim() || null;
+  const depRaw = parseFloat(String(form.get("term_deposit_pct") ?? ""));
+  const termDeposit = Number.isFinite(depRaw) ? depRaw : null;
+  // Keep the legacy text payment_terms in sync (derived) so older displays still read.
+  const paymentTerms = termType ? payTermSummary({ type: termType as PayTermCfg["type"], depositPct: termDeposit }) : null;
+  const contact = String(form.get("contact") ?? "").trim() || null;
+
   const { error } = await supabase.from("suppliers").insert({
     name,
     origin: String(form.get("origin") ?? "").trim() || null,
-    contact: String(form.get("contact") ?? "").trim() || null,
-    payment_terms: String(form.get("payment_terms") ?? "").trim() || null,
+    contact,
+    payment_terms: paymentTerms,
+    term_type: termType,
+    term_deposit_pct: termDeposit,
     is_new: true,
   });
   if (error) return { ok: false, error: error.message };
+
+  // Optionally create a contact record for this supplier (the "＋ New contact" flow).
+  if (form.get("create_contact") === "1" && contact) {
+    await supabase.from("contacts").insert({ id: randomUUID(), company: name, name: contact, is_primary: true });
+  }
   revalidatePath("/suppliers");
   return { ok: true, name };
 }

@@ -1920,6 +1920,7 @@ export type Database = {
       suppliers: {
         Row: {
           address: string | null
+          archived: boolean
           contact: string | null
           created_at: string
           email: string | null
@@ -1933,10 +1934,13 @@ export type Database = {
           payment_terms: string | null
           phone: string | null
           route: string | null
+          term_deposit_pct: number | null
+          term_type: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          archived?: boolean
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -1950,10 +1954,13 @@ export type Database = {
           payment_terms?: string | null
           phone?: string | null
           route?: string | null
+          term_deposit_pct?: number | null
+          term_type?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          archived?: boolean
           contact?: string | null
           created_at?: string
           email?: string | null
@@ -1967,6 +1974,8 @@ export type Database = {
           payment_terms?: string | null
           phone?: string | null
           route?: string | null
+          term_deposit_pct?: number | null
+          term_type?: string | null
           updated_at?: string
         }
         Relationships: []
