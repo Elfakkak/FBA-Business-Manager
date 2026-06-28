@@ -7,8 +7,9 @@ import { Card, Badge, Kpi, PageHead, Avatar, CardHeader } from "@/components/ui/
 import { Modal, Field, inputCls, PrimaryButton, GhostButton } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { useFormModal } from "@/lib/use-form-modal";
+import { useBulkSelect } from "@/lib/use-bulk-select";
 import { Drawer, DrawerStat } from "@/components/ui/drawer";
-import { createSupplier } from "./actions";
+import { createSupplier, bulkSetSupplierArchived } from "./actions";
 import { money, num, PAYTERM_TYPES, PAYTERM_BY_KEY } from "@/lib/derive";
 import { cn } from "@/lib/utils";
 import { Plus, ArrowRight, Info } from "lucide-react";
@@ -29,10 +30,17 @@ export type SupplierSummary = {
 export function SuppliersList({ suppliers, contactNames }: { suppliers: SupplierSummary[]; contactNames: string[] }) {
   const [q, setQ] = useState("");
   const [peek, setPeek] = useState<SupplierSummary | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
-    return suppliers.filter((s) => !n || `${s.name} ${s.origin ?? ""} ${s.route ?? ""}`.toLowerCase().includes(n));
-  }, [suppliers, q]);
+    return suppliers.filter((s) => (showArchived || !s.archived) && (!n || `${s.name} ${s.origin ?? ""} ${s.route ?? ""}`.toLowerCase().includes(n)));
+  }, [suppliers, q, showArchived]);
+
+  const bulk = useBulkSelect(filtered.map((s) => s.name));
+  const archivedCount = suppliers.filter((s) => s.archived).length;
+  const selItems = suppliers.filter((s) => bulk.has(s.name));
+  const canArchive = selItems.some((s) => !s.archived);
+  const canUnarchive = selItems.some((s) => s.archived);
 
   const totalProducts = suppliers.reduce((s, x) => s + x.productCount, 0);
   const openOrders = suppliers.reduce((s, x) => s + x.openOrders, 0);
@@ -59,12 +67,27 @@ export function SuppliersList({ suppliers, contactNames }: { suppliers: Supplier
           className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
       </Card>
 
+      {(archivedCount > 0 || bulk.size > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {archivedCount > 0 && <button onClick={() => setShowArchived((v) => !v)} className={cn("vy-chip", showArchived && "is-active")}>{showArchived ? "Hide" : "Show"} archived ({archivedCount})</button>}
+          {bulk.size > 0 && (
+            <div className="ml-auto flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-3 py-1.5 text-sm">
+              <span className="font-semibold">{bulk.size} selected</span>
+              <button type="button" disabled={bulk.pending || !canArchive} onClick={() => bulk.runBulk((ids) => bulkSetSupplierArchived(ids, true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
+              <button type="button" disabled={bulk.pending || !canUnarchive} onClick={() => bulk.runBulk((ids) => bulkSetSupplierArchived(ids, false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
+              <button type="button" onClick={bulk.clear} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         <CardHeader title={`${filtered.length} suppliers`} caption="Open AP = unpaid goods + agent bills on their orders" />
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="w-9 py-2 pl-4 pr-1"><input type="checkbox" checked={bulk.allSelected} onChange={bulk.toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>
                 <th className="px-4 py-2 font-medium">Supplier</th>
                 <th className="px-4 py-2 font-medium">Origin</th>
                 <th className="px-4 py-2 text-right font-medium">Products</th>
@@ -75,15 +98,19 @@ export function SuppliersList({ suppliers, contactNames }: { suppliers: Supplier
             </thead>
             <tbody className="divide-y">
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No suppliers match your search.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">No suppliers match your search.</td></tr>
               ) : filtered.map((s) => (
-                <tr key={s.name} className="cursor-pointer hover:bg-accent/40" onClick={() => setPeek(s)}>
+                <tr key={s.name} className={cn("cursor-pointer hover:bg-accent/40", s.archived && "opacity-60")} onClick={() => setPeek(s)}>
+                  <td className="py-2.5 pl-4 pr-1" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={bulk.has(s.name)} onChange={() => bulk.toggle(s.name)} className="h-4 w-4 accent-primary" aria-label={`Select ${s.name}`} />
+                  </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={s.name} tone="brand" />
                       <div>
                         <Link href={`/suppliers/${encodeURIComponent(s.name)}`} onClick={(e) => e.stopPropagation()} className="font-medium hover:text-primary">{s.name}</Link>
                         {s.isNew && <Badge tone="brand" className="ml-1.5">New</Badge>}
+                        {s.archived && <span className="ml-1.5 rounded bg-muted px-1 py-px text-[9px] uppercase tracking-wide">archived</span>}
                         {s.route && <div className="text-[11px] text-muted-foreground">{s.route}</div>}
                       </div>
                     </div>

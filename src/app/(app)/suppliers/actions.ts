@@ -62,3 +62,13 @@ export async function updateSupplier(name: string, form: FormData): Promise<Resu
   revalidatePath(`/suppliers/${encodeURIComponent(name)}`);
   return { ok: true };
 }
+
+// Soft-hide dormant suppliers from the active list without losing history. Keyed by name (PK).
+export async function bulkSetSupplierArchived(names: string[], archived: boolean): Promise<Result> {
+  if (!names.length) return { ok: true };
+  const supabase = await createClient();
+  const { error } = await supabase.from("suppliers").update({ archived }).in("name", names);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/suppliers");
+  return { ok: true };
+}
