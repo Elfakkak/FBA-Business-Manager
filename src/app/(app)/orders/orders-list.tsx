@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useBulkSelect } from "@/lib/use-bulk-select";
 import { Card, Badge, Kpi, PageHead, CardHeader } from "@/components/ui/primitives";
 import { Drawer } from "@/components/ui/drawer";
 import { Select } from "@/components/ui/select";
@@ -28,11 +28,6 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
   const [stage, setStage] = useState("all");
   const [peek, setPeek] = useState<OrderSummary | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [sel, setSel] = useState<Set<string>>(new Set());
-  const [bulkPending, startBulk] = useTransition();
-  const router = useRouter();
-  const toggleSel = (id: string) => setSel((s) => { const c = new Set(s); if (c.has(id)) c.delete(id); else c.add(id); return c; });
-  const runBulk = (fn: () => Promise<unknown>) => startBulk(async () => { await fn(); setSel(new Set()); router.refresh(); });
 
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -43,8 +38,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
       return true;
     });
   }, [orders, q, stage, showArchived]);
-  const allSelected = filtered.length > 0 && filtered.every((o) => sel.has(o.id));
-  const toggleAll = () => setSel((s) => { const c = new Set(s); if (allSelected) filtered.forEach((o) => c.delete(o.id)); else filtered.forEach((o) => c.add(o.id)); return c; });
+  const bulk = useBulkSelect(filtered.map((o) => o.id));
   const archivedCount = orders.filter((o) => o.archived).length;
 
   const openOrders = orders.filter((o) => o.status !== "closed" && o.status !== "fba").length;
@@ -82,18 +76,18 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
         </div>
       </Card>
 
-      {sel.size > 0 && (() => {
-        const selItems = orders.filter((o) => sel.has(o.id));
+      {bulk.size > 0 && (() => {
+        const selItems = orders.filter((o) => bulk.has(o.id));
         const canArchive = selItems.some((o) => !o.archived);
         const canUnarchive = selItems.some((o) => o.archived);
         return (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-accent/40 px-4 py-2.5 text-sm">
-            <span className="font-semibold">{sel.size} selected</span>
+            <span className="font-semibold">{bulk.size} selected</span>
             <span className="text-[12px] text-muted-foreground">Archive soft-hides finished orders but keeps history.</span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <button type="button" disabled={bulkPending || !canArchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
-              <button type="button" disabled={bulkPending || !canUnarchive} onClick={() => runBulk(() => bulkSetOrderArchived([...sel], false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
-              <button type="button" onClick={() => setSel(new Set())} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
+              <button type="button" disabled={bulk.pending || !canArchive} onClick={() => bulk.runBulk((ids) => bulkSetOrderArchived(ids, true))} className="vy-btn vy-btn--outline vy-btn--sm disabled:opacity-40">Archive</button>
+              <button type="button" disabled={bulk.pending || !canUnarchive} onClick={() => bulk.runBulk((ids) => bulkSetOrderArchived(ids, false))} className="vy-btn vy-btn--ghost vy-btn--sm disabled:opacity-40">Unarchive</button>
+              <button type="button" onClick={bulk.clear} className="vy-btn vy-btn--ghost vy-btn--sm">Clear</button>
             </div>
           </div>
         );
@@ -105,7 +99,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-9 py-2 pl-4 pr-1"><input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>
+                <th className="w-9 py-2 pl-4 pr-1"><input type="checkbox" checked={bulk.allSelected} onChange={bulk.toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>
                 <th className="px-4 py-2 font-medium">Order</th>
                 <th className="px-4 py-2 font-medium">Supplier</th>
                 <th className="px-4 py-2 text-right font-medium">Units</th>
@@ -122,7 +116,7 @@ export function OrdersList({ orders, suppliers, agents }: { orders: OrderSummary
               ) : filtered.map((o) => (
                 <tr key={o.id} className={cn("vy-order-row cursor-pointer hover:bg-accent/40", o.archived && "opacity-60")} onClick={() => setPeek(o)}>
                   <td className="py-2.5 pl-4 pr-1" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggleSel(o.id)} className="h-4 w-4 accent-primary" aria-label={`Select ${o.id}`} />
+                    <input type="checkbox" checked={bulk.has(o.id)} onChange={() => bulk.toggle(o.id)} className="h-4 w-4 accent-primary" aria-label={`Select ${o.id}`} />
                   </td>
                   <td className="px-4 py-2.5">
                     <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-[12px] font-semibold hover:text-primary">{o.id}</Link>
